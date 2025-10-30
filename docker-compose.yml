@@ -1,0 +1,66 @@
+# ==============================================================================
+# AI Stack - Docker Compose
+# Maintains offline-first operation with ephemeral containers for
+# ultimate privacy and control.
+# ==============================================================================
+
+# ==============================================================================
+# Network section purpose:
+# This bridge network is explicitly intended to be an isolated, host-local-only
+# network that prevents any ingress or egress of information to/from external
+# networks; containers attached here cannot reach the internet and cannot be
+# reached from outside the Docker host
+# ==============================================================================
+networks:
+  bridge:
+    driver: bridge
+
+services:
+  # --------------------------------------------------------------------
+  # Ollama: local LLM host
+  # Public image on Docker Hub
+  # Handles text generation and embeddings for RAG workflows
+  # --------------------------------------------------------------------
+  ollama:
+    image: ollama/ollama
+    container_name: ollama
+    restart: unless-stopped
+    volumes:
+      - ./models:/root/.ollama/models # Can host pre-pulled models. Persistent volume.
+      - ./tensors:/root/.ollama/tensors # Manually downloaded model tensors. Persistent volume.
+    runtime: nvidia
+    gpus: all
+    networks:
+      - bridge
+
+  # --------------------------------------------------------------------
+  # ComfyUI: Stable Diffusion image generation engine
+  # Used for generating maps, heatmaps, diagrams, and reports.
+  # --------------------------------------------------------------------
+  comfyui:
+    image: ghcr.io/lecode-official/comfyui-docker:latest
+    container_name: comfyui
+    restart: unless-stopped
+    volumes:
+      - ./tensors:/root/ComfyUI/models/chekpoints
+    runtime: nvidia
+    networks:
+      - bridge
+
+  # --------------------------------------------------------------------
+  # OpenWebUI: browser-based chat interface
+  # --------------------------------------------------------------------
+  openwebui:
+    image: ghcr.io/open-webui/open-webui:main
+    container_name: openwebui
+    restart: unless-stopped
+    ports:
+      - "80:8080"
+    environment:
+      - OLLAMA_API=http://ollama:11434 # This config works
+      - OLLAMA_BASE_URL=http://ollama:11434 # ... but this one is in the docs
+      - WEBUI_AUTH=False # Single user mode, no authentication
+    volumes:
+      - ./data:/app/backend/data # Shared data directory, persistent volume
+    networks:
+      - bridge
