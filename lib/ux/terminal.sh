@@ -15,6 +15,11 @@
 # - Commands are discoverable but not intrusive
 # - Color enhances but doesn't overwhelm
 #
+# Output Architecture:
+# - All display output uses ux_* functions from lib/ux/output.sh
+# - Uses UX_* color constants for consistency
+# - Never uses raw echo for formatted output
+#
 # Constitution Reference:
 # - Law of Truth: Clear, honest interface
 # - Law of Care: Pleasant, non-stressful experience
@@ -29,7 +34,7 @@ _YOLLAYAH_UX_TERMINAL_LOADED=1
 # ============================================================================
 
 ux_print_banner() {
-    echo -e "${MAGENTA}"
+    echo -e "${UX_MAGENTA}"
     cat << 'BANNER'
   ╭─────────────────────────────────────────╮
   │                                         │
@@ -41,11 +46,11 @@ ux_print_banner() {
   │                                         │
   ╰─────────────────────────────────────────╯
 BANNER
-    echo -e "${NC}"
+    echo -e "${UX_NC}"
 }
 
 ux_print_separator() {
-    echo -e "${MAGENTA}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
+    ux_separator
 }
 
 # ============================================================================
@@ -53,14 +58,14 @@ ux_print_separator() {
 # ============================================================================
 
 ux_print_ready() {
-    echo ""
+    ux_blank
     ux_print_separator
-    echo ""
-    echo -e "${WHITE}Yollayah is ready! Type your message and press Enter.${NC}"
-    echo -e "${CYAN}Commands: /quit to exit, /clear to clear screen, /help for more${NC}"
-    echo ""
+    ux_blank
+    echo -e "${UX_WHITE}Yollayah is ready! Type your message and press Enter.${UX_NC}"
+    echo -e "${UX_CYAN}Commands: /quit to exit, /clear to clear screen, /help for more${UX_NC}"
+    ux_blank
     ux_print_separator
-    echo ""
+    ux_blank
 }
 
 # ============================================================================
@@ -68,19 +73,19 @@ ux_print_ready() {
 # ============================================================================
 
 ux_show_help() {
-    echo ""
-    echo -e "${CYAN}Commands:${NC}"
-    echo "  /quit, /exit, /q  - Exit Yollayah"
-    echo "  /clear            - Clear the screen"
-    echo "  /mood             - Check Yollayah's mood"
-    echo "  /model            - Show current model"
-    echo "  /help             - Show this help"
-    echo ""
-    echo -e "${CYAN}Tips:${NC}"
-    echo "  - Just type naturally, Yollayah understands context"
-    echo "  - Your conversations stay local and private"
-    echo "  - Check out agents/ai-way-docs/ for more info"
-    echo ""
+    ux_blank
+    echo -e "${UX_CYAN}Commands:${UX_NC}"
+    ux_item "/quit, /exit, /q  - Exit Yollayah"
+    ux_item "/clear            - Clear the screen"
+    ux_item "/mood             - Check Yollayah's mood"
+    ux_item "/model            - Show current model"
+    ux_item "/help             - Show this help"
+    ux_blank
+    echo -e "${UX_CYAN}Tips:${UX_NC}"
+    ux_item "Just type naturally, Yollayah understands context"
+    ux_item "Your conversations stay local and private"
+    ux_item "Check out agents/ai-way-docs/ for more info"
+    ux_blank
 }
 
 # ============================================================================
@@ -94,9 +99,9 @@ ux_handle_command() {
 
     case "$input" in
         /quit|/exit|/q)
-            echo ""
-            echo -e "${MAGENTA}Yollayah: ${NC}¡Hasta luego! Take care of yourself. 💜"
-            echo ""
+            ux_blank
+            ux_yollayah "¡Hasta luego! Take care of yourself. 💜"
+            ux_blank
             exit 0
             ;;
         /clear)
@@ -105,14 +110,14 @@ ux_handle_command() {
             return 0
             ;;
         /mood)
-            echo -e "${MAGENTA}Yollayah: ${NC}I'm feeling good! Ready to help. How about you?"
-            echo ""
+            ux_yollayah "I'm feeling good! Ready to help. How about you?"
+            ux_blank
             return 0
             ;;
         /model)
-            echo -e "${CYAN}Current model:${NC} $SELECTED_MODEL"
-            echo -e "${CYAN}Hardware:${NC} $(hardware_summary)"
-            echo ""
+            ux_keyval "Current model" "$SELECTED_MODEL"
+            ux_keyval "Hardware" "$(hardware_summary)"
+            ux_blank
             return 0
             ;;
         /help)
@@ -123,19 +128,19 @@ ux_handle_command() {
             # Hidden command to toggle debug mode
             if [[ -n "$YOLLAYAH_DEBUG" ]]; then
                 unset YOLLAYAH_DEBUG
-                echo -e "${CYAN}Debug mode disabled${NC}"
+                ux_info "Debug mode disabled"
             else
                 export YOLLAYAH_DEBUG=1
-                echo -e "${CYAN}Debug mode enabled${NC}"
+                ux_info "Debug mode enabled"
             fi
-            echo ""
+            ux_blank
             return 0
             ;;
         /*)
             # Unknown command
-            echo -e "${YELLOW}Unknown command: $input${NC}"
-            echo -e "Type /help for available commands"
-            echo ""
+            ux_warn "Unknown command: $input"
+            ux_print "Type /help for available commands"
+            ux_blank
             return 0
             ;;
         *)
@@ -157,7 +162,7 @@ ux_conversation_loop() {
 
     while true; do
         # Prompt
-        echo -ne "${GREEN}You: ${NC}"
+        ux_prompt "You:"
         read -r user_input
 
         # Handle empty input
@@ -171,14 +176,14 @@ ux_conversation_loop() {
         fi
 
         # Get response from Yollayah
-        echo ""
-        echo -ne "${MAGENTA}Yollayah: ${NC}"
+        ux_blank
+        echo -ne "${UX_MAGENTA}Yollayah:${UX_NC} "
 
         # Stream the response
         ollama run "$model_name" "$user_input" 2>/dev/null
 
-        echo ""
-        echo ""
+        ux_blank
+        ux_blank
     done
 }
 
@@ -187,13 +192,13 @@ ux_conversation_loop() {
 # ============================================================================
 
 ux_show_startup_progress() {
-    info "Checking dependencies..."
-    echo ""
+    ux_info "Checking dependencies..."
+    ux_blank
 }
 
 ux_show_all_ready() {
-    echo ""
-    success "All systems ready!"
+    ux_blank
+    ux_success "All systems ready!"
 }
 
 # ============================================================================

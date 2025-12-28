@@ -71,14 +71,28 @@ ollama_check_installed() {
         return 0
     else
         error "Ollama not found"
-        echo ""
-        echo -e "${YELLOW}Ollama is required to run Yollayah locally.${NC}"
-        echo ""
-        echo "Install options:"
-        echo "  Linux/WSL:  curl -fsSL https://ollama.com/install.sh | sh"
-        echo "  macOS:      brew install ollama"
-        echo "  Manual:     https://ollama.com/download"
-        echo ""
+
+        # Use ux_* for user-facing messages if available
+        if declare -f ux_blank &>/dev/null; then
+            ux_blank
+            ux_warn "Ollama is required to run Yollayah locally."
+            ux_blank
+            ux_print "Install options:"
+            ux_item "Linux/WSL:  curl -fsSL https://ollama.com/install.sh | sh"
+            ux_item "macOS:      brew install ollama"
+            ux_item "Manual:     https://ollama.com/download"
+            ux_blank
+        else
+            echo ""
+            echo "Ollama is required to run Yollayah locally."
+            echo ""
+            echo "Install options:"
+            echo "  Linux/WSL:  curl -fsSL https://ollama.com/install.sh | sh"
+            echo "  macOS:      brew install ollama"
+            echo "  Manual:     https://ollama.com/download"
+            echo ""
+        fi
+
         read -p "Would you like me to try installing Ollama? [y/N] " -n 1 -r
         echo
         if [[ $REPLY =~ ^[Yy]$ ]]; then

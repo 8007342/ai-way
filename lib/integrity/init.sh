@@ -131,12 +131,19 @@ integrity_status() {
     local level
     level=$(_integrity_get_level)
 
-    echo ""
-    echo -e "${CYAN}Integrity Configuration${NC}"
-    echo "========================"
-    echo ""
-    echo "Current level: $level"
-    echo ""
+    # Use ux_* functions if available, fall back to raw echo
+    if declare -f ux_section &>/dev/null; then
+        ux_section "Integrity Configuration"
+        ux_keyval "Current level" "$level"
+        ux_blank
+    else
+        echo ""
+        echo "Integrity Configuration"
+        echo "========================"
+        echo ""
+        echo "Current level: $level"
+        echo ""
+    fi
 
     case "$level" in
         0)

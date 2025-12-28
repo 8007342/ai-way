@@ -6,6 +6,7 @@ logs/
 # See lib/user/README.md for privacy policy
 .state/
 .user/
+.logs/
 
 # Legacy state files (pre-modular)
 .yollayah-state
