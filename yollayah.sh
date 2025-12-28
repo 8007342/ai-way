@@ -34,8 +34,12 @@ export SCRIPT_DIR
 # Bootstrap: Load Modules
 # ============================================================================
 
-# Core utilities (colors, logging, paths)
+# Core utilities (colors, logging, paths) - must be first
 source "${SCRIPT_DIR}/lib/common.sh"
+
+# Integrity verification - loaded early, runs environment sanitization immediately
+# This cannot be bypassed - environment.sh always runs
+source "${SCRIPT_DIR}/lib/integrity/init.sh"
 
 # Ollama management
 source "${SCRIPT_DIR}/lib/ollama/service.sh"
@@ -60,6 +64,11 @@ source "${SCRIPT_DIR}/lib/user/init.sh"
 main() {
     clear
     ux_print_banner
+
+    # Verify script integrity FIRST (before any other operations)
+    # Environment sanitization already ran when integrity module was sourced
+    integrity_verify || exit 1
+
     ux_show_startup_progress
 
     # Check Ollama is installed
