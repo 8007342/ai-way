@@ -2,7 +2,44 @@
 
 Privacy-first local AI runtime. Your AI, your data, your rules.
 
-## Architecture
+## Quick Start (ai-way-lite)
+
+```bash
+git clone https://github.com/8007342/ai-way.git
+cd ai-way
+./yollayah.sh
+```
+
+That's it. Yollayah will:
+1. Check for Ollama (offer to install if missing)
+2. Pull a small base model (~2GB)
+3. Create her personality
+4. Start chatting with you
+
+**Requirements**: Just Ollama. The script handles everything else.
+
+### Environment Variables
+
+```bash
+YOLLAYAH_MODEL=llama3.2:3b  # Base model (default: llama3.2:3b)
+```
+
+## Two Modes
+
+### ai-way-lite (Quick Start)
+- Single bash script
+- Direct Ollama conversation
+- No Python dependencies
+- Perfect for trying it out
+
+### ai-way-full (Coming Soon)
+- Multi-agent routing (19 specialists)
+- Session persistence
+- API server for surfaces
+- Web UI, terminal UI, mobile surfaces
+- Yollayah floats between screens
+
+## Architecture (Full Mode)
 
 ```
 ┌─────────────────────────────────────────────────────────────────┐
