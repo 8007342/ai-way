@@ -2,6 +2,18 @@
 modelfiles/
 logs/
 
+# Yollayah runtime state (stored in script dir, not /home)
+# See lib/user/README.md for privacy policy
+.state/
+.user/
+
+# Legacy state files (pre-modular)
+.yollayah-state
+.yollayah-settings
+
+# Cloned agents repo (the breadcrumb to YOU.md)
+agents/
+
 # Python
 __pycache__/
 *.pyc
