@@ -34,8 +34,16 @@ export SCRIPT_DIR
 # Bootstrap: Load Modules
 # ============================================================================
 
-# Core utilities (colors, logging, paths) - must be first
+# Core utilities (paths, helper functions) - must be first
 source "${SCRIPT_DIR}/lib/common.sh"
+
+# Logging bus - loaded early so all modules can log
+# Logs go to .logs/ for PJ debugging, not visible to AJ
+source "${SCRIPT_DIR}/lib/logging/init.sh"
+
+# UX output - loaded before modules that display to AJ
+# All user-facing output goes through ux_* functions
+source "${SCRIPT_DIR}/lib/ux/output.sh"
 
 # Integrity verification - loaded early, runs environment sanitization immediately
 # This cannot be bypassed - environment.sh always runs

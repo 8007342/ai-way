@@ -3,11 +3,15 @@
 # lib/common.sh - Shared utilities for Yollayah
 #
 # This module provides:
-# - Terminal colors and formatting
-# - Logging functions (info, success, warn, error)
 # - Path configuration (all relative to SCRIPT_DIR)
 # - Global state variables
 # - Utility functions
+# - Legacy output functions (wrappers for ux_* and log_*)
+#
+# Output Architecture:
+# - log_* functions → Write to .logs/ (for PJ debugging)
+# - ux_*  functions → Display to terminal (for AJ)
+# - info/success/warn/error → Legacy wrappers (use ux_* in new code)
 #
 # Constitution Reference:
 # - Law of Truth: Logging is honest and transparent
@@ -19,20 +23,7 @@
 _YOLLAYAH_COMMON_LOADED=1
 
 # ============================================================================
-# Terminal Colors
-# ============================================================================
-
-readonly RED='\033[0;31m'
-readonly GREEN='\033[0;32m'
-readonly YELLOW='\033[0;33m'
-readonly BLUE='\033[0;34m'
-readonly MAGENTA='\033[0;35m'
-readonly CYAN='\033[0;36m'
-readonly WHITE='\033[1;37m'
-readonly NC='\033[0m'  # No Color
-
-# ============================================================================
-# Paths - Everything relative to script directory
+# Path Configuration
 #
 # Constitution Reference (Four Protections):
 # "Protect AJ from third parties" - No data in standard locations
@@ -53,6 +44,9 @@ readonly AGENTS_REPO="https://github.com/8007342/agents.git"
 # Runtime state (gitignored, ephemeral)
 readonly STATE_DIR="${SCRIPT_DIR}/.state"
 readonly STATE_FILE="${STATE_DIR}/ollama.state"
+
+# Logs (gitignored, for PJ debugging)
+readonly LOGS_DIR="${SCRIPT_DIR}/.logs"
 
 # User customizations (gitignored, persistent but local-only)
 # See lib/user/README.md for privacy policy
@@ -78,32 +72,71 @@ SELECTED_MODEL=""
 MODEL_NEEDS_UPDATE=false
 
 # ============================================================================
-# Logging Functions
+# Legacy Output Functions (Wrappers)
 #
-# Constitution Reference:
-# - Law of Truth: "Be honest, always"
-# - These functions provide clear, honest feedback to AJ
+# These wrap ux_* and log_* functions for backward compatibility.
+# NEW CODE SHOULD USE ux_* for display and log_* for logging directly.
+#
+# After modules are loaded:
+# - info()    → ux_info() + log_info()
+# - success() → ux_success() + log_info()
+# - warn()    → ux_warn() + log_warn()
+# - error()   → ux_error() + log_error()
+# - debug()   → log_debug() only (never shown to AJ)
 # ============================================================================
 
+# Colors for early output (before ux module loads)
+readonly _C_RED='\033[0;31m'
+readonly _C_GREEN='\033[0;32m'
+readonly _C_YELLOW='\033[0;33m'
+readonly _C_BLUE='\033[0;34m'
+readonly _C_MAGENTA='\033[0;35m'
+readonly _C_CYAN='\033[0;36m'
+readonly _C_WHITE='\033[1;37m'
+readonly _C_NC='\033[0m'
+
 info() {
-    echo -e "${CYAN}[INFO]${NC} $1"
+    if declare -f ux_info &>/dev/null; then
+        ux_info "$1"
+    else
+        # Early output before ux module loads
+        echo -e "${_C_CYAN}[INFO]${_C_NC} $1"
+    fi
 }
 
 success() {
-    echo -e "${GREEN}[OK]${NC} $1"
+    if declare -f ux_success &>/dev/null; then
+        ux_success "$1"
+    else
+        echo -e "${_C_GREEN}[OK]${_C_NC} $1"
+    fi
 }
 
 warn() {
-    echo -e "${YELLOW}[WARN]${NC} $1"
+    if declare -f ux_warn &>/dev/null; then
+        ux_warn "$1"
+    else
+        echo -e "${_C_YELLOW}[WARN]${_C_NC} $1"
+    fi
 }
 
 error() {
-    echo -e "${RED}[ERROR]${NC} $1"
+    if declare -f ux_error &>/dev/null; then
+        ux_error "$1"
+    else
+        echo -e "${_C_RED}[ERROR]${_C_NC} $1" >&2
+    fi
 }
 
+# Debug only goes to log, never displayed to AJ
 debug() {
-    # Only show debug messages if YOLLAYAH_DEBUG is set
-    [[ -n "$YOLLAYAH_DEBUG" ]] && echo -e "${BLUE}[DEBUG]${NC} $1"
+    if declare -f log_debug &>/dev/null; then
+        log_debug "$1"
+    fi
+    # Only show to terminal if YOLLAYAH_DEBUG is set AND we're early in boot
+    if [[ -n "$YOLLAYAH_DEBUG" ]] && ! declare -f log_debug &>/dev/null; then
+        echo -e "${_C_BLUE}[DEBUG]${_C_NC} $1"
+    fi
 }
 
 # ============================================================================

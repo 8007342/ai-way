@@ -151,7 +151,7 @@ model_pull() {
     fi
 
     info "Pulling model $model..."
-    echo -e "${YELLOW}This may take a few minutes on first run...${NC}"
+    warn "This may take a few minutes on first run..."
 
     if ollama pull "$model"; then
         success "Model $model ready"
