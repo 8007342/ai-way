@@ -5,7 +5,7 @@
 # Initializes the logging system for internal diagnostics.
 #
 # Key Principle:
-# - Logs are for PJ (Power Joe) to debug issues
+# - Logs are for PJ (Power Joe/Jane) to debug issues
 # - AJ never sees log messages - they get clean UX output
 # - Logs are stored in .logs/ (gitignored, local only)
 #
