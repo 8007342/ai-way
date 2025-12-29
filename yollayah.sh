@@ -107,8 +107,8 @@ main() {
     # Ready!
     ux_show_all_ready
 
-    # Start the conversation
-    ux_conversation_loop "$YOLLAYAH_MODEL_NAME"
+    # Start the interface (TUI if available, else bash prompt)
+    ux_start_interface "$YOLLAYAH_MODEL_NAME"
 }
 
 # ============================================================================
