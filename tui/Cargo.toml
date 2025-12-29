@@ -1,0 +1,52 @@
+[package]
+name = "yollayah-tui"
+version = "0.1.0"
+edition = "2021"
+description = "Terminal UI for Yollayah - the cutest AI companion"
+authors = ["ai-way contributors"]
+license = "AGPL-3.0"
+
+[[bin]]
+name = "yollayah-tui"
+path = "src/main.rs"
+
+[dependencies]
+# Core TUI
+ratatui = "0.29"
+crossterm = { version = "0.28", features = ["event-stream"] }
+
+# Async runtime
+tokio = { version = "1.41", features = ["full", "rt-multi-thread", "macros"] }
+tokio-stream = "0.1"
+
+# HTTP client for Ollama/backend
+reqwest = { version = "0.12", features = ["json", "stream"] }
+tokio-tungstenite = "0.24"
+futures = "0.3"
+
+# Serialization
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+
+# Error handling
+anyhow = "1.0"
+thiserror = "2.0"
+
+# Utilities
+unicode-width = "0.2"
+textwrap = "0.16"
+
+# Logging
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+
+# Random for playful behaviors
+rand = "0.8"
+
+[dev-dependencies]
+pretty_assertions = "1.4"
+
+[profile.release]
+lto = true
+codegen-units = 1
+panic = "abort"
