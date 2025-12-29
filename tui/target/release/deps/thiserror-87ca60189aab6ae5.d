@@ -1,0 +1,14 @@
+/var/home/calmecacpilli/src/ai-way/tui/target/release/deps/thiserror-87ca60189aab6ae5.d: /var/home/calmecacpilli/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/thiserror-2.0.17/src/lib.rs /var/home/calmecacpilli/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/thiserror-2.0.17/src/aserror.rs /var/home/calmecacpilli/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/thiserror-2.0.17/src/display.rs /var/home/calmecacpilli/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/thiserror-2.0.17/src/var.rs /var/home/calmecacpilli/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/thiserror-2.0.17/src/private.rs /var/home/calmecacpilli/src/ai-way/tui/target/release/build/thiserror-f90d22db63854158/out/private.rs
+
+/var/home/calmecacpilli/src/ai-way/tui/target/release/deps/libthiserror-87ca60189aab6ae5.rlib: /var/home/calmecacpilli/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/thiserror-2.0.17/src/lib.rs /var/home/calmecacpilli/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/thiserror-2.0.17/src/aserror.rs /var/home/calmecacpilli/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/thiserror-2.0.17/src/display.rs /var/home/calmecacpilli/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/thiserror-2.0.17/src/var.rs /var/home/calmecacpilli/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/thiserror-2.0.17/src/private.rs /var/home/calmecacpilli/src/ai-way/tui/target/release/build/thiserror-f90d22db63854158/out/private.rs
+
+/var/home/calmecacpilli/src/ai-way/tui/target/release/deps/libthiserror-87ca60189aab6ae5.rmeta: /var/home/calmecacpilli/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/thiserror-2.0.17/src/lib.rs /var/home/calmecacpilli/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/thiserror-2.0.17/src/aserror.rs /var/home/calmecacpilli/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/thiserror-2.0.17/src/display.rs /var/home/calmecacpilli/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/thiserror-2.0.17/src/var.rs /var/home/calmecacpilli/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/thiserror-2.0.17/src/private.rs /var/home/calmecacpilli/src/ai-way/tui/target/release/build/thiserror-f90d22db63854158/out/private.rs
+
+/var/home/calmecacpilli/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/thiserror-2.0.17/src/lib.rs:
+/var/home/calmecacpilli/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/thiserror-2.0.17/src/aserror.rs:
+/var/home/calmecacpilli/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/thiserror-2.0.17/src/display.rs:
+/var/home/calmecacpilli/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/thiserror-2.0.17/src/var.rs:
+/var/home/calmecacpilli/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/thiserror-2.0.17/src/private.rs:
+/var/home/calmecacpilli/src/ai-way/tui/target/release/build/thiserror-f90d22db63854158/out/private.rs:
+
+# env-dep:OUT_DIR=/var/home/calmecacpilli/src/ai-way/tui/target/release/build/thiserror-f90d22db63854158/out
