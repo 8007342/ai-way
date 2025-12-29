@@ -24,7 +24,7 @@
 # ============================================================================
 
 # Prevent double-sourcing
-[[ -n "$_YOLLAYAH_USER_STORAGE_LOADED" ]] && return 0
+[[ -n "${_YOLLAYAH_USER_STORAGE_LOADED:-}" ]] && return 0
 _YOLLAYAH_USER_STORAGE_LOADED=1
 
 # ============================================================================

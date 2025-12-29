@@ -19,7 +19,7 @@
 # ============================================================================
 
 # Prevent double-sourcing
-[[ -n "$_YOLLAYAH_COMMON_LOADED" ]] && return 0
+[[ -n "${_YOLLAYAH_COMMON_LOADED:-}" ]] && return 0
 _YOLLAYAH_COMMON_LOADED=1
 
 # ============================================================================
@@ -134,7 +134,7 @@ debug() {
         log_debug "$1"
     fi
     # Only show to terminal if YOLLAYAH_DEBUG is set AND we're early in boot
-    if [[ -n "$YOLLAYAH_DEBUG" ]] && ! declare -f log_debug &>/dev/null; then
+    if [[ -n "${YOLLAYAH_DEBUG:-}" ]] && ! declare -f log_debug &>/dev/null; then
         echo -e "${_C_BLUE}[DEBUG]${_C_NC} $1"
     fi
 }

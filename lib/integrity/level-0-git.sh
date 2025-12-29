@@ -27,7 +27,7 @@
 # ============================================================================
 
 # Prevent double-sourcing
-[[ -n "$_YOLLAYAH_INTEGRITY_GIT_LOADED" ]] && return 0
+[[ -n "${_YOLLAYAH_INTEGRITY_GIT_LOADED:-}" ]] && return 0
 _YOLLAYAH_INTEGRITY_GIT_LOADED=1
 
 # ============================================================================

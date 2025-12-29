@@ -24,7 +24,7 @@
 # ============================================================================
 
 # Prevent double-sourcing
-[[ -n "$_YOLLAYAH_LOGGING_BUS_LOADED" ]] && return 0
+[[ -n "${_YOLLAYAH_LOGGING_BUS_LOADED:-}" ]] && return 0
 _YOLLAYAH_LOGGING_BUS_LOADED=1
 
 # ============================================================================
@@ -118,21 +118,25 @@ _log_write() {
 # Debug log (verbose, only when YOLLAYAH_DEBUG=1)
 log_debug() {
     [[ $_log_level -le 0 ]] && _log_write "DEBUG" "$1" "${2:-}"
+    return 0
 }
 
 # Info log (normal operations)
 log_info() {
     [[ $_log_level -le 1 ]] && _log_write "INFO" "$1" "${2:-}"
+    return 0
 }
 
 # Warning log (unexpected but recoverable)
 log_warn() {
     [[ $_log_level -le 2 ]] && _log_write "WARN" "$1" "${2:-}"
+    return 0
 }
 
 # Error log (something went wrong)
 log_error() {
     [[ $_log_level -le 3 ]] && _log_write "ERROR" "$1" "${2:-}"
+    return 0
 }
 
 # Fatal log (unrecoverable, will exit)
