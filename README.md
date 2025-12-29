@@ -13,7 +13,7 @@ cd ai-way
 That's it. Yollayah will:
 1. Check for Ollama (offer to install if missing)
 2. Pull a small base model (~2GB)
-3. Create her personality
+3. Create their personality
 4. Start chatting with you
 
 **Requirements**: Just Ollama. The script handles everything else.

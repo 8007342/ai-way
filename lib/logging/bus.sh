@@ -3,7 +3,7 @@
 # lib/logging/bus.sh - Logging Bus
 #
 # Internal logging for debugging and diagnostics. These logs are for PJ
-# (Power Joe) to inspect - AJ never sees them.
+# (Power Joe/Jane) to inspect - AJ never sees them.
 #
 # Log files are stored in .logs/ directory (gitignored, local only).
 #
