@@ -25,7 +25,7 @@
 # ============================================================================
 
 # Prevent double-sourcing
-[[ -n "$_YOLLAYAH_UX_OUTPUT_LOADED" ]] && return 0
+[[ -n "${_YOLLAYAH_UX_OUTPUT_LOADED:-}" ]] && return 0
 _YOLLAYAH_UX_OUTPUT_LOADED=1
 
 # ============================================================================

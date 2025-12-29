@@ -31,7 +31,7 @@
 # ============================================================================
 
 # Prevent double-sourcing
-[[ -n "$_YOLLAYAH_INTEGRITY_CHECKSUMS_LOADED" ]] && return 0
+[[ -n "${_YOLLAYAH_INTEGRITY_CHECKSUMS_LOADED:-}" ]] && return 0
 _YOLLAYAH_INTEGRITY_CHECKSUMS_LOADED=1
 
 # ============================================================================

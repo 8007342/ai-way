@@ -40,7 +40,7 @@
 # ============================================================================
 
 # Prevent double-sourcing
-[[ -n "$_YOLLAYAH_USER_PREFERENCES_LOADED" ]] && return 0
+[[ -n "${_YOLLAYAH_USER_PREFERENCES_LOADED:-}" ]] && return 0
 _YOLLAYAH_USER_PREFERENCES_LOADED=1
 
 # ============================================================================

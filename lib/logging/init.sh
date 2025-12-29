@@ -25,7 +25,7 @@
 # ============================================================================
 
 # Prevent double-sourcing
-[[ -n "$_YOLLAYAH_LOGGING_LOADED" ]] && return 0
+[[ -n "${_YOLLAYAH_LOGGING_LOADED:-}" ]] && return 0
 _YOLLAYAH_LOGGING_LOADED=1
 
 # ============================================================================

@@ -18,7 +18,7 @@
 # ============================================================================
 
 # Prevent double-sourcing
-[[ -n "$_YOLLAYAH_OLLAMA_SERVICE_LOADED" ]] && return 0
+[[ -n "${_YOLLAYAH_OLLAMA_SERVICE_LOADED:-}" ]] && return 0
 _YOLLAYAH_OLLAMA_SERVICE_LOADED=1
 
 # ============================================================================

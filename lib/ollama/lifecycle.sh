@@ -19,7 +19,7 @@
 # ============================================================================
 
 # Prevent double-sourcing
-[[ -n "$_YOLLAYAH_OLLAMA_LIFECYCLE_LOADED" ]] && return 0
+[[ -n "${_YOLLAYAH_OLLAMA_LIFECYCLE_LOADED:-}" ]] && return 0
 _YOLLAYAH_OLLAMA_LIFECYCLE_LOADED=1
 
 # ============================================================================
@@ -92,7 +92,7 @@ detect_ram_gb() {
 # Sets SELECTED_MODEL global variable
 model_select_best() {
     # Allow override via environment variable
-    if [[ -n "$YOLLAYAH_MODEL" ]]; then
+    if [[ -n "${YOLLAYAH_MODEL:-}" ]]; then
         SELECTED_MODEL="$YOLLAYAH_MODEL"
         debug "Using model from YOLLAYAH_MODEL: $SELECTED_MODEL"
         return 0
