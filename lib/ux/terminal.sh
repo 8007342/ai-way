@@ -26,7 +26,7 @@
 # ============================================================================
 
 # Prevent double-sourcing
-[[ -n "$_YOLLAYAH_UX_TERMINAL_LOADED" ]] && return 0
+[[ -n "${_YOLLAYAH_UX_TERMINAL_LOADED:-}" ]] && return 0
 _YOLLAYAH_UX_TERMINAL_LOADED=1
 
 # ============================================================================
@@ -126,7 +126,7 @@ ux_handle_command() {
             ;;
         /debug)
             # Hidden command to toggle debug mode
-            if [[ -n "$YOLLAYAH_DEBUG" ]]; then
+            if [[ -n "${YOLLAYAH_DEBUG:-}" ]]; then
                 unset YOLLAYAH_DEBUG
                 ux_info "Debug mode disabled"
             else
@@ -202,15 +202,59 @@ ux_show_all_ready() {
 }
 
 # ============================================================================
-# Future: Rich Terminal UI
+# Rich Terminal UI (Rust TUI)
 # ============================================================================
 
-# TODO: When we add richer terminal UI features:
-# - Markdown rendering
-# - Code syntax highlighting
-# - Progress bars for model downloads
-# - Split panes for dev mode (show routing)
-# - History navigation with arrow keys
+# Path to the Rust TUI binary
+TUI_BINARY="${SCRIPT_DIR}/tui/target/release/yollayah-tui"
+TUI_BINARY_DEBUG="${SCRIPT_DIR}/tui/target/debug/yollayah-tui"
 
-# For now, we keep it simple and let bash do the work.
-# Rich features can come later via Python surfaces.
+# Check if Rust TUI is available
+ux_tui_available() {
+    [[ -x "$TUI_BINARY" ]] || [[ -x "$TUI_BINARY_DEBUG" ]]
+}
+
+# Get the TUI binary path (prefer release, fall back to debug)
+ux_tui_binary() {
+    if [[ -x "$TUI_BINARY" ]]; then
+        echo "$TUI_BINARY"
+    elif [[ -x "$TUI_BINARY_DEBUG" ]]; then
+        echo "$TUI_BINARY_DEBUG"
+    fi
+}
+
+# Launch the rich TUI
+# Returns 0 if TUI launched and exited cleanly, 1 if not available
+ux_launch_tui() {
+    local model_name="$1"
+    local tui_bin
+
+    tui_bin="$(ux_tui_binary)"
+
+    if [[ -z "$tui_bin" ]]; then
+        log_debug "TUI binary not found, falling back to bash prompt"
+        return 1
+    fi
+
+    log_info "Launching rich TUI: $tui_bin"
+
+    # Export model info for TUI to use
+    export YOLLAYAH_MODEL="$model_name"
+    export YOLLAYAH_OLLAMA_HOST="${OLLAMA_HOST:-localhost}"
+    export YOLLAYAH_OLLAMA_PORT="${OLLAMA_PORT:-11434}"
+
+    # Launch TUI (it takes over the terminal)
+    "$tui_bin"
+    return $?
+}
+
+# Start UI - tries TUI first, falls back to bash
+ux_start_interface() {
+    local model_name="$1"
+
+    if ux_tui_available; then
+        ux_launch_tui "$model_name"
+    else
+        ux_conversation_loop "$model_name"
+    fi
+}
