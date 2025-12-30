@@ -13,16 +13,12 @@ logs/
 .yollayah-settings
 
 # Cloned agents repo (the breadcrumb to YOU.md)
+# Note: lib/agents/ is tracked - only the root agents/ is ignored
 agents/
+!lib/agents/
 
-# Python
-__pycache__/
-*.pyc
-*.pyo
-.pytest_cache/
-.venv/
-venv/
-*.egg-info/
+# Rust build artifacts
+tui/target/
 
 # Docker volumes (persistent data)
 models/
