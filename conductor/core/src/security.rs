@@ -53,14 +53,14 @@ pub struct ConductorLimits {
 impl Default for ConductorLimits {
     fn default() -> Self {
         Self {
-            max_message_size: 100 * 1024,          // 100KB
+            max_message_size: 100 * 1024, // 100KB
             max_messages_per_minute: 30,
             max_command_args: 10,
             max_session_messages: 1000,
             max_session_content_bytes: 10 * 1024 * 1024, // 10MB
             max_active_tasks: 20,
             max_total_tasks: 100,
-            task_cleanup_age_ms: 60 * 60 * 1000,   // 1 hour
+            task_cleanup_age_ms: 60 * 60 * 1000, // 1 hour
             max_commands_per_response: 10,
             max_task_description_length: 1000,
         }
@@ -183,7 +183,10 @@ impl InputValidator {
         }
 
         // Check for control characters (except newline, tab)
-        if content.chars().any(|c| c.is_control() && c != '\n' && c != '\t' && c != '\r') {
+        if content
+            .chars()
+            .any(|c| c.is_control() && c != '\n' && c != '\t' && c != '\r')
+        {
             return ValidationResult::Invalid(
                 "Message contains invalid control characters".to_string(),
             );
@@ -209,7 +212,10 @@ impl InputValidator {
         }
 
         // Check for invalid characters in command
-        if !command.chars().all(|c| c.is_alphanumeric() || c == '-' || c == '_') {
+        if !command
+            .chars()
+            .all(|c| c.is_alphanumeric() || c == '-' || c == '_')
+        {
             return ValidationResult::Invalid(
                 "Command name contains invalid characters".to_string(),
             );
@@ -233,7 +239,10 @@ impl InputValidator {
                     arg.len()
                 ));
             }
-            if arg.chars().any(|c| c.is_control() && c != '\n' && c != '\t') {
+            if arg
+                .chars()
+                .any(|c| c.is_control() && c != '\n' && c != '\t')
+            {
                 return ValidationResult::Invalid(format!(
                     "Argument {} contains control characters",
                     i
@@ -360,13 +369,10 @@ impl CommandValidator {
     fn default_allowed_commands() -> HashSet<String> {
         [
             // Movement commands
-            "move", "wander", "stop", "point", "follow",
-            // Expression commands
-            "mood", "size", "hide", "show",
-            // Gesture commands
-            "wave", "nod", "shake", "bounce", "spin", "dance",
-            "swim", "stretch", "yawn", "wiggle", "peek",
-            // Reaction commands
+            "move", "wander", "stop", "point", "follow", // Expression commands
+            "mood", "size", "hide", "show", // Gesture commands
+            "wave", "nod", "shake", "bounce", "spin", "dance", "swim", "stretch", "yawn", "wiggle",
+            "peek", // Reaction commands
             "react", "laugh", "gasp", "tada", "oops", "love", "wink",
             // Task commands (validated separately)
             "task",
@@ -427,7 +433,10 @@ impl CommandValidator {
                     return Err(reason);
                 }
                 // Only allow alphanumeric and basic punctuation
-                if !data.chars().all(|c| c.is_alphanumeric() || " -_.".contains(c)) {
+                if !data
+                    .chars()
+                    .all(|c| c.is_alphanumeric() || " -_.".contains(c))
+                {
                     let reason = CommandRejectionReason::InvalidArguments(
                         "CustomSprite contains invalid characters".to_string(),
                     );
@@ -436,7 +445,10 @@ impl CommandValidator {
                 }
                 Ok(())
             }
-            AvatarCommand::PointAt { x_percent, y_percent } => {
+            AvatarCommand::PointAt {
+                x_percent,
+                y_percent,
+            } => {
                 // Already bounded to u8, but double-check
                 if *x_percent > 100 || *y_percent > 100 {
                     let reason = CommandRejectionReason::InvalidArguments(
@@ -715,7 +727,10 @@ mod tests {
         assert!(validator.validate_command(&cmd).is_ok());
 
         let result = validator.validate_command(&cmd);
-        assert!(matches!(result, Err(CommandRejectionReason::RateLimitExceeded)));
+        assert!(matches!(
+            result,
+            Err(CommandRejectionReason::RateLimitExceeded)
+        ));
 
         // Reset and try again
         validator.reset_response_counter();
@@ -744,7 +759,10 @@ mod tests {
             description: "Test task".to_string(),
         });
         let result = validator.validate_command(&cmd);
-        assert!(matches!(result, Err(CommandRejectionReason::UnknownAgent(_))));
+        assert!(matches!(
+            result,
+            Err(CommandRejectionReason::UnknownAgent(_))
+        ));
     }
 
     #[test]
@@ -801,7 +819,613 @@ mod tests {
         let mut limits = ConductorLimits::default();
         limits.max_command_args = 2;
         let validator = InputValidator::new(limits);
-        let result = validator.validate_command("test", &["a".to_string(), "b".to_string(), "c".to_string()]);
+        let result = validator
+            .validate_command("test", &["a".to_string(), "b".to_string(), "c".to_string()]);
         assert!(!result.is_valid());
+    }
+
+    // ========================================================================
+    // SECURITY TESTS: Input Injection Prevention
+    // ========================================================================
+
+    #[test]
+    fn test_input_null_byte_injection() {
+        let validator = InputValidator::new(ConductorLimits::default());
+        // Null byte injection attempt
+        let result = validator.validate_message("Hello\x00World");
+        assert!(!result.is_valid());
+        assert!(result.error_message().unwrap().contains("control"));
+    }
+
+    #[test]
+    fn test_input_bell_character_injection() {
+        let validator = InputValidator::new(ConductorLimits::default());
+        // Bell character (could be annoying in terminal)
+        let result = validator.validate_message("Hello\x07World");
+        assert!(!result.is_valid());
+    }
+
+    #[test]
+    fn test_input_escape_sequence_injection() {
+        let validator = InputValidator::new(ConductorLimits::default());
+        // ANSI escape sequence start
+        let result = validator.validate_message("Hello\x1b[31mRED\x1b[0m");
+        assert!(!result.is_valid());
+        assert!(result.error_message().unwrap().contains("control"));
+    }
+
+    #[test]
+    fn test_input_backspace_injection() {
+        let validator = InputValidator::new(ConductorLimits::default());
+        // Backspace could manipulate terminal display
+        let result = validator.validate_message("Safe\x08\x08\x08\x08EVIL");
+        assert!(!result.is_valid());
+    }
+
+    #[test]
+    fn test_input_form_feed_injection() {
+        let validator = InputValidator::new(ConductorLimits::default());
+        // Form feed control character
+        let result = validator.validate_message("Page1\x0cPage2");
+        assert!(!result.is_valid());
+    }
+
+    #[test]
+    fn test_input_carriage_return_allowed() {
+        let validator = InputValidator::new(ConductorLimits::default());
+        // Carriage return is allowed (Windows line endings)
+        let result = validator.validate_message("Hello\r\nWorld");
+        assert!(result.is_valid());
+    }
+
+    #[test]
+    fn test_input_vertical_tab_rejected() {
+        let validator = InputValidator::new(ConductorLimits::default());
+        // Vertical tab is a control character
+        let result = validator.validate_message("Hello\x0bWorld");
+        assert!(!result.is_valid());
+    }
+
+    // ========================================================================
+    // SECURITY TESTS: Command Injection Prevention
+    // ========================================================================
+
+    #[test]
+    fn test_command_shell_semicolon_injection() {
+        let validator = InputValidator::new(ConductorLimits::default());
+        let result = validator.validate_command("test;rm", &[]);
+        assert!(!result.is_valid());
+    }
+
+    #[test]
+    fn test_command_shell_pipe_injection() {
+        let validator = InputValidator::new(ConductorLimits::default());
+        let result = validator.validate_command("test|cat", &[]);
+        assert!(!result.is_valid());
+    }
+
+    #[test]
+    fn test_command_shell_ampersand_injection() {
+        let validator = InputValidator::new(ConductorLimits::default());
+        let result = validator.validate_command("test&bg", &[]);
+        assert!(!result.is_valid());
+    }
+
+    #[test]
+    fn test_command_shell_backtick_injection() {
+        let validator = InputValidator::new(ConductorLimits::default());
+        let result = validator.validate_command("test`id`", &[]);
+        assert!(!result.is_valid());
+    }
+
+    #[test]
+    fn test_command_shell_dollar_injection() {
+        let validator = InputValidator::new(ConductorLimits::default());
+        let result = validator.validate_command("test$HOME", &[]);
+        assert!(!result.is_valid());
+    }
+
+    #[test]
+    fn test_command_name_too_long() {
+        let validator = InputValidator::new(ConductorLimits::default());
+        let long_cmd = "a".repeat(51);
+        let result = validator.validate_command(&long_cmd, &[]);
+        assert!(!result.is_valid());
+        assert!(result.error_message().unwrap().contains("too long"));
+    }
+
+    #[test]
+    fn test_command_valid_with_hyphen_underscore() {
+        let validator = InputValidator::new(ConductorLimits::default());
+        let result = validator.validate_command("my-test_command", &[]);
+        assert!(result.is_valid());
+    }
+
+    #[test]
+    fn test_command_argument_control_char_rejected() {
+        let validator = InputValidator::new(ConductorLimits::default());
+        let result = validator.validate_command("test", &["arg\x00value".to_string()]);
+        assert!(!result.is_valid());
+        assert!(result.error_message().unwrap().contains("control"));
+    }
+
+    #[test]
+    fn test_command_argument_too_long() {
+        let validator = InputValidator::new(ConductorLimits::default());
+        let long_arg = "a".repeat(1001);
+        let result = validator.validate_command("test", &[long_arg]);
+        assert!(!result.is_valid());
+        assert!(result.error_message().unwrap().contains("too long"));
+    }
+
+    #[test]
+    fn test_command_argument_newline_allowed() {
+        let validator = InputValidator::new(ConductorLimits::default());
+        // Newlines in args should be allowed (multi-line content)
+        let result = validator.validate_command("test", &["line1\nline2".to_string()]);
+        assert!(result.is_valid());
+    }
+
+    // ========================================================================
+    // SECURITY TESTS: Task Agent Injection Prevention
+    // ========================================================================
+
+    #[test]
+    fn test_task_agent_with_path_chars_rejected() {
+        let limits = ConductorLimits::default();
+        let validator = CommandValidator::new(&limits);
+
+        let cmd = AvatarCommand::Task(TaskCommand::Start {
+            agent: "../../../etc/passwd".to_string(),
+            description: "Path traversal attempt".to_string(),
+        });
+        let result = validator.validate_command(&cmd);
+        assert!(matches!(
+            result,
+            Err(CommandRejectionReason::UnknownAgent(_))
+        ));
+    }
+
+    #[test]
+    fn test_task_agent_with_shell_chars_rejected() {
+        let limits = ConductorLimits::default();
+        let validator = CommandValidator::new(&limits);
+
+        let cmd = AvatarCommand::Task(TaskCommand::Start {
+            agent: "agent;rm -rf /".to_string(),
+            description: "Shell injection attempt".to_string(),
+        });
+        let result = validator.validate_command(&cmd);
+        assert!(matches!(
+            result,
+            Err(CommandRejectionReason::UnknownAgent(_))
+        ));
+    }
+
+    #[test]
+    fn test_task_description_empty_rejected() {
+        let limits = ConductorLimits::default();
+        let validator = CommandValidator::new(&limits);
+
+        let cmd = AvatarCommand::Task(TaskCommand::Start {
+            agent: "ethical-hacker".to_string(),
+            description: "   ".to_string(), // Only whitespace
+        });
+        let result = validator.validate_command(&cmd);
+        assert!(matches!(
+            result,
+            Err(CommandRejectionReason::InvalidTaskDescription(_))
+        ));
+    }
+
+    #[test]
+    fn test_task_description_control_chars_rejected() {
+        let limits = ConductorLimits::default();
+        let validator = CommandValidator::new(&limits);
+
+        let cmd = AvatarCommand::Task(TaskCommand::Start {
+            agent: "ethical-hacker".to_string(),
+            description: "Task\x00with\x1bnull".to_string(),
+        });
+        let result = validator.validate_command(&cmd);
+        assert!(matches!(
+            result,
+            Err(CommandRejectionReason::InvalidTaskDescription(_))
+        ));
+    }
+
+    #[test]
+    fn test_task_id_too_long_rejected() {
+        let limits = ConductorLimits::default();
+        let validator = CommandValidator::new(&limits);
+
+        let cmd = AvatarCommand::Task(TaskCommand::Done {
+            task_id: "a".repeat(101),
+        });
+        let result = validator.validate_command(&cmd);
+        assert!(matches!(
+            result,
+            Err(CommandRejectionReason::InvalidArguments(_))
+        ));
+    }
+
+    #[test]
+    fn test_task_id_invalid_chars_rejected() {
+        let limits = ConductorLimits::default();
+        let validator = CommandValidator::new(&limits);
+
+        let cmd = AvatarCommand::Task(TaskCommand::Done {
+            task_id: "task;rm -rf /".to_string(),
+        });
+        let result = validator.validate_command(&cmd);
+        assert!(matches!(
+            result,
+            Err(CommandRejectionReason::InvalidArguments(_))
+        ));
+    }
+
+    #[test]
+    fn test_task_id_valid_format() {
+        let limits = ConductorLimits::default();
+        let validator = CommandValidator::new(&limits);
+
+        let cmd = AvatarCommand::Task(TaskCommand::Done {
+            task_id: "task_123_abc-def".to_string(),
+        });
+        assert!(validator.validate_command(&cmd).is_ok());
+    }
+
+    #[test]
+    fn test_task_progress_over_100_rejected() {
+        let limits = ConductorLimits::default();
+        let validator = CommandValidator::new(&limits);
+
+        // Note: percent is u8 so max is 255, but > 100 should be rejected
+        let cmd = AvatarCommand::Task(TaskCommand::Progress {
+            task_id: "task_1".to_string(),
+            percent: 150,
+        });
+        let result = validator.validate_command(&cmd);
+        assert!(matches!(
+            result,
+            Err(CommandRejectionReason::InvalidArguments(_))
+        ));
+    }
+
+    #[test]
+    fn test_task_progress_boundary_values() {
+        let limits = ConductorLimits::default();
+        let validator = CommandValidator::new(&limits);
+
+        // 0% is valid
+        let cmd = AvatarCommand::Task(TaskCommand::Progress {
+            task_id: "task_1".to_string(),
+            percent: 0,
+        });
+        assert!(validator.validate_command(&cmd).is_ok());
+
+        // Reset counter for next test
+        validator.reset_response_counter();
+
+        // 100% is valid
+        let cmd = AvatarCommand::Task(TaskCommand::Progress {
+            task_id: "task_1".to_string(),
+            percent: 100,
+        });
+        assert!(validator.validate_command(&cmd).is_ok());
+    }
+
+    #[test]
+    fn test_task_fail_reason_too_long() {
+        let mut limits = ConductorLimits::default();
+        limits.max_task_description_length = 50;
+        let validator = CommandValidator::new(&limits);
+
+        let cmd = AvatarCommand::Task(TaskCommand::Fail {
+            task_id: "task_1".to_string(),
+            reason: "a".repeat(100),
+        });
+        let result = validator.validate_command(&cmd);
+        assert!(matches!(
+            result,
+            Err(CommandRejectionReason::InvalidTaskDescription(_))
+        ));
+    }
+
+    // ========================================================================
+    // SECURITY TESTS: CustomSprite Injection Prevention
+    // ========================================================================
+
+    #[test]
+    fn test_custom_sprite_path_traversal_rejected() {
+        let limits = ConductorLimits::default();
+        let validator = CommandValidator::new(&limits);
+
+        let cmd = AvatarCommand::CustomSprite("../../../etc/passwd".to_string());
+        let result = validator.validate_command(&cmd);
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_custom_sprite_html_injection_rejected() {
+        let limits = ConductorLimits::default();
+        let validator = CommandValidator::new(&limits);
+
+        let cmd = AvatarCommand::CustomSprite("<script>alert(1)</script>".to_string());
+        let result = validator.validate_command(&cmd);
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_custom_sprite_valid_names() {
+        let limits = ConductorLimits::default();
+        let validator = CommandValidator::new(&limits);
+
+        // Valid sprite names
+        let cmd = AvatarCommand::CustomSprite("sprite-name_v1".to_string());
+        assert!(validator.validate_command(&cmd).is_ok());
+
+        validator.reset_response_counter();
+
+        let cmd = AvatarCommand::CustomSprite("MySprite.v2".to_string());
+        assert!(validator.validate_command(&cmd).is_ok());
+    }
+
+    // ========================================================================
+    // SECURITY TESTS: PointAt Boundary Validation
+    // ========================================================================
+
+    #[test]
+    fn test_point_at_valid_boundaries() {
+        let limits = ConductorLimits::default();
+        let validator = CommandValidator::new(&limits);
+
+        // Valid: 0,0
+        let cmd = AvatarCommand::PointAt {
+            x_percent: 0,
+            y_percent: 0,
+        };
+        assert!(validator.validate_command(&cmd).is_ok());
+
+        validator.reset_response_counter();
+
+        // Valid: 100,100
+        let cmd = AvatarCommand::PointAt {
+            x_percent: 100,
+            y_percent: 100,
+        };
+        assert!(validator.validate_command(&cmd).is_ok());
+
+        validator.reset_response_counter();
+
+        // Valid: 50,50
+        let cmd = AvatarCommand::PointAt {
+            x_percent: 50,
+            y_percent: 50,
+        };
+        assert!(validator.validate_command(&cmd).is_ok());
+    }
+
+    #[test]
+    fn test_point_at_over_100_rejected() {
+        let limits = ConductorLimits::default();
+        let validator = CommandValidator::new(&limits);
+
+        let cmd = AvatarCommand::PointAt {
+            x_percent: 101,
+            y_percent: 50,
+        };
+        let result = validator.validate_command(&cmd);
+        assert!(result.is_err());
+    }
+
+    // ========================================================================
+    // SECURITY TESTS: Allowlist Management
+    // ========================================================================
+
+    #[test]
+    fn test_allow_agent_adds_to_set() {
+        let limits = ConductorLimits::default();
+        let mut validator = CommandValidator::new(&limits);
+
+        assert!(!validator.is_agent_allowed("custom-agent"));
+        validator.allow_agent("custom-agent".to_string());
+        assert!(validator.is_agent_allowed("custom-agent"));
+    }
+
+    #[test]
+    fn test_disallow_agent_removes_from_set() {
+        let limits = ConductorLimits::default();
+        let mut validator = CommandValidator::new(&limits);
+
+        assert!(validator.is_agent_allowed("ethical-hacker"));
+        validator.disallow_agent("ethical-hacker");
+        assert!(!validator.is_agent_allowed("ethical-hacker"));
+    }
+
+    #[test]
+    fn test_allowed_agents_returns_set() {
+        let limits = ConductorLimits::default();
+        let validator = CommandValidator::new(&limits);
+
+        let agents = validator.allowed_agents();
+        assert!(agents.contains("ethical-hacker"));
+        assert!(agents.contains("backend-engineer"));
+        assert!(agents.contains("qa-engineer"));
+    }
+
+    // ========================================================================
+    // SECURITY TESTS: Rejection Logging
+    // ========================================================================
+
+    #[test]
+    fn test_rejected_commands_logged() {
+        let limits = ConductorLimits::default();
+        let validator = CommandValidator::new(&limits);
+
+        // Trigger a rejection
+        let cmd = AvatarCommand::Task(TaskCommand::Start {
+            agent: "unknown-agent".to_string(),
+            description: "Test".to_string(),
+        });
+        let _ = validator.validate_command(&cmd);
+
+        let rejected = validator.rejected_commands();
+        assert!(!rejected.is_empty());
+    }
+
+    #[test]
+    fn test_rejected_commands_log_limit() {
+        let mut limits = ConductorLimits::default();
+        limits.max_commands_per_response = 200; // Allow many commands
+        let validator = CommandValidator::new(&limits);
+
+        // Trigger 150 rejections
+        for i in 0..150 {
+            let cmd = AvatarCommand::Task(TaskCommand::Start {
+                agent: format!("unknown-{}", i),
+                description: "Test".to_string(),
+            });
+            let _ = validator.validate_command(&cmd);
+        }
+
+        // Log should be capped at 100
+        let rejected = validator.rejected_commands();
+        assert_eq!(rejected.len(), 100);
+    }
+
+    #[test]
+    fn test_clear_rejected_log() {
+        let limits = ConductorLimits::default();
+        let validator = CommandValidator::new(&limits);
+
+        // Trigger a rejection
+        let cmd = AvatarCommand::Task(TaskCommand::Start {
+            agent: "unknown".to_string(),
+            description: "Test".to_string(),
+        });
+        let _ = validator.validate_command(&cmd);
+        assert!(!validator.rejected_commands().is_empty());
+
+        validator.clear_rejected_log();
+        assert!(validator.rejected_commands().is_empty());
+    }
+
+    // ========================================================================
+    // SECURITY TESTS: ValidationResult
+    // ========================================================================
+
+    #[test]
+    fn test_validation_result_is_valid_variants() {
+        assert!(ValidationResult::Valid.is_valid());
+        assert!(!ValidationResult::Invalid("test".to_string()).is_valid());
+        assert!(!ValidationResult::RateLimited("test".to_string()).is_valid());
+    }
+
+    #[test]
+    fn test_validation_result_error_messages() {
+        assert!(ValidationResult::Valid.error_message().is_none());
+        assert_eq!(
+            ValidationResult::Invalid("error1".to_string()).error_message(),
+            Some("error1")
+        );
+        assert_eq!(
+            ValidationResult::RateLimited("error2".to_string()).error_message(),
+            Some("error2")
+        );
+    }
+
+    // ========================================================================
+    // SECURITY TESTS: CommandRejectionReason Display
+    // ========================================================================
+
+    #[test]
+    fn test_rejection_reason_display() {
+        let reason = CommandRejectionReason::NotAllowed("test".to_string());
+        assert!(format!("{}", reason).contains("not allowed"));
+
+        let reason = CommandRejectionReason::RateLimitExceeded;
+        assert!(format!("{}", reason).contains("Too many"));
+
+        let reason = CommandRejectionReason::UnknownAgent("bad".to_string());
+        assert!(format!("{}", reason).contains("Unknown agent"));
+
+        let reason = CommandRejectionReason::InvalidArguments("bad args".to_string());
+        assert!(format!("{}", reason).contains("Invalid"));
+    }
+
+    // ========================================================================
+    // SECURITY TESTS: SecurityConfig
+    // ========================================================================
+
+    #[test]
+    fn test_security_config_default() {
+        let config = SecurityConfig::default();
+        assert!(config.additional_agents.is_empty());
+        assert!(!config.log_rejections); // Default is false
+        assert_eq!(config.limits.max_message_size, 100 * 1024);
+    }
+
+    // ========================================================================
+    // SECURITY TESTS: All Default Allowed Agents Present
+    // ========================================================================
+
+    #[test]
+    fn test_all_default_agents_allowed() {
+        let limits = ConductorLimits::default();
+        let validator = CommandValidator::new(&limits);
+
+        let expected_agents = [
+            "ethical-hacker",
+            "backend-engineer",
+            "frontend-specialist",
+            "senior-full-stack-developer",
+            "solutions-architect",
+            "ux-ui-designer",
+            "qa-engineer",
+            "privacy-researcher",
+            "devops-engineer",
+            "relational-database-expert",
+        ];
+
+        for agent in expected_agents {
+            assert!(
+                validator.is_agent_allowed(agent),
+                "Expected agent '{}' to be allowed",
+                agent
+            );
+        }
+    }
+
+    // ========================================================================
+    // SECURITY TESTS: Custom Allowlist Constructor
+    // ========================================================================
+
+    #[test]
+    fn test_custom_allowlists() {
+        let limits = ConductorLimits::default();
+        let mut custom_commands = HashSet::new();
+        custom_commands.insert("custom-cmd".to_string());
+
+        let mut custom_agents = HashSet::new();
+        custom_agents.insert("custom-agent".to_string());
+
+        let validator = CommandValidator::with_allowlists(&limits, custom_commands, custom_agents);
+
+        assert!(validator.is_agent_allowed("custom-agent"));
+        assert!(!validator.is_agent_allowed("ethical-hacker")); // Not in custom list
+    }
+
+    // ========================================================================
+    // SECURITY TESTS: InputValidator Limits Accessor
+    // ========================================================================
+
+    #[test]
+    fn test_input_validator_limits_accessor() {
+        let mut limits = ConductorLimits::default();
+        limits.max_message_size = 12345;
+        let validator = InputValidator::new(limits);
+
+        assert_eq!(validator.limits().max_message_size, 12345);
     }
 }
