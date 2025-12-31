@@ -211,8 +211,9 @@ ux_show_all_ready() {
 # ============================================================================
 
 # Path to the Rust TUI binary
-TUI_BINARY="${SCRIPT_DIR}/tui/target/release/yollayah-tui"
-TUI_BINARY_DEBUG="${SCRIPT_DIR}/tui/target/debug/yollayah-tui"
+TUI_DIR="${SCRIPT_DIR}/tui"
+TUI_BINARY="${TUI_DIR}/target/release/yollayah-tui"
+TUI_BINARY_DEBUG="${TUI_DIR}/target/debug/yollayah-tui"
 
 # Check if Rust TUI is available
 ux_tui_available() {
@@ -226,6 +227,83 @@ ux_tui_binary() {
     elif [[ -x "$TUI_BINARY_DEBUG" ]]; then
         echo "$TUI_BINARY_DEBUG"
     fi
+}
+
+# Check if TUI needs to be rebuilt (sources newer than binary)
+ux_tui_needs_rebuild() {
+    local binary
+    binary="$(ux_tui_binary)"
+
+    # No binary at all? Definitely need to build
+    if [[ -z "$binary" ]] || [[ ! -f "$binary" ]]; then
+        log_ux "DEBUG" "TUI binary not found, needs build"
+        return 0
+    fi
+
+    # Check if any Rust source file is newer than the binary
+    local newest_source
+    newest_source=$(find "$TUI_DIR/src" -name "*.rs" -newer "$binary" 2>/dev/null | head -1)
+
+    if [[ -n "$newest_source" ]]; then
+        log_ux "INFO" "TUI source newer than binary: $newest_source"
+        return 0
+    fi
+
+    # Check if Cargo.toml is newer (dependencies changed)
+    if [[ "$TUI_DIR/Cargo.toml" -nt "$binary" ]]; then
+        log_ux "INFO" "Cargo.toml newer than binary, rebuild needed"
+        return 0
+    fi
+
+    log_ux "DEBUG" "TUI binary is up to date"
+    return 1
+}
+
+# Build the TUI (release mode)
+ux_tui_build() {
+    # Check if Rust is available
+    if ! command -v cargo &>/dev/null; then
+        # Try sourcing cargo env
+        if [[ -f "$HOME/.cargo/env" ]]; then
+            source "$HOME/.cargo/env" 2>/dev/null || true
+        fi
+    fi
+
+    if ! command -v cargo &>/dev/null; then
+        log_ux "WARN" "Cargo not available, cannot build TUI"
+        return 1
+    fi
+
+    log_ux "INFO" "Building TUI (this may take a moment on first build)..."
+    ux_yollayah "$(yollayah_thinking) Getting my pretty face ready..."
+
+    # Build in release mode for better performance
+    if ux_run_friendly "Building interface..." cargo build --release --manifest-path "$TUI_DIR/Cargo.toml" 2>&1; then
+        log_ux "INFO" "TUI build successful"
+        ux_success "Interface ready!"
+        return 0
+    else
+        log_ux "ERROR" "TUI build failed"
+        ux_warn "Couldn't build the fancy interface, using simple mode"
+        return 1
+    fi
+}
+
+# Ensure TUI is built and up to date
+ux_tui_ensure_ready() {
+    # Check if TUI directory exists
+    if [[ ! -d "$TUI_DIR/src" ]]; then
+        log_ux "DEBUG" "TUI source directory not found"
+        return 1
+    fi
+
+    # Check if rebuild is needed
+    if ux_tui_needs_rebuild; then
+        ux_tui_build
+        return $?
+    fi
+
+    return 0
 }
 
 # Launch the rich TUI
@@ -260,6 +338,9 @@ ux_launch_tui() {
 # Start UI - tries TUI first, falls back to bash
 ux_start_interface() {
     local model_name="$1"
+
+    # Ensure TUI is built and up to date (rebuilds if sources changed)
+    ux_tui_ensure_ready
 
     if ux_tui_available; then
         log_ux "INFO" "Launching rich TUI interface"

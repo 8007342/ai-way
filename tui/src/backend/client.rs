@@ -27,6 +27,7 @@ impl Default for BackendConnection {
 }
 
 /// Backend client
+#[derive(Clone)]
 pub struct BackendClient {
     connection: BackendConnection,
     http_client: reqwest::Client,
@@ -142,6 +143,44 @@ impl BackendClient {
         });
 
         Ok(())
+    }
+
+    /// Send a message and wait for complete response (non-streaming)
+    /// Used for quick queries like generating goodbye messages
+    pub async fn send_message_sync(
+        &self,
+        message: &str,
+        model: &str,
+    ) -> anyhow::Result<String> {
+        match &self.connection {
+            BackendConnection::DirectOllama { host, port } => {
+                let url = format!("http://{}:{}/api/generate", host, port);
+
+                let request = serde_json::json!({
+                    "model": model,
+                    "prompt": message,
+                    "stream": false,
+                });
+
+                let response = self.http_client
+                    .post(&url)
+                    .json(&request)
+                    .send()
+                    .await?;
+
+                let data: serde_json::Value = response.json().await?;
+                let response_text = data
+                    .get("response")
+                    .and_then(|r| r.as_str())
+                    .unwrap_or("")
+                    .to_string();
+
+                Ok(response_text)
+            }
+            BackendConnection::CoreServer { .. } => {
+                anyhow::bail!("Server mode not yet implemented")
+            }
+        }
     }
 
     /// Check if backend is healthy
