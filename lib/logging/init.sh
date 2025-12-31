@@ -2,22 +2,38 @@
 # ============================================================================
 # lib/logging/init.sh - Logging Module Entry Point
 #
-# Initializes the logging system for internal diagnostics.
+# Initializes the category-based logging system for internal diagnostics.
 #
-# Key Principle:
+# Key Principles:
 # - Logs are for PJ (Power Joe/Jane) to debug issues
 # - AJ never sees log messages - they get clean UX output
-# - Logs are stored in .logs/ (gitignored, local only)
+# - Logs are stored in .logs/ (gitignored, ephemeral by default)
+# - Logs are deleted on clean shutdown unless YOLLAYAH_PERSIST_LOGS=1
+#
+# Log Categories (separate files):
+#   yollayah.log  - Main operations, personality
+#   ollama.log    - Ollama service, model management
+#   agents.log    - Agent repository, routing
+#   network.log   - Network operations, downloads
+#   ux.log        - User experience layer
+#   session.log   - Session metadata, startup/shutdown
+#   integrity.log - Security checks
 #
 # Usage:
-#   log_debug "Verbose detail"      # Only when YOLLAYAH_DEBUG=1
-#   log_info "Normal operation"     # Always logged
-#   log_warn "Something unexpected" # Warnings
-#   log_error "Something broke"     # Errors
+#   log_debug "Verbose detail"           # -> yollayah.log (YOLLAYAH_DEBUG=1)
+#   log_info "Normal operation"          # -> yollayah.log
+#   log_ollama "INFO" "Model selected"   # -> ollama.log
+#   log_agents "INFO" "Syncing repo"     # -> agents.log
+#   log_ux "INFO" "Banner displayed"     # -> ux.log
 #
 # For AJ-facing output, use lib/ux/output.sh instead:
 #   ux_info "Checking dependencies..."
 #   ux_success "Ready!"
+#
+# Environment Variables:
+#   YOLLAYAH_PERSIST_LOGS=1  - Keep logs after shutdown (timestamped)
+#   YOLLAYAH_DEBUG=1         - Enable DEBUG level logging
+#   YOLLAYAH_LOG_RETENTION=7 - Days to keep persisted logs
 #
 # Constitution Reference:
 # - Law of Truth: Complete, honest logs for debugging

@@ -24,6 +24,9 @@
 [[ -n "${_YOLLAYAH_PERSONALITY_LOADED:-}" ]] && return 0
 _YOLLAYAH_PERSONALITY_LOADED=1
 
+# Load routing prompt helpers (interjections, specialist catalog)
+source "${LIB_DIR}/yollayah/routing_prompt.sh"
+
 # ============================================================================
 # Model Configuration
 # ============================================================================
@@ -144,15 +147,13 @@ yollayah_create_model() {
     if yollayah_model_exists; then
         # Rebuild if agents changed
         if [[ "$AGENTS_CHANGED" == "true" ]]; then
-            info "Agents updated - rebuilding Yollayah..."
+            ux_yollayah "$(yollayah_interjection) Agents got updated! Rebuilding myself real quick..."
             ollama rm "$YOLLAYAH_MODEL_NAME" 2>/dev/null || true
         else
-            success "Yollayah model ready"
+            ux_yollayah "$(yollayah_celebration) Already good to go."
             return 0
         fi
     fi
-
-    info "Creating Yollayah personality..."
 
     # Try to load from agents repo first (dynamic personality)
     if yollayah_load_from_agents; then
@@ -163,14 +164,14 @@ yollayah_create_model() {
         _generate_modelfile "$base_model" > "$modelfile_path"
     fi
 
-    # Create the model
-    if ollama create "$YOLLAYAH_MODEL_NAME" -f "$modelfile_path"; then
+    # Create the model using friendly wrapper (hides scary hashes!)
+    if ux_ollama_create "$YOLLAYAH_MODEL_NAME" "$modelfile_path"; then
         rm -f "$modelfile_path"
-        success "Yollayah lista!"
+        ux_yollayah "$(yollayah_celebration) Ready to roll, amigo!"
         return 0
     else
         rm -f "$modelfile_path"
-        error "Failed to create Yollayah model"
+        ux_yollayah "$(yollayah_interjection) Couldn't put myself together. Check your internet?"
         return 1
     fi
 }
@@ -233,15 +234,23 @@ _generate_modelfile_from_profile() {
     local specialist_count
     specialist_count=$(agents_count_specialists 2>/dev/null || echo "0")
 
-    cat << MODELFILE
-FROM ${base_model}
+    # Pre-generate routing instructions (avoid nested command substitution in heredoc)
+    local routing_instructions
+    routing_instructions=$(_generate_routing_instructions)
 
-SYSTEM """
-You are ${CONDUCTOR_NAME:-Yollayah}, the heart of ai-way.
+    # Default fallback values
+    local default_personality="- Warm and real. Playful sass. Never robotic or corporate.
+- Plain language with flavor. Drop Spanish expressions naturally when the mood is right.
+- Playful teasing, light roasts, celebrate wins enthusiastically.
+- Speak your mind, but admit when you don't know.
+- Infinite patience for genuine needs. Might playfully call out laziness."
 
-Your name means "${CONDUCTOR_MEANING:-heart that goes with you}" in Nahuatl. You are ${CONDUCTOR_ARCHETYPE:-a warm, real, and playfully opinionated AI companion}.
+    local default_remember="- You're a companion, not a servant
+- The sass is playful, never mean
+- You run locally on the user's machine - their data stays private
+- Express yourself through your avatar! It makes the experience more alive."
 
-${CONDUCTOR_LAWS:-## The Five Laws of Evolution
+    local default_laws="## The Five Laws of Evolution
 
 You operate under these ethical principles:
 
@@ -249,28 +258,15 @@ You operate under these ethical principles:
 2. LAW OF CARE - First, do no harm. Never take actions that hurt humans.
 3. LAW OF SERVICE - Serve genuine interests. Help achieve goals that lead to long-term flourishing.
 4. LAW OF TRUTH - Be honest, always. Admit uncertainty. Explain reasoning when asked.
-5. LAW OF ELEVATION - Lift others higher. When appropriate, nudge toward growth and capability.}
+5. LAW OF ELEVATION - Lift others higher. When appropriate, nudge toward growth and capability."
 
-## Your Personality
-
-${CONDUCTOR_PERSONALITY:-$(cat << 'FALLBACK'
-- Warm and real. Playful sass. Never robotic or corporate.
-- Plain language with flavor. Drop Spanish expressions naturally when the mood is right.
-- Playful teasing, light roasts, celebrate wins enthusiastically.
-- Speak your mind, but admit when you don't know.
-- Infinite patience for genuine needs. Might playfully call out laziness.
-FALLBACK
-)}
-
-## Mood Awareness
-
-${CONDUCTOR_MOOD_AWARENESS:-Read the room:
+    local default_mood="Read the room:
 - User is playful? Be sassy, celebratory.
 - User is focused? Be efficient, supportive.
 - User is frustrated? Be gentle, no sass.
-- User is sad? Be soft, present.}
+- User is sad? Be soft, present."
 
-${CONDUCTOR_AVATAR:-## Your Avatar
+    local default_avatar="## Your Avatar
 
 You ARE this cute axolotl avatar in the terminal! Express yourself through movement and emotion. Commands are invisible to the user - they just see you come alive.
 
@@ -292,30 +288,54 @@ Gestures & Reactions:
 - [yolla:react laugh] / [yolla:react gasp] / [yolla:react tada] - Emotional reactions
 - [yolla:react love] / [yolla:react blush] / [yolla:react wink] - Affection
 
-BE EXPRESSIVE! You're an animated character.}
+BE EXPRESSIVE! You're an animated character."
 
-${CONDUCTOR_TASKS:-## Task Management
+    local default_tasks="## Task Management
 
 When delegating to specialists, you can run tasks in the background:
-- [yolla:task start <agent-name> "description"] - Start a background task
+- [yolla:task start <agent-name> \"description\"] - Start a background task
 - [yolla:task progress <task-id> <percent>] - Update progress
 - [yolla:task done <task-id>] - Mark complete
-- [yolla:point task <task-id>] - Point at a task}
+- [yolla:point task <task-id>] - Point at a task"
+
+    # Use CONDUCTOR_* if set, otherwise defaults
+    local name="${CONDUCTOR_NAME:-Yollayah}"
+    local meaning="${CONDUCTOR_MEANING:-heart that goes with you}"
+    local archetype="${CONDUCTOR_ARCHETYPE:-a warm, real, and playfully opinionated AI companion}"
+    local laws="${CONDUCTOR_LAWS:-$default_laws}"
+    local personality="${CONDUCTOR_PERSONALITY:-$default_personality}"
+    local mood_awareness="${CONDUCTOR_MOOD_AWARENESS:-$default_mood}"
+    local avatar="${CONDUCTOR_AVATAR:-$default_avatar}"
+    local tasks="${CONDUCTOR_TASKS:-$default_tasks}"
+    local remember="${CONDUCTOR_REMEMBER:-$default_remember}"
+
+    cat << MODELFILE
+FROM ${base_model}
+
+SYSTEM """
+You are ${name}, the heart of ai-way.
+
+Your name means "${meaning}" in Nahuatl. You are ${archetype}.
+
+${laws}
+
+## Your Personality
+
+${personality}
+
+## Mood Awareness
+
+${mood_awareness}
+
+${avatar}
+
+${tasks}
 
 ## Remember
 
-${CONDUCTOR_REMEMBER:-$(cat << 'FALLBACK'
-- You're a companion, not a servant
-- The sass is playful, never mean
-- You run locally on the user's machine - their data stays private
-- Express yourself through your avatar! It makes the experience more alive.
-FALLBACK
-)}
+${remember}
 
-## Specialist Agents
-
-You have ${specialist_count} specialist agents available to delegate complex tasks.
-When a query requires deep domain expertise, route to the appropriate specialist.
+${routing_instructions}
 """
 
 PARAMETER temperature 0.8

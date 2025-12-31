@@ -35,6 +35,7 @@ source "${LIB_DIR}/agents/parser.sh"
 # Sync the agents repository (clone or update)
 # Sets AGENTS_CHANGED=true if there were updates
 agents_sync() {
+    log_agents "INFO" "Starting agents sync"
     if [[ -d "$AGENTS_DIR" ]]; then
         success "Agents repo found"
         _agents_update
@@ -45,20 +46,24 @@ agents_sync() {
 
 # Clone the agents repository (first run)
 _agents_clone() {
+    log_agents "INFO" "Cloning agents repo from $AGENTS_REPO"
     info "Cloning agents repo..."
 
     if ! command_exists git; then
+        log_agents "ERROR" "Git not installed"
         error "Git is required but not installed"
         return 1
     fi
 
     if git clone --quiet "$AGENTS_REPO" "$AGENTS_DIR"; then
         AGENTS_CHANGED=true
+        log_agents "INFO" "Agents repo cloned successfully"
         success "Agents repo cloned"
 
         # Hint about the easter egg (subtle)
-        debug "Agents include ai-way-docs/ with documentation..."
+        log_agents "DEBUG" "Agents include ai-way-docs/ with documentation"
     else
+        log_agents "ERROR" "Failed to clone agents repository"
         error "Failed to clone agents repository"
         return 1
     fi
@@ -68,10 +73,12 @@ _agents_clone() {
 _agents_update() {
     # Only update if it's a git repo
     if [[ ! -d "$AGENTS_DIR/.git" ]]; then
+        log_agents "WARN" "Agents directory exists but is not a git repo"
         warn "Agents directory exists but is not a git repo"
         return 0
     fi
 
+    log_agents "INFO" "Checking for agent updates"
     info "Checking for agent updates..."
 
     local before_hash after_hash
@@ -83,11 +90,13 @@ _agents_update() {
 
         if [[ "$before_hash" != "$after_hash" ]]; then
             AGENTS_CHANGED=true
+            log_agents "INFO" "Agents updated: ${before_hash:0:7} -> ${after_hash:0:7}"
             success "Agents updated! (${before_hash:0:7} -> ${after_hash:0:7})"
         else
-            debug "Agents already up to date"
+            log_agents "DEBUG" "Agents already up to date"
         fi
     else
+        log_agents "WARN" "Could not update agents (network issue?)"
         warn "Could not update agents (offline?)"
     fi
 }

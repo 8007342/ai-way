@@ -59,6 +59,12 @@ source "${SCRIPT_DIR}/lib/agents/sync.sh"
 # Yollayah personality
 source "${SCRIPT_DIR}/lib/yollayah/personality.sh"
 
+# Yollayah setup (first-run, dependency installation)
+source "${SCRIPT_DIR}/lib/yollayah/setup.sh"
+
+# Routing module (specialist agents, task management)
+source "${SCRIPT_DIR}/lib/routing/init.sh"
+
 # User experience
 source "${SCRIPT_DIR}/lib/ux/terminal.sh"
 
@@ -79,7 +85,10 @@ main() {
 
     ux_show_startup_progress
 
-    # Check Ollama is installed
+    # Run first-time setup if needed (gracious sudo handling)
+    setup_run || exit 1
+
+    # Check Ollama is installed (should be after setup)
     ollama_check_installed || exit 1
 
     # Record pre-Yollayah state (for cleanup)
@@ -100,6 +109,9 @@ main() {
 
     # Create Yollayah personality model
     yollayah_create_model || exit 1
+
+    # Initialize routing module (specialist task management)
+    routing_init
 
     # Initialize user module (no-op if no data)
     user_init
