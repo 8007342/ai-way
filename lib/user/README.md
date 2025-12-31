@@ -62,37 +62,33 @@ One command clears everything. No confirmation loops.
 
 ---
 
-## What This Module Will Handle (Eventually)
+## What This Module Handles
 
 ### Implemented Now
-- Nothing. This is a skeleton.
-
-### Planned (With Privacy Review Required)
 
 #### Preferences (`preferences.sh`)
 - Yollayah personality tweaks (sass level, language)
 - UI preferences (colors, verbosity)
 - Model preferences (override auto-selection)
 
-**Privacy Review Needed**: These are low-risk but could fingerprint AJ
-if combined. Need to ensure preferences don't leak via model behavior.
+**Privacy Note**: Low-risk but could fingerprint AJ if combined.
+Preferences don't leak via model behavior.
 
 #### Conversation History (`history.sh`)
 - Opt-in conversation logging
 - Session persistence across restarts
 
-**Privacy Review Needed**: This is HIGH RISK. Conversations contain:
-- Business secrets
-- Personal information
-- Potentially sensitive queries
+**Privacy Note**: HIGH RISK module. Conversations may contain sensitive
+data. Currently opt-in with clear warnings.
 
-Questions to answer:
-- Should this be encrypted? (Key management problem)
-- Should we auto-delete after N days?
-- How do we handle "delete this conversation"?
-- What if someone gets physical access to the machine?
+#### Storage Abstraction (`storage.sh`)
+- Handles data persistence with privacy-first design
+- All data stays in `$SCRIPT_DIR/.user/`
+- Supports secure deletion where available
 
-#### Context Memory (`memory.sh`) [Not Yet Created]
+### Planned (Not Yet Created)
+
+#### Context Memory (`memory.sh`)
 - Long-term facts AJ teaches Yollayah
 - Project context that persists
 
@@ -150,13 +146,13 @@ lib/user/
 ├── README.md        # This file - privacy manifesto
 ├── init.sh          # Module initialization (consent check)
 ├── storage.sh       # Storage abstraction (where/how)
-├── preferences.sh   # User preferences (placeholder)
-└── history.sh       # Conversation history (placeholder)
+├── preferences.sh   # User preferences
+└── history.sh       # Conversation history (opt-in)
 ```
 
 Future submodules (not yet created):
-- `memory.sh` - Long-term memory
-- `analytics.sh` - Local analytics
+- `memory.sh` - Long-term context memory
+- `analytics.sh` - Local-only usage patterns
 - `export.sh` - Data export for portability
 - `delete.sh` - Secure deletion utilities
 
