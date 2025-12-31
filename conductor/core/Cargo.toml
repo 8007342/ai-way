@@ -10,9 +10,14 @@ license = "AGPL-3.0"
 name = "conductor_core"
 path = "src/lib.rs"
 
+[features]
+default = []
+# Enable WebSocket transport for remote surfaces
+websocket = ["tokio-tungstenite"]
+
 [dependencies]
 # Async runtime
-tokio = { version = "1.41", features = ["full", "rt-multi-thread", "macros", "sync"] }
+tokio = { version = "1.41", features = ["full", "rt-multi-thread", "macros", "sync", "net"] }
 tokio-stream = "0.1"
 
 # HTTP client for LLM backends
@@ -33,6 +38,13 @@ tracing = "0.1"
 # Async trait support
 async-trait = "0.1"
 
+# Unix socket peer credentials (Linux)
+libc = "0.2"
+
+# Optional: WebSocket transport
+tokio-tungstenite = { version = "0.24", optional = true }
+
 [dev-dependencies]
 tokio-test = "0.4"
 pretty_assertions = "1.4"
+tempfile = "3.10"

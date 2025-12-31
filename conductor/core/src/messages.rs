@@ -207,6 +207,32 @@ pub enum ConductorMessage {
         /// Optional goodbye message
         message: Option<String>,
     },
+
+    // ============================================
+    // Transport/Handshake Messages
+    // ============================================
+    /// Handshake acknowledgment (response to Handshake event)
+    ///
+    /// Sent by the Conductor after receiving a Handshake event.
+    HandshakeAck {
+        /// Whether the handshake was accepted
+        accepted: bool,
+        /// Connection ID assigned by Conductor (unique per session)
+        connection_id: String,
+        /// Reason for rejection (if not accepted)
+        rejection_reason: Option<String>,
+        /// Protocol version supported by Conductor
+        protocol_version: u32,
+    },
+
+    /// Heartbeat request
+    ///
+    /// Sent periodically to detect dead connections.
+    /// Surface should respond with Pong event.
+    Ping {
+        /// Sequence number (surface echoes this back)
+        seq: u64,
+    },
 }
 
 /// Message identifier
