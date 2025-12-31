@@ -86,6 +86,29 @@ pub enum AvatarCommand {
     Show,
     /// Custom sprite data (future)
     CustomSprite(String),
+    /// Task-related command
+    Task(TaskCommand),
+}
+
+/// Commands for background task management
+#[derive(Clone, Debug, PartialEq)]
+pub enum TaskCommand {
+    /// Start a new background task
+    Start { agent: String, description: String },
+    /// Update task progress
+    Progress { task_id: String, percent: u8 },
+    /// Mark task as done
+    Done { task_id: String },
+    /// Mark task as failed
+    Fail { task_id: String, reason: String },
+    /// Focus/highlight a specific task
+    Focus { task_id: String },
+    /// Point at a task
+    PointAt { task_id: String },
+    /// Hover near a task
+    Hover { task_id: String },
+    /// Celebrate task completion
+    Celebrate { task_id: String },
 }
 
 /// Named positions
@@ -263,6 +286,60 @@ impl CommandParser {
             // Future: custom sprites
             "sprite" if parts.len() > 1 => Some(AvatarCommand::CustomSprite(parts[1..].join(" "))),
 
+            // Task management
+            "task" => self.parse_task(&parts[1..]),
+
+            _ => None,
+        }
+    }
+
+    fn parse_task(&self, args: &[&str]) -> Option<AvatarCommand> {
+        if args.is_empty() {
+            return None;
+        }
+
+        match args[0] {
+            "start" if args.len() >= 3 => {
+                let agent = args[1].to_string();
+                // Description is the rest, possibly quoted
+                let desc_parts = &args[2..];
+                let description = desc_parts.join(" ").trim_matches('"').to_string();
+                Some(AvatarCommand::Task(TaskCommand::Start { agent, description }))
+            }
+            "progress" if args.len() >= 3 => {
+                let task_id = args[1].to_string();
+                let percent: u8 = args[2].parse().ok()?;
+                Some(AvatarCommand::Task(TaskCommand::Progress { task_id, percent: percent.min(100) }))
+            }
+            "done" if args.len() >= 2 => {
+                let task_id = args[1].to_string();
+                Some(AvatarCommand::Task(TaskCommand::Done { task_id }))
+            }
+            "fail" if args.len() >= 2 => {
+                let task_id = args[1].to_string();
+                let reason = if args.len() > 2 {
+                    args[2..].join(" ").trim_matches('"').to_string()
+                } else {
+                    "Unknown error".to_string()
+                };
+                Some(AvatarCommand::Task(TaskCommand::Fail { task_id, reason }))
+            }
+            "focus" if args.len() >= 2 => {
+                let task_id = args[1].to_string();
+                Some(AvatarCommand::Task(TaskCommand::Focus { task_id }))
+            }
+            "point" if args.len() >= 2 => {
+                let task_id = args[1].to_string();
+                Some(AvatarCommand::Task(TaskCommand::PointAt { task_id }))
+            }
+            "hover" if args.len() >= 2 => {
+                let task_id = args[1].to_string();
+                Some(AvatarCommand::Task(TaskCommand::Hover { task_id }))
+            }
+            "celebrate" if args.len() >= 2 => {
+                let task_id = args[1].to_string();
+                Some(AvatarCommand::Task(TaskCommand::Celebrate { task_id }))
+            }
             _ => None,
         }
     }

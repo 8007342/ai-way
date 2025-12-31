@@ -1,10 +1,17 @@
 //! Main Application
 //!
-//! The App struct manages the entire TUI lifecycle:
+//! The App struct manages the TUI lifecycle as a thin display client:
 //! - Event loop (keyboard, mouse, resize)
-//! - Compositor orchestration
-//! - Avatar state machine
-//! - Backend communication
+//! - ConductorClient for orchestration
+//! - DisplayState for rendering
+//!
+//! # Phase 2 Architecture
+//!
+//! The App is now a thin client that:
+//! 1. Converts terminal events to SurfaceEvents
+//! 2. Sends events to the embedded Conductor via ConductorClient
+//! 3. Receives ConductorMessages and updates DisplayState
+//! 4. Renders based on DisplayState
 
 use std::io;
 use std::time::{Duration, Instant};
@@ -14,88 +21,88 @@ use ratatui::backend::CrosstermBackend;
 use ratatui::layout::Rect;
 use ratatui::style::{Color, Style};
 use ratatui::Terminal;
-use tokio::sync::mpsc;
 
-use crate::avatar::{Avatar, AvatarState, AvatarStateMachine, AvatarTrigger};
-use crate::avatar::commands::{AvatarCommand, CommandParser, Position, Mood, Size as AvatarSize, Gesture, Reaction};
-use crate::backend::{BackendClient, BackendConnection, StreamingToken};
+use conductor_core::{ConductorMessage, ConductorState, ScrollDirection};
+
+use crate::avatar::{Activity, Avatar, AvatarSize as TuiAvatarSize};
 use crate::compositor::{Compositor, LayerId};
+use crate::conductor_client::ConductorClient;
+use crate::display::{DisplayRole, DisplayState};
 use crate::theme::YOLLAYAH_MAGENTA;
+
+/// Input box height (lines) for text wrapping
+const INPUT_HEIGHT: u16 = 5;
+
+/// Quick goodbye messages (no LLM needed, instant)
+const QUICK_GOODBYES: &[&str] = &[
+    "Bye bye!",
+    "Hasta luego!",
+    "Cuidate!",
+    "See ya!",
+    "Later, gator!",
+    "Nos vemos!",
+    "Peace out!",
+    "Take care!",
+    "You got this!",
+    "Believe in yourself!",
+    "Go make something cool!",
+    "Echale ganas!",
+];
 
 /// Main application state
 pub struct App {
+    // === Core State ===
     /// Is the app still running?
     running: bool,
+    /// Goodbye message to show on exit
+    goodbye_message: Option<String>,
+
+    // === Conductor Integration ===
+    /// Client for communicating with the embedded Conductor
+    conductor: ConductorClient,
+    /// Display state derived from ConductorMessages
+    display: DisplayState,
+
+    // === UI Components ===
     /// The layered compositor
     compositor: Compositor,
-    /// The avatar (heart of the UX)
+    /// The avatar renderer (display only)
     avatar: Avatar,
-    /// Avatar state machine
-    state_machine: AvatarStateMachine,
     /// Layer assignments
     layers: AppLayers,
+
+    // === Input State ===
     /// User input buffer
     input_buffer: String,
-    /// Conversation messages
-    messages: Vec<Message>,
-    /// Currently streaming response
-    streaming: Option<String>,
-    /// Stream receiver for tokens
-    stream_rx: Option<mpsc::Receiver<StreamingToken>>,
+    /// Scroll offset (lines from bottom, 0 = latest)
+    scroll_offset: usize,
+    /// Total rendered lines (for scroll bounds)
+    total_lines: usize,
+
+    // === Avatar Rendering State ===
+    /// Avatar position (x, y)
+    avatar_pos: (u16, u16),
+    /// Avatar target position for smooth movement
+    avatar_target: (u16, u16),
+    /// Time until next wander
+    wander_timer: Duration,
+
+    // === Misc State ===
     /// Last frame time (for animations)
     last_frame: Instant,
     /// Developer mode
     dev_mode: bool,
     /// Terminal size
     size: (u16, u16),
-    /// Backend client
-    backend: BackendClient,
-    /// Model name
-    model: String,
-    /// Scroll offset (lines from bottom, 0 = latest)
-    scroll_offset: usize,
-    /// Total rendered lines (for scroll bounds)
-    total_lines: usize,
-    /// Avatar position (x, y)
-    avatar_pos: (u16, u16),
-    /// Avatar target position for smooth movement
-    avatar_target: (u16, u16),
-    /// Time until next wander (fallback when agent doesn't control)
-    wander_timer: Duration,
-    /// Command parser for agent control
-    command_parser: CommandParser,
-    /// Whether avatar is hidden
-    avatar_hidden: bool,
-    /// Current mood set by agent
-    agent_mood: Option<Mood>,
-    /// Whether agent enabled free wandering
-    wander_enabled: bool,
-    /// Current gesture/reaction being performed
-    current_gesture: Option<String>,
-    /// Gesture timer
-    gesture_timer: Duration,
 }
 
 /// Layer IDs for UI regions
 struct AppLayers {
     conversation: LayerId,
+    tasks: LayerId,
     input: LayerId,
     status: LayerId,
     avatar: LayerId,
-}
-
-/// A conversation message
-#[derive(Clone)]
-pub struct Message {
-    pub role: Role,
-    pub content: String,
-}
-
-#[derive(Clone, Copy, PartialEq)]
-pub enum Role {
-    User,
-    Yollayah,
-    System,
 }
 
 impl App {
@@ -107,14 +114,14 @@ impl App {
         let mut compositor = Compositor::new(area);
 
         // Create layers with z-ordering
-        // Lower z = further back, higher z = in front
+        let input_and_status_height = INPUT_HEIGHT + 1;
         let conversation = compositor.create_layer(
-            Rect::new(0, 0, area.width, area.height.saturating_sub(3)),
-            0, // Background
+            Rect::new(0, 0, area.width, area.height.saturating_sub(input_and_status_height)),
+            0,
         );
 
         let input = compositor.create_layer(
-            Rect::new(0, area.height.saturating_sub(3), area.width, 2),
+            Rect::new(0, area.height.saturating_sub(input_and_status_height), area.width, INPUT_HEIGHT),
             10,
         );
 
@@ -123,10 +130,22 @@ impl App {
             10,
         );
 
-        // Avatar layer - starts in bottom right, medium size
+        // Task panel layer - right side
+        let task_panel_width = 32u16;
+        let tasks_layer = compositor.create_layer(
+            Rect::new(
+                area.width.saturating_sub(task_panel_width),
+                0,
+                task_panel_width,
+                area.height.saturating_sub(input_and_status_height),
+            ),
+            25,
+        );
+
+        // Avatar layer
         let avatar_bounds = Rect::new(
             area.width.saturating_sub(26),
-            area.height.saturating_sub(8),
+            area.height.saturating_sub(input_and_status_height + 6),
             24,
             6,
         );
@@ -134,59 +153,38 @@ impl App {
 
         let layers = AppLayers {
             conversation,
+            tasks: tasks_layer,
             input,
             status,
             avatar: avatar_layer,
         };
 
         let avatar = Avatar::new();
-        let state_machine = AvatarStateMachine::new();
 
-        // Get model and connection from environment (set by yollayah.sh)
-        let model = std::env::var("YOLLAYAH_MODEL")
-            .unwrap_or_else(|_| "yollayah".to_string());
-        let host = std::env::var("YOLLAYAH_OLLAMA_HOST")
-            .unwrap_or_else(|_| "localhost".to_string());
-        let port: u16 = std::env::var("YOLLAYAH_OLLAMA_PORT")
-            .unwrap_or_else(|_| "11434".to_string())
-            .parse()
-            .unwrap_or(11434);
-
-        let backend = BackendClient::new(BackendConnection::DirectOllama { host, port });
-
-        // Initial avatar position (bottom right)
+        // Initial avatar position
         let avatar_x = area.width.saturating_sub(26);
-        let avatar_y = area.height.saturating_sub(10);
+        let avatar_y = area.height.saturating_sub(input_and_status_height + 8);
+
+        // Create conductor client
+        let conductor = ConductorClient::new();
 
         Ok(Self {
             running: true,
+            goodbye_message: None,
+            conductor,
+            display: DisplayState::new(),
             compositor,
             avatar,
-            state_machine,
             layers,
             input_buffer: String::new(),
-            messages: vec![Message {
-                role: Role::System,
-                content: "Welcome! Yollayah is ready to help.".to_string(),
-            }],
-            streaming: None,
-            stream_rx: None,
-            last_frame: Instant::now(),
-            dev_mode: false,
-            size: (size.0, size.1),
-            backend,
-            model,
             scroll_offset: 0,
             total_lines: 0,
             avatar_pos: (avatar_x, avatar_y),
             avatar_target: (avatar_x, avatar_y),
             wander_timer: Duration::from_secs(5),
-            command_parser: CommandParser::new(),
-            avatar_hidden: false,
-            agent_mood: None,
-            wander_enabled: true, // Default to wandering until agent takes control
-            current_gesture: None,
-            gesture_timer: Duration::ZERO,
+            last_frame: Instant::now(),
+            dev_mode: false,
+            size: (size.0, size.1),
         })
     }
 
@@ -195,8 +193,14 @@ impl App {
         &mut self,
         terminal: &mut Terminal<CrosstermBackend<io::Stdout>>,
     ) -> anyhow::Result<()> {
-        // Target ~10 FPS for terminal-style animations (100ms per frame)
+        // Target ~10 FPS for terminal-style animations
         let frame_duration = Duration::from_millis(100);
+
+        // Start the Conductor
+        self.conductor.start().await?;
+
+        // Connect this surface
+        self.conductor.connect().await?;
 
         while self.running {
             let frame_start = Instant::now();
@@ -205,20 +209,28 @@ impl App {
             if event::poll(Duration::from_millis(1))? {
                 match event::read()? {
                     Event::Key(key) => self.handle_key(key).await,
-                    Event::Mouse(mouse) => self.handle_mouse(mouse),
-                    Event::Resize(w, h) => self.handle_resize(w, h),
+                    Event::Mouse(mouse) => self.handle_mouse(mouse).await,
+                    Event::Resize(w, h) => self.handle_resize(w, h).await,
                     _ => {}
                 }
             }
 
-            // Poll for streaming tokens (non-blocking)
-            self.poll_stream();
+            // Poll conductor for streaming tokens
+            self.conductor.poll_streaming().await;
 
-            // Update animations
+            // Receive and process messages from Conductor
+            self.process_conductor_messages();
+
+            // Update animations and display state
             self.update();
 
             // Render
             self.render(terminal)?;
+
+            // Check for quit message
+            if matches!(self.display.conductor_state, ConductorState::ShuttingDown) {
+                self.running = false;
+            }
 
             // Frame rate limiting
             let elapsed = frame_start.elapsed();
@@ -230,50 +242,16 @@ impl App {
         Ok(())
     }
 
-    /// Poll for streaming tokens from the backend
-    fn poll_stream(&mut self) {
-        if let Some(ref mut rx) = self.stream_rx {
-            // Try to receive tokens without blocking
-            while let Ok(token) = rx.try_recv() {
-                match token {
-                    StreamingToken::Token(text) => {
-                        // Parse for avatar commands, get cleaned text
-                        let clean_text = self.command_parser.parse(&text);
-
-                        // Append cleaned text to streaming buffer
-                        if !clean_text.is_empty() {
-                            if let Some(ref mut s) = self.streaming {
-                                s.push_str(&clean_text);
-                            } else {
-                                self.streaming = Some(clean_text);
-                            }
-                        }
-                    }
-                    StreamingToken::Complete { message } => {
-                        // Move completed message to history
-                        self.messages.push(Message {
-                            role: Role::Yollayah,
-                            content: message,
-                        });
-                        self.streaming = None;
-                        self.stream_rx = None;
-                        self.scroll_offset = 0; // Jump to latest
-                        self.state_machine.trigger(AvatarTrigger::ResponseCompleted { success: true });
-                        break;
-                    }
-                    StreamingToken::Error(err) => {
-                        // Show error
-                        self.messages.push(Message {
-                            role: Role::System,
-                            content: format!("Error: {}", err),
-                        });
-                        self.streaming = None;
-                        self.stream_rx = None;
-                        self.state_machine.trigger(AvatarTrigger::ErrorOccurred { message: err });
-                        break;
-                    }
-                }
+    /// Process all pending messages from the Conductor
+    fn process_conductor_messages(&mut self) {
+        for msg in self.conductor.recv_all() {
+            // Check for quit message before applying
+            if let ConductorMessage::Quit { message } = &msg {
+                self.goodbye_message = message.clone();
             }
+
+            // Apply message to display state
+            self.display.apply_message(msg);
         }
     }
 
@@ -281,26 +259,55 @@ impl App {
     async fn handle_key(&mut self, key: event::KeyEvent) {
         match key.code {
             // Quit
-            KeyCode::Esc => self.running = false,
+            KeyCode::Esc => {
+                self.generate_goodbye();
+                let _ = self.conductor.request_quit().await;
+                self.running = false;
+            }
             KeyCode::Char('c') if key.modifiers.contains(KeyModifiers::CONTROL) => {
-                self.running = false
+                self.generate_goodbye();
+                let _ = self.conductor.request_quit().await;
+                self.running = false;
             }
 
             // Submit message
             KeyCode::Enter => {
                 if !self.input_buffer.is_empty() {
-                    self.submit_message().await;
+                    let message = std::mem::take(&mut self.input_buffer);
+                    let _ = self.conductor.send_message(message).await;
+                    self.scroll_offset = 0;
                 }
             }
 
             // Typing
             KeyCode::Char(c) => {
                 self.input_buffer.push(c);
-                self.state_machine.trigger(AvatarTrigger::UserTyping);
+                let _ = self.conductor.user_typing(true).await;
             }
 
             KeyCode::Backspace => {
                 self.input_buffer.pop();
+            }
+
+            // Conversation scrolling
+            KeyCode::PageUp => {
+                let page_size = self.size.1.saturating_sub(INPUT_HEIGHT + 1) / 2;
+                let max_scroll = self.total_lines.saturating_sub(1);
+                self.scroll_offset = (self.scroll_offset + page_size as usize).min(max_scroll);
+                let _ = self.conductor.user_scrolled(ScrollDirection::Up, page_size as u32).await;
+            }
+            KeyCode::PageDown => {
+                let page_size = self.size.1.saturating_sub(INPUT_HEIGHT + 1) / 2;
+                self.scroll_offset = self.scroll_offset.saturating_sub(page_size as usize);
+                let _ = self.conductor.user_scrolled(ScrollDirection::Down, page_size as u32).await;
+            }
+            KeyCode::Home if key.modifiers.contains(KeyModifiers::CONTROL) => {
+                self.scroll_offset = self.total_lines.saturating_sub(1);
+                let _ = self.conductor.user_scrolled(ScrollDirection::Top, 0).await;
+            }
+            KeyCode::End if key.modifiers.contains(KeyModifiers::CONTROL) => {
+                self.scroll_offset = 0;
+                let _ = self.conductor.user_scrolled(ScrollDirection::Bottom, 0).await;
             }
 
             // Toggle dev mode
@@ -313,63 +320,78 @@ impl App {
     }
 
     /// Handle mouse input
-    fn handle_mouse(&mut self, mouse: event::MouseEvent) {
+    async fn handle_mouse(&mut self, mouse: event::MouseEvent) {
         match mouse.kind {
             MouseEventKind::ScrollUp => {
-                // Scroll up (show older messages)
                 if self.scroll_offset < self.total_lines.saturating_sub(1) {
                     self.scroll_offset += 3;
                 }
-                self.state_machine.trigger(AvatarTrigger::UserScrolled);
+                let _ = self.conductor.user_scrolled(ScrollDirection::Up, 3).await;
             }
             MouseEventKind::ScrollDown => {
-                // Scroll down (show newer messages)
                 self.scroll_offset = self.scroll_offset.saturating_sub(3);
-                self.state_machine.trigger(AvatarTrigger::UserScrolled);
+                let _ = self.conductor.user_scrolled(ScrollDirection::Down, 3).await;
             }
             _ => {}
         }
     }
 
     /// Handle terminal resize
-    fn handle_resize(&mut self, width: u16, height: u16) {
+    async fn handle_resize(&mut self, width: u16, height: u16) {
         self.size = (width, height);
-        // Recreate compositor with new size
         let area = Rect::new(0, 0, width, height);
+
         self.compositor.resize(area);
-        self.state_machine.trigger(AvatarTrigger::WindowResized);
-    }
 
-    /// Submit user message
-    async fn submit_message(&mut self) {
-        let message = std::mem::take(&mut self.input_buffer);
+        let input_and_status_height = INPUT_HEIGHT + 1;
 
-        // Add to history
-        self.messages.push(Message {
-            role: Role::User,
-            content: message.clone(),
-        });
+        // Conversation layer
+        self.compositor.move_layer(self.layers.conversation, 0, 0);
+        self.compositor.resize_layer(
+            self.layers.conversation,
+            width,
+            height.saturating_sub(input_and_status_height),
+        );
 
-        // Trigger thinking state
-        self.state_machine.trigger(AvatarTrigger::QuerySubmitted);
+        // Input layer
+        self.compositor.move_layer(
+            self.layers.input,
+            0,
+            height.saturating_sub(input_and_status_height),
+        );
+        self.compositor.resize_layer(self.layers.input, width, INPUT_HEIGHT);
 
-        // Send to backend and get streaming receiver
-        match self.backend.send_message(&message, &self.model).await {
-            Ok(rx) => {
-                self.stream_rx = Some(rx);
-                self.streaming = Some(String::new());
-                self.state_machine.trigger(AvatarTrigger::ResponseStarted);
-            }
-            Err(e) => {
-                self.messages.push(Message {
-                    role: Role::System,
-                    content: format!("Failed to send message: {}", e),
-                });
-                self.state_machine.trigger(AvatarTrigger::ErrorOccurred {
-                    message: e.to_string(),
-                });
-            }
-        }
+        // Status layer
+        self.compositor.move_layer(self.layers.status, 0, height.saturating_sub(1));
+        self.compositor.resize_layer(self.layers.status, width, 1);
+
+        // Task panel
+        let task_panel_width = 32u16;
+        self.compositor.move_layer(
+            self.layers.tasks,
+            width.saturating_sub(task_panel_width),
+            0,
+        );
+        self.compositor.resize_layer(
+            self.layers.tasks,
+            task_panel_width,
+            height.saturating_sub(input_and_status_height),
+        );
+
+        // Avatar bounds update
+        let (bounds_w, bounds_h) = self.avatar.bounds();
+        let max_x = width.saturating_sub(bounds_w + 2);
+        let max_y = height.saturating_sub(bounds_h + input_and_status_height + 2);
+        self.avatar_target = (
+            self.avatar_target.0.min(max_x),
+            self.avatar_target.1.min(max_y),
+        );
+        self.avatar_pos = (
+            self.avatar_pos.0.min(max_x),
+            self.avatar_pos.1.min(max_y),
+        );
+
+        let _ = self.conductor.resized(width as u32, height as u32).await;
     }
 
     /// Update animations and state
@@ -378,232 +400,116 @@ impl App {
         let delta = now - self.last_frame;
         self.last_frame = now;
 
-        // Process any pending avatar commands from the agent
-        let mut agent_moved = false;
-        while let Some(cmd) = self.command_parser.next_command() {
-            agent_moved |= self.apply_avatar_command(cmd);
-        }
+        // Update display state timers
+        self.display.update(delta);
 
         // Update avatar animation
         self.avatar.update(delta);
 
-        // Handle gesture timer
-        if self.gesture_timer > Duration::ZERO {
-            self.gesture_timer = self.gesture_timer.saturating_sub(delta);
-            if self.gesture_timer.is_zero() {
-                self.current_gesture = None;
+        // Sync avatar state from display state
+        self.sync_avatar_from_display();
+
+        // Handle wandering if enabled
+        if self.display.avatar.wandering {
+            self.wander_timer = self.wander_timer.saturating_sub(delta);
+            if self.wander_timer.is_zero() {
+                self.pick_new_wander_target();
+                let secs = 4 + (rand::random::<u64>() % 7);
+                self.wander_timer = Duration::from_secs(secs);
             }
         }
 
-        // Sync avatar state: gesture > mood > state machine
-        let recommended_anim = if let Some(ref gesture) = self.current_gesture {
-            gesture.as_str()
-        } else if let Some(mood) = &self.agent_mood {
-            match mood {
-                Mood::Happy | Mood::Excited => "happy",
-                Mood::Thinking => "thinking",
-                Mood::Playful => "swimming",
-                Mood::Shy => "idle",
-                Mood::Confused => "error",
-                Mood::Calm => "idle",
-                Mood::Curious => "waiting",
-            }
-        } else {
-            self.state_machine.recommended_animation()
-        };
-        self.avatar.play(recommended_anim);
-
-        let recommended_size = self.state_machine.recommended_size();
-        self.avatar.set_size(recommended_size);
-
-        // Update z-index based on state
-        let should_foreground = self.state_machine.should_be_foreground();
-        let new_z = if should_foreground { 100 } else { 50 };
-        self.compositor.set_z_index(self.layers.avatar, new_z);
-
-        // Wandering - only when enabled and idle
-        if self.wander_enabled && !agent_moved {
-            let is_idle = matches!(
-                self.state_machine.state(),
-                AvatarState::Idle | AvatarState::WaitingForInput { .. } | AvatarState::Playful { .. }
-            );
-
-            if is_idle {
-                // Decrease wander timer
-                self.wander_timer = self.wander_timer.saturating_sub(delta);
-
-                if self.wander_timer.is_zero() {
-                    // Pick a new random target position
-                    self.pick_new_wander_target();
-                    // Reset timer (random 4-10 seconds)
-                    let secs = 4 + (rand::random::<u64>() % 7);
-                    self.wander_timer = Duration::from_secs(secs);
-                }
-            }
-        } else if agent_moved {
-            // Agent gave movement commands, reset wander timer
-            self.wander_timer = Duration::from_secs(6);
+        // Handle position updates from Conductor
+        if let Some(pos) = self.display.avatar.target_position {
+            self.update_avatar_target_from_position(&pos);
         }
 
         // Smoothly move towards target
         self.move_towards_target();
 
-        // Update layer position and visibility
-        self.compositor.set_visible(self.layers.avatar, !self.avatar_hidden);
+        // Update layer visibility
+        self.compositor.set_visible(self.layers.avatar, self.display.avatar.visible);
         self.compositor.move_layer(self.layers.avatar, self.avatar_pos.0, self.avatar_pos.1);
+
+        // Update task panel visibility
+        let show_tasks = self.display.has_active_tasks();
+        self.compositor.set_visible(self.layers.tasks, show_tasks);
+
+        // Update z-index based on conductor state
+        let should_foreground = matches!(
+            self.display.conductor_state,
+            ConductorState::Thinking | ConductorState::Responding
+        );
+        let new_z = if should_foreground { 100 } else { 50 };
+        self.compositor.set_z_index(self.layers.avatar, new_z);
     }
 
-    /// Apply an avatar command from the agent
-    fn apply_avatar_command(&mut self, cmd: AvatarCommand) -> bool {
-        match cmd {
-            AvatarCommand::MoveTo(pos) => {
-                let (bounds_w, bounds_h) = self.avatar.bounds();
-                let max_x = self.size.0.saturating_sub(bounds_w + 2);
-                let max_y = self.size.1.saturating_sub(bounds_h + 4);
+    /// Sync TUI avatar renderer from display state
+    fn sync_avatar_from_display(&mut self) {
+        // Set animation based on display state
+        let anim = self.display.avatar.suggested_animation();
+        self.avatar.play(anim);
 
-                let (x, y) = match pos {
-                    Position::TopLeft => (2, 1),
-                    Position::TopRight => (max_x, 1),
-                    Position::BottomLeft => (2, max_y),
-                    Position::BottomRight => (max_x, max_y),
-                    Position::Center => (max_x / 2, max_y / 2),
-                    Position::Follow => {
-                        // Near the bottom of visible text
-                        (max_x, max_y.saturating_sub(3))
-                    }
-                };
-                self.avatar_target = (x, y);
-                self.wander_enabled = false; // Agent took control
-                true
-            }
-            AvatarCommand::MoveToPercent(x_pct, y_pct) => {
-                let (bounds_w, bounds_h) = self.avatar.bounds();
-                let max_x = self.size.0.saturating_sub(bounds_w + 2);
-                let max_y = self.size.1.saturating_sub(bounds_h + 4);
+        // Set size
+        let size = match self.display.avatar.size {
+            conductor_core::AvatarSize::Tiny => TuiAvatarSize::Tiny,
+            conductor_core::AvatarSize::Small => TuiAvatarSize::Small,
+            conductor_core::AvatarSize::Medium => TuiAvatarSize::Medium,
+            conductor_core::AvatarSize::Large => TuiAvatarSize::Large,
+        };
+        self.avatar.set_size(size);
 
-                let x = (max_x as u32 * x_pct as u32 / 100) as u16;
-                let y = (max_y as u32 * y_pct as u32 / 100) as u16;
-                self.avatar_target = (x.max(2), y.max(1));
-                self.wander_enabled = false;
-                true
-            }
-            AvatarCommand::PointAt(x_pct, y_pct) => {
-                // Move near the target location to "point" at it
-                let (bounds_w, bounds_h) = self.avatar.bounds();
-                let max_x = self.size.0.saturating_sub(bounds_w + 2);
-                let max_y = self.size.1.saturating_sub(bounds_h + 4);
+        // Set activity overlay based on conductor state
+        let activity = match self.display.conductor_state {
+            ConductorState::Thinking | ConductorState::Responding => Activity::Thinking,
+            _ => Activity::None,
+        };
+        self.avatar.set_activity(activity);
+    }
 
-                let target_x = (self.size.0 as u32 * x_pct as u32 / 100) as u16;
-                let target_y = (self.size.1 as u32 * y_pct as u32 / 100) as u16;
+    /// Update avatar target position from Conductor position
+    fn update_avatar_target_from_position(&mut self, pos: &conductor_core::AvatarPosition) {
+        let (bounds_w, bounds_h) = self.avatar.bounds();
+        let input_and_status_height = INPUT_HEIGHT + 1;
+        let max_x = self.size.0.saturating_sub(bounds_w + 2);
+        let max_y = self.size.1.saturating_sub(bounds_h + input_and_status_height + 2);
 
-                // Position avatar near target but offset
-                let x = if target_x > max_x / 2 { target_x.saturating_sub(bounds_w + 2) } else { target_x + 2 };
-                let y = target_y.min(max_y);
-
-                self.avatar_target = (x.max(2).min(max_x), y.max(1));
-                self.wander_enabled = false;
-                true
+        let (x, y) = match pos {
+            conductor_core::AvatarPosition::TopLeft => (2, 1),
+            conductor_core::AvatarPosition::TopRight => (max_x, 1),
+            conductor_core::AvatarPosition::BottomLeft => (2, max_y),
+            conductor_core::AvatarPosition::BottomRight => (max_x, max_y),
+            conductor_core::AvatarPosition::Center => (max_x / 2, max_y / 2),
+            conductor_core::AvatarPosition::Follow => (max_x, max_y.saturating_sub(3)),
+            conductor_core::AvatarPosition::Percent { x: x_pct, y: y_pct } => {
+                let x = (max_x as u32 * *x_pct as u32 / 100) as u16;
+                let y = (max_y as u32 * *y_pct as u32 / 100) as u16;
+                (x.max(2), y.max(1))
             }
-            AvatarCommand::Wander(enabled) => {
-                self.wander_enabled = enabled;
-                if enabled {
-                    // Start wandering immediately
-                    self.wander_timer = Duration::from_millis(500);
-                }
-                false
-            }
-            AvatarCommand::Mood(mood) => {
-                self.agent_mood = Some(mood);
-                false
-            }
-            AvatarCommand::Size(size) => {
-                let avatar_size = match size {
-                    AvatarSize::Tiny => crate::avatar::AvatarSize::Tiny,
-                    AvatarSize::Small => crate::avatar::AvatarSize::Small,
-                    AvatarSize::Medium => crate::avatar::AvatarSize::Medium,
-                    AvatarSize::Large => crate::avatar::AvatarSize::Large,
-                };
-                self.avatar.set_size(avatar_size);
-                false
-            }
-            AvatarCommand::Gesture(gesture) => {
-                // Gestures trigger specific animations with duration
-                let (anim, duration) = match gesture {
-                    Gesture::Wave => ("happy", 1500),
-                    Gesture::Nod => ("talking", 800),
-                    Gesture::Shake => ("error", 800),
-                    Gesture::Bounce => ("happy", 1000),
-                    Gesture::Spin => ("swimming", 1200),
-                    Gesture::Dance => ("happy", 2000),
-                    Gesture::Swim => ("swimming", 2000),
-                    Gesture::Stretch => ("idle", 1500),
-                    Gesture::Yawn => ("idle", 2000),
-                    Gesture::Wiggle => ("swimming", 1000),
-                    Gesture::Peek(_) => ("idle", 1000),
-                };
-                self.current_gesture = Some(anim.to_string());
-                self.gesture_timer = Duration::from_millis(duration);
-                false
-            }
-            AvatarCommand::React(reaction) => {
-                // Reactions are like gestures but more expressive
-                let (anim, duration) = match reaction {
-                    Reaction::Laugh => ("happy", 2000),
-                    Reaction::Gasp => ("error", 1000),
-                    Reaction::Hmm => ("thinking", 2000),
-                    Reaction::Tada => ("happy", 2500),
-                    Reaction::Oops => ("error", 1500),
-                    Reaction::Love => ("happy", 2000),
-                    Reaction::Blush => ("idle", 1500),
-                    Reaction::Wink => ("wink", 1000),
-                    Reaction::Cry => ("error", 2000),
-                    Reaction::Angry => ("error", 1500),
-                    Reaction::Sleepy => ("idle", 2500),
-                    Reaction::Dizzy => ("swimming", 2000),
-                };
-                self.current_gesture = Some(anim.to_string());
-                self.gesture_timer = Duration::from_millis(duration);
-                false
-            }
-            AvatarCommand::Hide => {
-                self.avatar_hidden = true;
-                false
-            }
-            AvatarCommand::Show => {
-                self.avatar_hidden = false;
-                false
-            }
-            AvatarCommand::CustomSprite(_data) => {
-                // Future: parse and apply custom sprite data
-                // For now, just acknowledge the command
-                false
-            }
-        }
+        };
+        self.avatar_target = (x, y);
     }
 
     /// Pick a new random position for Yollayah to wander to
     fn pick_new_wander_target(&mut self) {
         let (bounds_w, bounds_h) = self.avatar.bounds();
+        let input_and_status_height = INPUT_HEIGHT + 1;
         let max_x = self.size.0.saturating_sub(bounds_w + 2);
-        let max_y = self.size.1.saturating_sub(bounds_h + 4); // Leave room for input
+        let max_y = self.size.1.saturating_sub(bounds_h + input_and_status_height + 2);
 
-        // Pick random position, but bias towards edges/corners for personality
         let corner_bias = rand::random::<f32>();
 
         let (x, y) = if corner_bias < 0.3 {
-            // Go to a corner
             let corner = rand::random::<u8>() % 4;
             match corner {
-                0 => (2, 1),                           // Top-left
-                1 => (max_x, 1),                       // Top-right
-                2 => (2, max_y),                       // Bottom-left
-                _ => (max_x, max_y),                   // Bottom-right
+                0 => (2, 1),
+                1 => (max_x, 1),
+                2 => (2, max_y),
+                _ => (max_x, max_y),
             }
         } else if corner_bias < 0.5 {
-            // Center (for attention)
             (max_x / 2, max_y / 2)
         } else {
-            // Random position
             let x = 2 + (rand::random::<u16>() % max_x.saturating_sub(2).max(1));
             let y = 1 + (rand::random::<u16>() % max_y.saturating_sub(1).max(1));
             (x, y)
@@ -617,7 +523,6 @@ impl App {
         let (cx, cy) = self.avatar_pos;
         let (tx, ty) = self.avatar_target;
 
-        // Move 1-2 cells per frame towards target
         let new_x = if cx < tx {
             (cx + 1).min(tx)
         } else if cx > tx {
@@ -642,17 +547,14 @@ impl App {
         &mut self,
         terminal: &mut Terminal<CrosstermBackend<io::Stdout>>,
     ) -> anyhow::Result<()> {
-        // Render each layer
         self.render_conversation();
+        self.render_tasks();
         self.render_input();
         self.render_status();
         self.render_avatar();
 
-        // Composite and draw
         terminal.draw(|frame| {
             let output = self.compositor.composite();
-
-            // Copy compositor output to frame
             let area = frame.area();
             let buf = frame.buffer_mut();
 
@@ -669,48 +571,39 @@ impl App {
         Ok(())
     }
 
-    /// Render conversation layer with text wrapping, scrolling, and edge shading
+    /// Render conversation layer
     fn render_conversation(&mut self) {
-        // First pass: build all wrapped lines
-        let width = self.size.0.saturating_sub(2) as usize; // Leave margin
-        let height = self.size.1.saturating_sub(4) as usize; // Leave room for input/status
+        let width = self.size.0.saturating_sub(2) as usize;
+        let input_and_status_height = (INPUT_HEIGHT + 1) as usize;
+        let height = self.size.1.saturating_sub(input_and_status_height as u16) as usize;
 
         if width < 10 || height < 3 {
             return;
         }
 
-        // Build wrapped lines with their styles
+        // Build wrapped lines from display messages
         let mut all_lines: Vec<(String, Style)> = Vec::new();
 
-        for msg in &self.messages {
+        for msg in &self.display.messages {
             let (prefix, base_style) = match msg.role {
-                Role::User => ("You: ", Style::default().fg(Color::Green)),
-                Role::Yollayah => ("Yollayah: ", Style::default().fg(YOLLAYAH_MAGENTA)),
-                Role::System => ("", Style::default().fg(Color::DarkGray)),
+                DisplayRole::User => ("You: ", Style::default().fg(Color::Green)),
+                DisplayRole::Assistant => ("Yollayah: ", Style::default().fg(YOLLAYAH_MAGENTA)),
+                DisplayRole::System => ("", Style::default().fg(Color::DarkGray)),
             };
 
-            let full_text = format!("{}{}", prefix, msg.content);
-            let wrapped = textwrap::wrap(&full_text, width);
+            let content = if msg.streaming {
+                format!("{}{}_", prefix, msg.content)
+            } else {
+                format!("{}{}", prefix, msg.content)
+            };
 
+            let wrapped = textwrap::wrap(&content, width);
             for line in wrapped {
                 all_lines.push((line.to_string(), base_style));
             }
-
-            // Blank line between messages
             all_lines.push((String::new(), Style::default()));
         }
 
-        // Add streaming response if active
-        if let Some(ref streaming) = self.streaming {
-            let full_text = format!("Yollayah: {}_", streaming);
-            let wrapped = textwrap::wrap(&full_text, width);
-
-            for line in wrapped {
-                all_lines.push((line.to_string(), Style::default().fg(YOLLAYAH_MAGENTA)));
-            }
-        }
-
-        // Update total lines for scroll bounds
         self.total_lines = all_lines.len();
 
         // Clamp scroll offset
@@ -719,15 +612,13 @@ impl App {
             self.scroll_offset = max_scroll;
         }
 
-        // Calculate visible range (scroll from bottom)
+        // Calculate visible range
         let visible_end = self.total_lines.saturating_sub(self.scroll_offset);
         let visible_start = visible_end.saturating_sub(height);
 
-        // Check if there's content above/below
         let has_content_above = visible_start > 0;
         let has_content_below = self.scroll_offset > 0;
 
-        // Now render to buffer
         if let Some(buf) = self.compositor.layer_buffer_mut(self.layers.conversation) {
             buf.reset();
             let area = buf.area;
@@ -744,13 +635,10 @@ impl App {
                     break;
                 }
 
-                // Apply gradient shading at edges to indicate scroll
                 let final_style = if has_content_above && i < 2 {
-                    // Fade top lines
                     let shade = if i == 0 { Color::Rgb(80, 80, 80) } else { Color::Rgb(120, 120, 120) };
                     Style::default().fg(shade)
                 } else if has_content_below && i >= height.saturating_sub(2) {
-                    // Fade bottom lines
                     let dist_from_bottom = height.saturating_sub(1).saturating_sub(i);
                     let shade = if dist_from_bottom == 0 { Color::Rgb(80, 80, 80) } else { Color::Rgb(120, 120, 120) };
                     Style::default().fg(shade)
@@ -758,7 +646,6 @@ impl App {
                     *style
                 };
 
-                // Truncate line to width (should already be wrapped, but safety)
                 let display_line: String = line.chars().take(area.width as usize).collect();
                 buf.set_string(area.x, y, &display_line, final_style);
             }
@@ -771,23 +658,43 @@ impl App {
             buf.reset();
             let area = buf.area;
 
-            // Draw separator
-            let separator = "─".repeat(area.width as usize);
-            buf.set_string(
-                area.x,
-                area.y,
-                &separator,
-                Style::default().fg(Color::DarkGray),
-            );
+            let separator = "-".repeat(area.width as usize);
+            buf.set_string(area.x, area.y, &separator, Style::default().fg(Color::DarkGray));
 
-            // Draw input prompt
-            let prompt = format!("You: {}_", self.input_buffer);
-            buf.set_string(
-                area.x,
-                area.y + 1,
-                &prompt,
-                Style::default().fg(Color::Green),
-            );
+            let text_height = area.height.saturating_sub(1) as usize;
+            let text_width = area.width.saturating_sub(1) as usize;
+
+            if text_width < 5 || text_height < 1 {
+                return;
+            }
+
+            let full_input = format!("You: {}_", self.input_buffer);
+            let wrapped_lines: Vec<String> = textwrap::wrap(&full_input, text_width)
+                .iter()
+                .map(|s| s.to_string())
+                .collect();
+
+            let visible_lines: Vec<&String> = if wrapped_lines.len() > text_height {
+                wrapped_lines.iter().skip(wrapped_lines.len() - text_height).collect()
+            } else {
+                wrapped_lines.iter().collect()
+            };
+
+            for (i, line) in visible_lines.iter().enumerate() {
+                let y = area.y + 1 + i as u16;
+                if y < area.y + area.height {
+                    buf.set_string(area.x, y, line, Style::default().fg(Color::Green));
+                }
+            }
+
+            if wrapped_lines.len() > text_height {
+                buf.set_string(
+                    area.x + area.width.saturating_sub(3),
+                    area.y,
+                    "^",
+                    Style::default().fg(Color::Yellow),
+                );
+            }
         }
     }
 
@@ -797,29 +704,81 @@ impl App {
             buf.reset();
             let area = buf.area;
 
-            let state_str = match self.state_machine.state() {
-                AvatarState::Idle => "Ready",
-                AvatarState::Thinking => "Thinking...",
-                AvatarState::Responding => "Responding...",
-                AvatarState::WaitingForInput { .. } => "Listening",
-                AvatarState::Celebrating { .. } => "Celebrating!",
-                AvatarState::Playful { .. } => "Playful",
-                AvatarState::Error { .. } => "Error",
-                _ => "...",
+            let state_str = self.display.conductor_state.description();
+
+            let status_style = match self.display.conductor_state {
+                ConductorState::WarmingUp | ConductorState::Initializing => {
+                    Style::default().fg(YOLLAYAH_MAGENTA)
+                }
+                _ => Style::default().fg(Color::DarkGray),
+            };
+
+            let scroll_info = if self.scroll_offset > 0 {
+                format!(" [^{} lines - PgDn to scroll]", self.scroll_offset)
+            } else {
+                String::new()
             };
 
             let status = format!(
-                " {} | Esc to quit | F12 for dev mode{}",
+                " {} | Esc to quit | PgUp/PgDn scroll{}{}",
                 state_str,
+                scroll_info,
                 if self.dev_mode { " [DEV]" } else { "" }
             );
 
-            buf.set_string(
-                area.x,
-                area.y,
-                &status,
-                Style::default().fg(Color::DarkGray),
-            );
+            buf.set_string(area.x, area.y, &status, status_style);
+        }
+    }
+
+    /// Render task panel layer
+    fn render_tasks(&mut self) {
+        let has_tasks = self.display.has_active_tasks();
+        let tasks: Vec<_> = self.display.tasks.iter()
+            .filter(|t| t.status.is_active())
+            .cloned()
+            .collect();
+
+        if let Some(buf) = self.compositor.layer_buffer_mut(self.layers.tasks) {
+            buf.reset();
+            if has_tasks {
+                // Render tasks from display state
+                Self::render_display_tasks_to_buffer(buf, &tasks);
+            }
+        }
+    }
+
+    /// Render tasks from display state to a buffer
+    fn render_display_tasks_to_buffer(buf: &mut ratatui::buffer::Buffer, tasks: &[crate::display::DisplayTask]) {
+        let area = buf.area;
+        if area.width < 10 || area.height < 3 {
+            return;
+        }
+
+        // Header
+        buf.set_string(
+            area.x + 1,
+            area.y,
+            "--- Tasks ---",
+            Style::default().fg(Color::Yellow),
+        );
+
+        let mut y = area.y + 2;
+        for task in tasks {
+            if y >= area.y + area.height - 1 {
+                break;
+            }
+
+            // Task name
+            let name: String = task.display_name().chars().take(area.width as usize - 2).collect();
+            buf.set_string(area.x + 1, y, &name, Style::default().fg(YOLLAYAH_MAGENTA));
+            y += 1;
+
+            // Progress bar
+            let bar_width = (area.width as usize).saturating_sub(4).min(20);
+            let progress_bar = task.progress_bar(bar_width);
+            let progress_str = format!("[{}] {}%", progress_bar, task.progress);
+            buf.set_string(area.x + 2, y, &progress_str, Style::default().fg(Color::DarkGray));
+            y += 2;
         }
     }
 
@@ -829,5 +788,16 @@ impl App {
             buf.reset();
             self.avatar.render(buf);
         }
+    }
+
+    /// Generate a quick goodbye message
+    fn generate_goodbye(&mut self) {
+        let idx = rand::random::<usize>() % QUICK_GOODBYES.len();
+        self.goodbye_message = Some(QUICK_GOODBYES[idx].to_string());
+    }
+
+    /// Get the goodbye message for display after TUI closes
+    pub fn goodbye(&self) -> Option<&str> {
+        self.goodbye_message.as_deref()
     }
 }

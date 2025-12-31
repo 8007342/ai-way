@@ -62,5 +62,13 @@ async fn main() -> anyhow::Result<()> {
 
 async fn run_app(terminal: &mut Terminal<CrosstermBackend<io::Stdout>>) -> anyhow::Result<()> {
     let mut app = App::new().await?;
-    app.run(terminal).await
+    app.run(terminal).await?;
+
+    // Show goodbye message after TUI closes
+    if let Some(goodbye) = app.goodbye() {
+        // Print with Yollayah styling (magenta)
+        println!("\n\x1b[35mYollayah:\x1b[0m {}\n", goodbye);
+    }
+
+    Ok(())
 }

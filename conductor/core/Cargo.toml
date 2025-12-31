@@ -1,0 +1,38 @@
+[package]
+name = "conductor-core"
+version = "0.1.0"
+edition = "2021"
+description = "Headless meta-agent orchestration core for ai-way"
+authors = ["ai-way contributors"]
+license = "AGPL-3.0"
+
+[lib]
+name = "conductor_core"
+path = "src/lib.rs"
+
+[dependencies]
+# Async runtime
+tokio = { version = "1.41", features = ["full", "rt-multi-thread", "macros", "sync"] }
+tokio-stream = "0.1"
+
+# HTTP client for LLM backends
+reqwest = { version = "0.12", features = ["json", "stream"] }
+futures = "0.3"
+
+# Serialization
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+
+# Error handling
+anyhow = "1.0"
+thiserror = "2.0"
+
+# Logging
+tracing = "0.1"
+
+# Async trait support
+async-trait = "0.1"
+
+[dev-dependencies]
+tokio-test = "0.4"
+pretty_assertions = "1.4"

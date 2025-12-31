@@ -11,6 +11,9 @@ name = "yollayah-tui"
 path = "src/main.rs"
 
 [dependencies]
+# Conductor core (headless orchestration)
+conductor-core = { path = "../conductor/core" }
+
 # Core TUI
 ratatui = "0.29"
 crossterm = { version = "0.28", features = ["event-stream"] }
@@ -42,6 +45,9 @@ tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 
 # Random for playful behaviors
 rand = "0.8"
+
+# POSIX for FIFO non-blocking
+libc = "0.2"
 
 [dev-dependencies]
 pretty_assertions = "1.4"
