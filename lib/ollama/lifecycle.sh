@@ -44,6 +44,187 @@ readonly MODEL_TIERS=(
 # Hardware Detection
 # ============================================================================
 
+# Check if NVIDIA CUDA is available for Ollama
+# Returns 0 if CUDA appears functional, 1 otherwise
+check_nvidia_cuda_available() {
+    # Check if nvidia-smi works
+    if ! command_exists nvidia-smi; then
+        log_ollama "DEBUG" "nvidia-smi not found"
+        return 1
+    fi
+
+    # Check if nvidia-smi can query the GPU
+    if ! nvidia-smi --query-gpu=name --format=csv,noheader &>/dev/null; then
+        log_ollama "WARN" "nvidia-smi found but cannot query GPU"
+        return 1
+    fi
+
+    # Check for CUDA libraries
+    local cuda_found=false
+    if [[ -d "/usr/local/cuda" ]] || [[ -d "/usr/lib/cuda" ]]; then
+        cuda_found=true
+    fi
+    if ldconfig -p 2>/dev/null | grep -q libcuda; then
+        cuda_found=true
+    fi
+    if [[ -f "/usr/lib64/libcuda.so" ]] || [[ -f "/usr/lib/x86_64-linux-gnu/libcuda.so" ]]; then
+        cuda_found=true
+    fi
+
+    if [[ "$cuda_found" == "false" ]]; then
+        log_ollama "WARN" "NVIDIA GPU found but CUDA libraries not detected"
+    fi
+
+    return 0
+}
+
+# Check what GPU Ollama is actually using
+# This queries Ollama's reported capabilities
+check_ollama_gpu_status() {
+    if ! ollama_is_running; then
+        return 1
+    fi
+
+    # Try to get Ollama's GPU info via the API
+    local ollama_info
+    ollama_info=$(curl -s http://localhost:11434/api/tags 2>/dev/null)
+
+    # Check nvidia-smi for active GPU processes
+    if command_exists nvidia-smi; then
+        local ollama_on_gpu
+        ollama_on_gpu=$(nvidia-smi --query-compute-apps=process_name --format=csv,noheader 2>/dev/null | grep -i ollama || true)
+        if [[ -n "$ollama_on_gpu" ]]; then
+            log_ollama "INFO" "Ollama is running on GPU (confirmed via nvidia-smi)"
+            echo "gpu"
+            return 0
+        fi
+    fi
+
+    # If we have VRAM but Ollama isn't showing on GPU, it's likely CPU
+    echo "unknown"
+    return 0
+}
+
+# Diagnose GPU setup and return status
+# Sets OLLAMA_GPU_STATUS: "gpu", "cpu", "unknown"
+diagnose_gpu_setup() {
+    log_ollama "INFO" "Diagnosing GPU setup..."
+
+    local has_nvidia=false
+    local has_amd=false
+    local nvidia_works=false
+
+    # Check NVIDIA
+    if command_exists nvidia-smi; then
+        has_nvidia=true
+        log_ollama "DEBUG" "nvidia-smi found"
+
+        local nvidia_output
+        nvidia_output=$(nvidia-smi --query-gpu=name,memory.total,driver_version --format=csv,noheader 2>&1)
+        if [[ $? -eq 0 ]]; then
+            nvidia_works=true
+            log_ollama "INFO" "NVIDIA GPU detected: $nvidia_output"
+
+            # Check CUDA
+            if check_nvidia_cuda_available; then
+                log_ollama "INFO" "CUDA appears available"
+            else
+                log_ollama "WARN" "CUDA may not be properly configured"
+            fi
+        else
+            log_ollama "WARN" "nvidia-smi failed: $nvidia_output"
+        fi
+    fi
+
+    # Check AMD ROCm
+    if command_exists rocm-smi; then
+        has_amd=true
+        log_ollama "DEBUG" "rocm-smi found"
+        local rocm_output
+        rocm_output=$(rocm-smi --showproductname 2>&1 || true)
+        log_ollama "INFO" "AMD ROCm detected: $rocm_output"
+    fi
+
+    # Summary
+    if [[ "$nvidia_works" == "true" ]]; then
+        OLLAMA_GPU_STATUS="nvidia"
+    elif [[ "$has_amd" == "true" ]]; then
+        OLLAMA_GPU_STATUS="amd"
+    else
+        OLLAMA_GPU_STATUS="cpu"
+        log_ollama "INFO" "No GPU acceleration detected, will use CPU"
+    fi
+}
+
+# Verify Ollama is using GPU after it's running
+# Call this after ollama_ensure_running to verify GPU usage
+verify_ollama_gpu_usage() {
+    # Only check if we detected a GPU
+    if [[ "${OLLAMA_GPU_STATUS:-cpu}" == "cpu" ]]; then
+        return 0
+    fi
+
+    # Give Ollama a moment to initialize
+    sleep 1
+
+    # Check if Ollama appears in GPU processes
+    if command_exists nvidia-smi; then
+        local gpu_processes
+        gpu_processes=$(nvidia-smi --query-compute-apps=process_name,used_memory --format=csv,noheader 2>/dev/null || true)
+
+        if echo "$gpu_processes" | grep -qi "ollama"; then
+            log_ollama "INFO" "Verified: Ollama is using NVIDIA GPU"
+            return 0
+        else
+            # GPU detected but Ollama not using it - this is the problem!
+            log_ollama "WARN" "NVIDIA GPU detected but Ollama is NOT using it!"
+            log_ollama "WARN" "GPU processes: ${gpu_processes:-none}"
+            log_ollama "WARN" "Ollama may need to be reinstalled with GPU support"
+
+            # Show warning to user
+            ux_warn "GPU detected but Ollama running on CPU - performance will be slower"
+            ux_info "To fix: reinstall Ollama with 'curl -fsSL https://ollama.com/install.sh | sh'"
+            ux_info "Make sure NVIDIA drivers and CUDA are properly installed"
+            return 1
+        fi
+    fi
+
+    return 0
+}
+
+# Show GPU troubleshooting tips
+show_gpu_troubleshooting() {
+    ux_blank
+    ux_separator
+    ux_yollayah "$(yollayah_interjection) Hmm, looks like I'm running on CPU instead of your GPU..."
+    ux_blank
+
+    cat << 'TIPS'
+    ╭──────────────────────────────────────────────────────────╮
+    │  🔧  GPU Troubleshooting Tips                            │
+    ├──────────────────────────────────────────────────────────┤
+    │                                                          │
+    │  For NVIDIA GPUs:                                        │
+    │  1. Check drivers: nvidia-smi                            │
+    │  2. Reinstall Ollama (it auto-detects CUDA):             │
+    │     curl -fsSL https://ollama.com/install.sh | sh        │
+    │  3. Restart Ollama after driver updates                  │
+    │                                                          │
+    │  For AMD GPUs:                                           │
+    │  1. Install ROCm: https://rocm.docs.amd.com              │
+    │  2. Reinstall Ollama after ROCm setup                    │
+    │                                                          │
+    │  Quick check:                                            │
+    │  - Run: YOLLAYAH_DEBUG=1 ./yollayah.sh                   │
+    │  - Check .logs/ollama.log for GPU detection info         │
+    │                                                          │
+    ╰──────────────────────────────────────────────────────────╯
+TIPS
+
+    ux_blank
+    ux_separator
+}
+
 # Detect GPU name (for display purposes)
 # Returns empty string if no GPU detected
 detect_gpu_name() {
@@ -119,9 +300,12 @@ model_select_best() {
     if [[ -n "${YOLLAYAH_MODEL:-}" ]]; then
         SELECTED_MODEL="$YOLLAYAH_MODEL"
         HARDWARE_TIER="custom"
-        debug "Using model from YOLLAYAH_MODEL: $SELECTED_MODEL"
+        log_ollama "INFO" "Using model from YOLLAYAH_MODEL: $SELECTED_MODEL"
         return 0
     fi
+
+    # Run GPU diagnostics first
+    diagnose_gpu_setup
 
     local vram_gb ram_gb
     vram_gb=$(detect_vram_gb)
@@ -130,6 +314,7 @@ model_select_best() {
     DETECTED_VRAM_GB=$vram_gb
 
     log_ollama "INFO" "Hardware detected: ${vram_gb}GB VRAM, ${ram_gb}GB RAM, GPU: ${DETECTED_GPU:-none}"
+    log_ollama "INFO" "GPU status: ${OLLAMA_GPU_STATUS:-unknown}"
 
     # If no GPU, fall back to CPU inference with RAM check
     if [[ $vram_gb -eq 0 ]]; then
