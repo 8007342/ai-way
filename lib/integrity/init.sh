@@ -77,9 +77,11 @@ _integrity_get_level() {
 integrity_verify() {
     local level
     level=$(_integrity_get_level)
+    log_integrity "INFO" "Starting integrity verification (level=$level)"
 
     # Handle manifest generation mode (developers only)
     if integrity_should_generate; then
+        log_integrity "INFO" "Generating integrity manifest (developer mode)"
         info "Generating integrity manifest..."
         integrity_generate_manifest
         info "Manifest generated. Exiting."
@@ -89,6 +91,7 @@ integrity_verify() {
 
     # Handle disabled mode
     if [[ "$level" == "disabled" ]]; then
+        log_integrity "WARN" "Integrity checks DISABLED by user"
         warn "=========================================="
         warn "  INTEGRITY CHECKS DISABLED"
         warn "=========================================="
@@ -111,15 +114,20 @@ integrity_verify() {
     # Run appropriate verification level
     case "$level" in
         0)
+            log_integrity "INFO" "Running git-based verification (level 0)"
             integrity_verify_git
             ;;
         1)
+            log_integrity "INFO" "Running checksum verification (level 1)"
             integrity_verify_checksums
             ;;
         2)
+            log_integrity "INFO" "Running signature verification (level 2)"
             integrity_verify_signatures
             ;;
     esac
+
+    log_integrity "INFO" "Integrity verification complete"
 }
 
 # ============================================================================

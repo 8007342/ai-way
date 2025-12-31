@@ -199,6 +199,11 @@ ux_show_startup_progress() {
 ux_show_all_ready() {
     ux_blank
     ux_success "All systems ready!"
+
+    # Show cute GPU message if one was detected
+    if [[ -n "${DETECTED_GPU:-}" ]] && [[ "${DETECTED_VRAM_GB:-0}" -gt 0 ]]; then
+        ux_yollayah "$(yollayah_gpu_flex "$DETECTED_GPU")"
+    fi
 }
 
 # ============================================================================
@@ -232,16 +237,20 @@ ux_launch_tui() {
     tui_bin="$(ux_tui_binary)"
 
     if [[ -z "$tui_bin" ]]; then
-        log_debug "TUI binary not found, falling back to bash prompt"
+        log_ux "DEBUG" "TUI binary not found, falling back to bash prompt"
         return 1
     fi
 
-    log_info "Launching rich TUI: $tui_bin"
+    log_ux "INFO" "Launching rich TUI: $tui_bin"
 
     # Export model info for TUI to use
     export YOLLAYAH_MODEL="$model_name"
     export YOLLAYAH_OLLAMA_HOST="${OLLAMA_HOST:-localhost}"
     export YOLLAYAH_OLLAMA_PORT="${OLLAMA_PORT:-11434}"
+
+    # Export paths for TUI shell integration (routing, task management)
+    export YOLLAYAH_SCRIPT_DIR="$SCRIPT_DIR"
+    export YOLLAYAH_STATE_DIR="$STATE_DIR"
 
     # Launch TUI (it takes over the terminal)
     "$tui_bin"
@@ -253,8 +262,10 @@ ux_start_interface() {
     local model_name="$1"
 
     if ux_tui_available; then
+        log_ux "INFO" "Launching rich TUI interface"
         ux_launch_tui "$model_name"
     else
+        log_ux "INFO" "Starting conversation loop (bash interface)"
         ux_conversation_loop "$model_name"
     fi
 }

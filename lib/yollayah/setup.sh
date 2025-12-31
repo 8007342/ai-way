@@ -1,0 +1,267 @@
+#!/bin/bash
+# ============================================================================
+# lib/yollayah/setup.sh - First-Run Setup with Yollayah Personality
+#
+# Handles installation of dependencies (Ollama, Rust, etc.) with a friendly,
+# non-scary Yollayah personality. AJ shouldn't be intimidated by system prompts.
+#
+# Key Principles:
+# - Explain what's happening in plain language
+# - Warn about sudo prompts graciously
+# - Make the scary system text feel safe
+# - Only happens once (or when updates needed)
+#
+# Constitution Reference:
+# - Law of Care: Don't stress AJ out
+# - Law of Truth: Be honest about what's being installed
+# ============================================================================
+
+# Prevent double-sourcing
+[[ -n "${_YOLLAYAH_SETUP_LOADED:-}" ]] && return 0
+_YOLLAYAH_SETUP_LOADED=1
+
+# ============================================================================
+# Setup State
+# ============================================================================
+
+readonly SETUP_STATE_FILE="${STATE_DIR}/setup.done"
+
+# Check if first-run setup is needed
+setup_needed() {
+    [[ ! -f "$SETUP_STATE_FILE" ]]
+}
+
+# Mark setup as complete
+setup_mark_done() {
+    date -Iseconds > "$SETUP_STATE_FILE"
+}
+
+# ============================================================================
+# Dependency Checks
+# ============================================================================
+
+# Check if Ollama is installed
+setup_has_ollama() {
+    command -v ollama &> /dev/null
+}
+
+# Check if Rust/Cargo is installed
+setup_has_rust() {
+    # First check if cargo is already in PATH
+    if command -v cargo &> /dev/null; then
+        return 0
+    fi
+
+    # Check if rustup installed cargo but it's not in PATH yet
+    if [[ -f "$HOME/.cargo/bin/cargo" ]]; then
+        # Source the env to add it to PATH for this session
+        source "$HOME/.cargo/env" 2>/dev/null || true
+        return 0
+    fi
+
+    # Check common alternative locations
+    if [[ -f "$HOME/.rustup/toolchains/stable-x86_64-unknown-linux-gnu/bin/cargo" ]]; then
+        return 0
+    fi
+
+    return 1
+}
+
+# Check if all dependencies are present
+setup_has_all_dependencies() {
+    setup_has_ollama && setup_has_rust
+}
+
+# ============================================================================
+# Gracious Sudo Warning (only when actually needed!)
+# ============================================================================
+
+# Show a friendly warning before sudo prompts
+# Only call this for things that ACTUALLY need sudo!
+setup_warn_sudo() {
+    local what_for="$1"
+
+    ux_blank
+    ux_separator
+
+    # Random interjection for personality
+    local interj
+    interj=$(yollayah_interjection)
+
+    ux_yollayah "${interj} Quick heads up!"
+    ux_blank
+
+    cat << 'BANNER'
+    ╭──────────────────────────────────────────────────────╮
+    │                                                      │
+    │   🔐  Your computer's gonna ask for permission!      │
+    │                                                      │
+    │   Totally normal - it just wants to make sure        │
+    │   YOU are okay with me installing stuff.             │
+    │                                                      │
+    │   This only happens once. Pinky promise.             │
+    │                                                      │
+    ╰──────────────────────────────────────────────────────╯
+BANNER
+
+    ux_blank
+    ux_yollayah "What I'm installing: ${what_for}"
+    ux_yollayah "Type your password when asked (it stays invisible, that's normal!)"
+    ux_blank
+
+    # Sassy punchline
+    local punchlines=(
+        "Computers are so dramatic, right? You got this!"
+        "Think of it like your computer saying 'pretty please?'"
+        "After this, smooth sailing. I got you."
+        "One password and we're golden, amigo!"
+    )
+    local punchline_idx=$((RANDOM % ${#punchlines[@]}))
+    ux_yollayah "${punchlines[$punchline_idx]}"
+
+    ux_blank
+    ux_separator
+    ux_blank
+
+    # Give AJ a moment to read
+    sleep 2
+}
+
+# ============================================================================
+# Dependency Installation
+# ============================================================================
+
+# Install Ollama (needs sudo - this is the only one that does!)
+setup_install_ollama() {
+    if setup_has_ollama; then
+        log_debug "Ollama already installed"
+        return 0
+    fi
+
+    ux_yollayah "$(yollayah_thinking) Getting the AI brain ready..."
+
+    # THIS actually needs sudo, so warn graciously
+    setup_warn_sudo "the AI brain (Ollama) - it's what makes me smart!"
+
+    # Download installer to temp file first (so we can run it with friendly wrapper)
+    local installer_script
+    installer_script=$(mktemp)
+
+    ux_blank
+    if ! curl -fsSL https://ollama.com/install.sh -o "$installer_script" 2>/dev/null; then
+        rm -f "$installer_script"
+        ux_yollayah "$(yollayah_interjection) Couldn't download. Internet okay?"
+        return 1
+    fi
+
+    # Run installer with friendly spinner (hides scary output)
+    if ux_run_friendly "Installing Ollama..." sudo sh "$installer_script"; then
+        rm -f "$installer_script"
+        ux_yollayah "$(yollayah_celebration) Brain installed! I can think now!"
+        return 0
+    else
+        rm -f "$installer_script"
+        ux_yollayah "$(yollayah_interjection) Hmm, that didn't work. Check the logs?"
+        return 1
+    fi
+}
+
+# Install Rust (NO sudo needed - just goes in your home folder!)
+setup_install_rust() {
+    if setup_has_rust; then
+        log_debug "Rust already installed"
+        return 0
+    fi
+
+    ux_yollayah "$(yollayah_thinking) Getting some tools for the pretty interface..."
+    ux_yollayah "This one's easy - no password needed!"
+    ux_blank
+
+    # Download installer to temp file first
+    local installer_script
+    installer_script=$(mktemp)
+
+    if ! curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs -o "$installer_script" 2>/dev/null; then
+        rm -f "$installer_script"
+        ux_yollayah "$(yollayah_interjection) Couldn't download. Internet okay?"
+        return 1
+    fi
+
+    # Run with friendly wrapper (hides scary output)
+    if ux_run_friendly "Installing Rust..." sh "$installer_script" -y; then
+        rm -f "$installer_script"
+        # Source cargo env
+        source "$HOME/.cargo/env" 2>/dev/null || true
+        ux_yollayah "$(yollayah_celebration) Got it! Now I can look pretty."
+        return 0
+    else
+        rm -f "$installer_script"
+        ux_yollayah "$(yollayah_interjection) That didn't work. Internet hiccup maybe?"
+        return 1
+    fi
+}
+
+# ============================================================================
+# Main Setup Flow
+# ============================================================================
+
+# Run the first-time setup (only does work if actually needed!)
+setup_run() {
+    # Already done AND have everything? Skip entirely!
+    if ! setup_needed && setup_has_all_dependencies; then
+        log_debug "Setup already complete and all deps present"
+        return 0
+    fi
+
+    # Check what's missing
+    local missing_ollama=false
+    local missing_rust=false
+
+    if ! setup_has_ollama; then
+        missing_ollama=true
+    fi
+    if ! setup_has_rust; then
+        missing_rust=true
+    fi
+
+    # Everything's already there? Just mark done and bounce
+    if [[ "$missing_ollama" == "false" && "$missing_rust" == "false" ]]; then
+        setup_mark_done
+        return 0
+    fi
+
+    # Okay, we actually need to install something
+    ux_blank
+    ux_yollayah "$(yollayah_interjection) First time? Let me get myself ready!"
+    ux_blank
+
+    # Install what's missing (Ollama first since it needs sudo)
+    if [[ "$missing_ollama" == "true" ]]; then
+        setup_install_ollama || return 1
+        ux_blank
+    fi
+
+    if [[ "$missing_rust" == "true" ]]; then
+        setup_install_rust || return 1
+        ux_blank
+    fi
+
+    # Mark setup complete
+    setup_mark_done
+
+    ux_yollayah "$(yollayah_celebration) All done! That wasn't so bad, right?"
+    ux_blank
+
+    return 0
+}
+
+# ============================================================================
+# Update Check
+# ============================================================================
+
+# Check if any dependencies need updating
+setup_check_updates() {
+    # Future: Check for Ollama/Rust updates
+    # For now, just return success
+    return 0
+}

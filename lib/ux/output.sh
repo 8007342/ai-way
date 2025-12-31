@@ -77,26 +77,26 @@ fi
 ux_info() {
     [[ "$UX_QUIET" == "true" ]] && return
     echo -e "${UX_CYAN}[INFO]${UX_NC} $1"
-    log_info "$1" "ux"
+    log_ux "INFO" "$1"
 }
 
 # Success message
 ux_success() {
     [[ "$UX_QUIET" == "true" ]] && return
     echo -e "${UX_GREEN}[OK]${UX_NC} $1"
-    log_info "SUCCESS: $1" "ux"
+    log_ux "INFO" "SUCCESS: $1"
 }
 
 # Warning message (AJ should know, but not panic)
 ux_warn() {
     echo -e "${UX_YELLOW}[WARN]${UX_NC} $1"
-    log_warn "$1" "ux"
+    log_ux "WARN" "$1"
 }
 
 # Error message (something went wrong)
 ux_error() {
     echo -e "${UX_RED}[ERROR]${UX_NC} $1" >&2
-    log_error "$1" "ux"
+    log_ux "ERROR" "$1"
 }
 
 # Plain message (no prefix)
@@ -128,7 +128,7 @@ ux_yollayah_thinking() {
     # Future: Animated axolotl swimming
     echo -ne "${UX_MAGENTA}Yollayah:${UX_NC} ${UX_DIM}*${context}*${UX_NC} "
 
-    log_debug "Thinking: $context" "ux"
+    log_ux "DEBUG" "Yollayah thinking: $context"
 }
 
 # Clear thinking indicator
@@ -258,6 +258,104 @@ ux_confirm() {
 }
 
 # ============================================================================
+# Yollayah-Friendly Command Wrappers
+# ============================================================================
+
+# Run a command with a cute spinner, hiding scary output
+# Usage: ux_run_friendly "Getting things ready..." command arg1 arg2
+ux_run_friendly() {
+    local message="$1"
+    shift
+    local cmd=("$@")
+
+    # Yollayah phrases to cycle through while waiting
+    local phrases=(
+        "Almost there..."
+        "Still working on it..."
+        "Doing the thing..."
+        "Making progress..."
+        "Just a bit more..."
+        "Getting closer..."
+    )
+    local phrase_idx=0
+
+    # Start the command in background, capturing output to temp file
+    local temp_out
+    temp_out=$(mktemp)
+    "${cmd[@]}" > "$temp_out" 2>&1 &
+    local cmd_pid=$!
+
+    # Show spinner while command runs
+    local spin_idx=0
+    local tick=0
+    while kill -0 "$cmd_pid" 2>/dev/null; do
+        local char="${UX_SPINNER_CHARS:spin_idx:1}"
+
+        # Change phrase every ~3 seconds (30 ticks at 0.1s)
+        if [[ $((tick % 30)) -eq 0 ]] && [[ $tick -gt 0 ]]; then
+            phrase_idx=$(( (phrase_idx + 1) % ${#phrases[@]} ))
+        fi
+
+        echo -ne "\r${UX_MAGENTA}${char}${UX_NC} ${message} ${UX_DIM}${phrases[$phrase_idx]}${UX_NC}  "
+        spin_idx=$(( (spin_idx + 1) % ${#UX_SPINNER_CHARS} ))
+        tick=$((tick + 1))
+        sleep 0.1
+    done
+
+    # Get exit code
+    wait "$cmd_pid"
+    local exit_code=$?
+
+    # Clear spinner line
+    echo -ne "\r\033[K"
+
+    # Clean up
+    rm -f "$temp_out"
+
+    return $exit_code
+}
+
+# Run ollama pull with cute progress
+# Usage: ux_ollama_pull "llama3.2:3b" [skip_intro]
+# If skip_intro is "true", skips the intro message (caller handles it)
+ux_ollama_pull() {
+    local model="$1"
+    local skip_intro="${2:-false}"
+
+    # Cute intro message (skipped if caller already announced)
+    if [[ "$skip_intro" != "true" ]]; then
+        ux_yollayah "$(yollayah_thinking) Downloading my brain... this might take a minute!"
+    fi
+    ux_blank
+
+    # Run ollama pull with spinner, hiding scary hashes
+    if ux_run_friendly "Fetching ${model}..." ollama pull "$model"; then
+        ux_yollayah "$(yollayah_celebration) Got it! Brain downloaded."
+        return 0
+    else
+        ux_yollayah "$(yollayah_interjection) Download failed. Internet okay?"
+        return 1
+    fi
+}
+
+# Run ollama create with cute progress
+# Usage: ux_ollama_create "yollayah" "/tmp/modelfile"
+ux_ollama_create() {
+    local model_name="$1"
+    local modelfile="$2"
+
+    ux_yollayah "$(yollayah_thinking) Putting myself together..."
+    ux_blank
+
+    # Run ollama create with spinner, hiding scary hashes
+    if ux_run_friendly "Building ${model_name}..." ollama create "$model_name" -f "$modelfile"; then
+        return 0
+    else
+        return 1
+    fi
+}
+
+# ============================================================================
 # Future: Animation Hooks
 # ============================================================================
 
@@ -326,7 +424,7 @@ _ux_init() {
         UX_MODE="basic"
     fi
 
-    log_debug "UX mode: $UX_MODE" "ux"
+    log_ux "DEBUG" "UX initialized: mode=$UX_MODE"
 }
 
 _ux_init

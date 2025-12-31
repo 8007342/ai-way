@@ -28,12 +28,12 @@ _YOLLAYAH_OLLAMA_SERVICE_LOADED=1
 # Record Ollama state BEFORE we touch anything
 # This lets us restore to pre-Yollayah state on exit
 ollama_record_state() {
-    debug "Recording pre-Yollayah Ollama state..."
+    log_ollama "INFO" "Recording pre-Yollayah Ollama state"
 
     # Check if Ollama is currently responding
     if ollama_is_running; then
         OLLAMA_WAS_RUNNING=true
-        debug "Ollama was already running"
+        log_ollama "DEBUG" "Ollama was already running"
     fi
 
     # Check systemd service state (Linux only)
@@ -41,11 +41,11 @@ ollama_record_state() {
         if systemctl list-unit-files ollama.service &> /dev/null 2>&1; then
             if systemctl is-enabled ollama.service &> /dev/null 2>&1; then
                 OLLAMA_SERVICE_WAS_ENABLED=true
-                debug "Ollama service was enabled"
+                log_ollama "DEBUG" "Ollama service was enabled"
             fi
             if systemctl is-active ollama.service &> /dev/null 2>&1; then
                 OLLAMA_SERVICE_WAS_ACTIVE=true
-                debug "Ollama service was active"
+                log_ollama "DEBUG" "Ollama service was active"
             fi
         fi
     fi
@@ -58,6 +58,7 @@ OLLAMA_SERVICE_WAS_ENABLED=$OLLAMA_SERVICE_WAS_ENABLED
 OLLAMA_SERVICE_WAS_ACTIVE=$OLLAMA_SERVICE_WAS_ACTIVE
 RECORDED_AT=$(date -Iseconds)
 EOF
+    log_ollama "INFO" "State recorded: was_running=$OLLAMA_WAS_RUNNING"
 }
 
 # ============================================================================
@@ -114,16 +115,19 @@ ollama_check_installed() {
 # Ensure Ollama is running (start if needed)
 ollama_ensure_running() {
     if ollama_is_running; then
+        log_ollama "INFO" "Ollama already running"
         success "Ollama is running"
         return 0
     fi
 
+    log_ollama "WARN" "Ollama not running, starting..."
     warn "Ollama is not running"
     info "Starting Ollama..."
 
     # Start Ollama serve in background
     ollama serve > /dev/null 2>&1 &
     WE_STARTED_OLLAMA=true
+    log_ollama "INFO" "Started ollama serve (PID: $!)"
 
     # Wait for it to come up
     local attempts=0
@@ -131,12 +135,14 @@ ollama_ensure_running() {
         sleep 1
         ((attempts++))
         if [[ $attempts -ge 10 ]]; then
+            log_ollama "ERROR" "Failed to start Ollama after 10 seconds"
             error "Failed to start Ollama after 10 seconds"
             error "Please run 'ollama serve' manually"
             return 1
         fi
     done
 
+    log_ollama "INFO" "Ollama started successfully"
     success "Ollama started (will stop on exit)"
 }
 
@@ -149,15 +155,16 @@ ollama_ensure_running() {
 ollama_cleanup() {
     # Only clean up if we started Ollama
     if [[ "$WE_STARTED_OLLAMA" != "true" ]]; then
-        debug "We didn't start Ollama, nothing to clean up"
+        log_ollama "DEBUG" "We didn't start Ollama, nothing to clean up"
         return 0
     fi
 
+    log_ollama "INFO" "Cleaning up Ollama..."
     info "Cleaning up..."
 
     # If Ollama wasn't running before, stop it
     if [[ "$OLLAMA_WAS_RUNNING" == "false" ]]; then
-        debug "Stopping Ollama (wasn't running before)"
+        log_ollama "INFO" "Stopping Ollama (wasn't running before)"
 
         # Kill the ollama serve process we started
         pkill -f "ollama serve" 2>/dev/null || true
@@ -167,6 +174,7 @@ ollama_cleanup() {
             # If service is now active but wasn't before, stop it
             if systemctl is-active ollama.service &> /dev/null 2>&1; then
                 if [[ "$OLLAMA_SERVICE_WAS_ACTIVE" == "false" ]]; then
+                    log_ollama "INFO" "Stopping Ollama systemd service"
                     info "Stopping Ollama service..."
                     sudo systemctl stop ollama.service 2>/dev/null || true
                 fi
@@ -175,14 +183,17 @@ ollama_cleanup() {
             # If service is now enabled but wasn't before, disable it
             if systemctl is-enabled ollama.service &> /dev/null 2>&1; then
                 if [[ "$OLLAMA_SERVICE_WAS_ENABLED" == "false" ]]; then
+                    log_ollama "INFO" "Disabling Ollama service auto-start"
                     info "Disabling Ollama service auto-start..."
                     sudo systemctl disable ollama.service 2>/dev/null || true
                 fi
             fi
         fi
 
+        log_ollama "INFO" "Ollama stopped, restored pre-Yollayah state"
         success "Ollama stopped (restored pre-Yollayah state)"
     else
+        log_ollama "INFO" "Leaving Ollama running (was already running)"
         info "Leaving Ollama running (was already running)"
     fi
 
@@ -205,5 +216,11 @@ _yollayah_exit_handler() {
     local exit_code=$?
     echo ""
     ollama_cleanup
+
+    # Clean up logs (deletes if not persisting)
+    if declare -f log_cleanup_on_exit &>/dev/null; then
+        log_cleanup_on_exit "$exit_code"
+    fi
+
     exit $exit_code
 }
