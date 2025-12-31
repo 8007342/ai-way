@@ -134,9 +134,11 @@ BANNER
 # Install Ollama (needs sudo - this is the only one that does!)
 setup_install_ollama() {
     if setup_has_ollama; then
-        log_debug "Ollama already installed"
+        log_ollama "INFO" "Ollama already installed, skipping installation"
         return 0
     fi
+
+    log_ollama "INFO" "Ollama not found, starting installation"
 
     ux_yollayah "$(yollayah_thinking) Getting the AI brain ready..."
 
@@ -169,10 +171,12 @@ setup_install_ollama() {
 # Install Rust (NO sudo needed - just goes in your home folder!)
 setup_install_rust() {
     if setup_has_rust; then
-        log_debug "Rust already installed"
+        log_info "Rust already installed, skipping installation"
+        ux_success "Rust toolchain found"
         return 0
     fi
 
+    log_info "Rust not found, starting installation"
     ux_yollayah "$(yollayah_thinking) Getting some tools for the pretty interface..."
     ux_yollayah "This one's easy - no password needed!"
     ux_blank
@@ -207,9 +211,11 @@ setup_install_rust() {
 
 # Run the first-time setup (only does work if actually needed!)
 setup_run() {
+    log_session "INFO" "Running setup check"
+
     # Already done AND have everything? Skip entirely!
     if ! setup_needed && setup_has_all_dependencies; then
-        log_debug "Setup already complete and all deps present"
+        log_session "INFO" "Setup already complete and all deps present"
         return 0
     fi
 
@@ -219,13 +225,21 @@ setup_run() {
 
     if ! setup_has_ollama; then
         missing_ollama=true
+        log_session "INFO" "Ollama not found, will install"
+    else
+        log_session "DEBUG" "Ollama found"
     fi
+
     if ! setup_has_rust; then
         missing_rust=true
+        log_session "INFO" "Rust not found, will install"
+    else
+        log_session "DEBUG" "Rust found"
     fi
 
     # Everything's already there? Just mark done and bounce
     if [[ "$missing_ollama" == "false" && "$missing_rust" == "false" ]]; then
+        log_session "INFO" "All dependencies present, marking setup done"
         setup_mark_done
         return 0
     fi
