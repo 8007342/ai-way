@@ -227,6 +227,16 @@ _log_write_session_header() {
     local session_log
     session_log=$(_log_file_for_category "session")
 
+    # Detect basic hardware info for header
+    local gpu_info="none"
+    if command -v nvidia-smi &>/dev/null; then
+        gpu_info=$(nvidia-smi --query-gpu=name --format=csv,noheader 2>/dev/null | head -1 || echo "nvidia (query failed)")
+    elif command -v rocm-smi &>/dev/null; then
+        gpu_info="AMD ROCm"
+    elif command -v lspci &>/dev/null; then
+        gpu_info=$(lspci 2>/dev/null | grep -i 'vga\|3d' | head -1 | sed 's/.*: //' | cut -d'(' -f1 || echo "unknown")
+    fi
+
     {
         echo "========================================"
         echo "Yollayah Session Log"
@@ -236,6 +246,7 @@ _log_write_session_header() {
         echo "Persist Logs: $LOG_PERSIST"
         echo "Debug Mode: ${YOLLAYAH_DEBUG:-0}"
         echo "Script Dir: $SCRIPT_DIR"
+        echo "GPU: $gpu_info"
         echo "========================================"
         echo ""
     } >> "$session_log"

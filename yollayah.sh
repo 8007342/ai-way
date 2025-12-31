@@ -102,6 +102,10 @@ main() {
 
     # Select and pull best model for hardware
     model_select_best
+
+    # Verify GPU usage (warn if GPU detected but Ollama not using it)
+    verify_ollama_gpu_usage || true  # Don't fail, just warn
+
     model_ensure_ready || exit 1
 
     # Sync agents repository (the breadcrumb to YOU.md)
