@@ -96,6 +96,7 @@
 //! - [`session`]: Conversation session management
 //! - [`tasks`]: Background task management
 //! - [`conductor`]: Main Conductor struct
+//! - [`transport`]: IPC transport layer (Unix sockets, WebSocket)
 //!
 //! # No TUI Dependencies
 //!
@@ -115,6 +116,7 @@ pub mod messages;
 pub mod security;
 pub mod session;
 pub mod tasks;
+pub mod transport;
 
 // Re-exports for convenience
 pub use avatar::{

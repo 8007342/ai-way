@@ -391,6 +391,56 @@ impl<B: LlmBackend + 'static> Conductor<B> {
                     tracing::warn!("Surface error (recoverable): {}", error);
                 }
             }
+
+            // Transport/Handshake events
+            SurfaceEvent::Handshake {
+                event_id,
+                protocol_version,
+                surface_type,
+                capabilities,
+                auth_token: _,
+            } => {
+                // Store surface info
+                self.surface_type = Some(surface_type);
+                self.surface_capabilities = Some(capabilities);
+
+                // Protocol version 1 is currently supported
+                let accepted = protocol_version == 1;
+                let rejection_reason = if accepted {
+                    None
+                } else {
+                    Some(format!(
+                        "Unsupported protocol version: {} (expected 1)",
+                        protocol_version
+                    ))
+                };
+
+                // Send handshake acknowledgment
+                self.send(ConductorMessage::HandshakeAck {
+                    accepted,
+                    connection_id: format!("conn_{}", self.session.id.0),
+                    rejection_reason,
+                    protocol_version: 1,
+                })
+                .await;
+                self.ack(event_id).await;
+
+                if accepted {
+                    // Send current state
+                    self.send(ConductorMessage::State { state: self.state }).await;
+                    self.send(ConductorMessage::SessionInfo {
+                        session_id: self.session.id.clone(),
+                        model: self.config.model.clone(),
+                        ready: self.warmup_complete,
+                    })
+                    .await;
+                }
+            }
+
+            SurfaceEvent::Pong { seq } => {
+                // Heartbeat response received
+                tracing::trace!(seq = seq, "Received pong");
+            }
         }
 
         Ok(())

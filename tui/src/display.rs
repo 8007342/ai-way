@@ -507,6 +507,14 @@ impl DisplayState {
             ConductorMessage::Ack { .. } | ConductorMessage::QueryCapabilities => {
                 // No display state change needed
             }
+
+            // Transport messages - handled at transport layer, no display change
+            ConductorMessage::HandshakeAck { .. } => {
+                // Handshake handled by transport
+            }
+            ConductorMessage::Ping { .. } => {
+                // Heartbeat handled by transport (would send Pong back)
+            }
         }
     }
 

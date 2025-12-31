@@ -33,6 +33,29 @@ pub enum SurfaceEvent {
         capabilities: SurfaceCapabilities,
     },
 
+    /// Handshake request (first message after transport connect)
+    ///
+    /// Sent immediately after transport connection is established.
+    /// The Conductor responds with HandshakeAck.
+    Handshake {
+        /// Event ID for acknowledgment
+        event_id: EventId,
+        /// Protocol version (current: 1)
+        protocol_version: u32,
+        /// Surface type identifier
+        surface_type: SurfaceType,
+        /// Surface capabilities
+        capabilities: SurfaceCapabilities,
+        /// Optional authentication token (for remote surfaces)
+        auth_token: Option<String>,
+    },
+
+    /// Heartbeat response (reply to Ping)
+    Pong {
+        /// Sequence number (echoed from Ping)
+        seq: u64,
+    },
+
     /// Surface disconnecting gracefully
     Disconnected {
         /// Event ID for acknowledgment
@@ -170,6 +193,7 @@ impl SurfaceEvent {
     pub fn event_id(&self) -> Option<&EventId> {
         match self {
             Self::Connected { event_id, .. }
+            | Self::Handshake { event_id, .. }
             | Self::Disconnected { event_id, .. }
             | Self::Resized { event_id, .. }
             | Self::UserMessage { event_id, .. }
@@ -180,7 +204,8 @@ impl SurfaceEvent {
             | Self::CapabilitiesReport { event_id, .. }
             | Self::QuitRequested { event_id }
             | Self::SurfaceError { event_id, .. } => Some(event_id),
-            Self::UserTyping { .. }
+            Self::Pong { .. }
+            | Self::UserTyping { .. }
             | Self::UserScrolled { .. }
             | Self::MessageReceived { .. }
             | Self::RenderComplete { .. } => None,

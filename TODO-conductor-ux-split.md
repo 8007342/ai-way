@@ -47,14 +47,19 @@ yollayah.sh
 - [ ] Integration test of message flow
 - [ ] Developer mode (PJ) debug panel
 
-### Phase 3: IPC Transport Layer (PENDING)
-- [ ] Abstract transport trait (Transport: Send/Recv ConductorMessage/SurfaceEvent)
-- [ ] Unix Socket transport implementation (default)
-- [ ] WebSocket transport implementation (optional)
-- [ ] Transport configuration in conductor-core
+### Phase 3: IPC Transport Layer (IN PROGRESS - ~70%)
+- [x] Abstract transport trait (SurfaceTransport/ConductorTransport)
+- [x] Unix Socket server transport (ConductorTransport impl)
+- [x] Unix Socket client transport (SurfaceTransport impl)
+- [x] InProcess transport (backwards compatible embedded mode)
+- [x] Transport configuration types (TransportConfig, TransportType)
+- [x] Length-prefixed JSON frame protocol
+- [x] Connection handshake messages (Handshake, HandshakeAck, Ping, Pong)
+- [x] SO_PEERCRED validation on Linux for Unix sockets
+- [ ] WebSocket transport implementation (optional feature)
 - [ ] yollayah.sh updates to launch Conductor as separate process
-- [ ] Connection handshake and authentication
 - [ ] Reconnection handling
+- [ ] ConductorClient refactor to use transport abstraction
 
 ### Phase 4: Process Separation (PENDING)
 - [ ] Conductor as standalone binary (conductor-daemon)
@@ -82,7 +87,8 @@ _Items discovered during refactor that should NOT block this work:_
 
 | Commit | Description | Date |
 |--------|-------------|------|
-| _pending_ | Phase 2 completion checkpoint | - |
+| 493e221 | Phase 2 checkpoint: Conductor-core and TUI thin client | 2025-12-31 |
+| b24333e | Phase 3 transport layer: Unix socket IPC infrastructure | 2025-12-31 |
 
 ## Notes
 
