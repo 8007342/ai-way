@@ -16,7 +16,7 @@
 use std::io;
 use std::time::{Duration, Instant};
 
-use crossterm::event::{self, Event, KeyCode, KeyModifiers, MouseEventKind};
+use crossterm::event::{self, Event, KeyCode, KeyEventKind, KeyModifiers, MouseEventKind};
 use ratatui::backend::CrosstermBackend;
 use ratatui::layout::Rect;
 use ratatui::style::{Color, Style};
@@ -225,7 +225,10 @@ impl App {
             // Poll for terminal events (non-blocking)
             if event::poll(Duration::from_millis(1))? {
                 match event::read()? {
-                    Event::Key(key) => self.handle_key(key).await,
+                    // Only handle Press events (not Release or Repeat)
+                    Event::Key(key) if key.kind == KeyEventKind::Press => {
+                        self.handle_key(key).await
+                    }
                     Event::Mouse(mouse) => self.handle_mouse(mouse).await,
                     Event::Resize(w, h) => self.handle_resize(w, h).await,
                     _ => {}
