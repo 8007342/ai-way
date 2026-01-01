@@ -22,6 +22,7 @@
 
 use std::sync::Arc;
 
+use chrono::Timelike;
 use tokio::sync::mpsc;
 
 use crate::avatar::{AvatarCommand, AvatarState, CommandParser};
@@ -41,6 +42,9 @@ pub struct ConductorConfig {
     pub model: String,
     /// Whether to warm up the model on startup
     pub warmup_on_start: bool,
+    /// Whether to send a dynamic greeting when a surface connects
+    /// This also serves as a warmup for the LLM
+    pub greet_on_connect: bool,
     /// Maximum messages to keep in context
     pub max_context_messages: usize,
     /// System prompt
@@ -56,6 +60,7 @@ impl Default for ConductorConfig {
         Self {
             model: "yollayah".to_string(),
             warmup_on_start: true,
+            greet_on_connect: true,
             max_context_messages: 10,
             system_prompt: None,
             limits: ConductorLimits::default(),
@@ -72,6 +77,9 @@ impl ConductorConfig {
             model: std::env::var("YOLLAYAH_MODEL").unwrap_or_else(|_| "yollayah".to_string()),
             warmup_on_start: std::env::var("YOLLAYAH_SKIP_WARMUP")
                 .map(|v| v != "1" && v.to_lowercase() != "true")
+                .unwrap_or(true),
+            greet_on_connect: std::env::var("YOLLAYAH_GREET")
+                .map(|v| v == "1" || v.to_lowercase() == "true")
                 .unwrap_or(true),
             max_context_messages: std::env::var("YOLLAYAH_MAX_CONTEXT")
                 .ok()
@@ -251,6 +259,60 @@ impl<B: LlmBackend + 'static> Conductor<B> {
         Ok(())
     }
 
+    /// Generate a dynamic greeting
+    ///
+    /// This sends a request to the LLM asking for a quick, cute greeting.
+    /// It doubles as a warmup (preloads the model) while making Yollayah
+    /// feel alive by starting the conversation.
+    async fn generate_greeting(&mut self) {
+        // Build a prompt that encourages a quick, dynamic response
+        let now = chrono::Local::now();
+        let day = now.format("%A").to_string();
+        let time_of_day = match now.hour() {
+            5..=11 => "morning",
+            12..=16 => "afternoon",
+            17..=20 => "evening",
+            _ => "night",
+        };
+
+        // Quick prompt for a one-liner greeting
+        let prompt = format!(
+            "Say a quick, cute one-liner greeting to start our chat. \
+             It's {} {}. Be yourself - warm, playful, maybe a Spanish expression. \
+             ONE sentence max. Include avatar commands for wave/mood.",
+            day, time_of_day
+        );
+
+        let mut request = LlmRequest::new(&prompt, &self.config.model).with_stream(true);
+
+        if let Some(ref system) = self.config.system_prompt {
+            request = request.with_system(system.clone());
+        }
+
+        self.set_state(ConductorState::Responding).await;
+
+        match self.backend.send_streaming(&request).await {
+            Ok(rx) => {
+                // Start streaming the greeting as an assistant message
+                let msg_id = self.session.start_assistant_response();
+                self.streaming_rx = Some(rx);
+                self.streaming_message_id = Some(msg_id);
+                // Note: poll_streaming() will handle the tokens and set state to Ready when done
+            }
+            Err(e) => {
+                tracing::warn!("Greeting generation failed: {}", e);
+                // Fall back to static greeting
+                self.send(ConductorMessage::Message {
+                    id: MessageId::new(),
+                    role: MessageRole::Assistant,
+                    content: "[yolla:wave][yolla:mood happy]¡Hola! Ready to chat!".to_string(),
+                })
+                .await;
+                self.set_state(ConductorState::Ready).await;
+            }
+        }
+    }
+
     /// Handle an event from the UI surface
     pub async fn handle_event(&mut self, event: SurfaceEvent) -> anyhow::Result<()> {
         match event {
@@ -273,8 +335,12 @@ impl<B: LlmBackend + 'static> Conductor<B> {
                 })
                 .await;
 
-                // Send welcome message if ready
-                if self.warmup_complete {
+                // Generate dynamic greeting if configured and ready
+                // This also warms up the LLM while making Yollayah feel alive
+                if self.config.greet_on_connect && self.warmup_complete {
+                    self.generate_greeting().await;
+                } else if self.warmup_complete {
+                    // Fall back to static welcome if greeting disabled
                     self.send(ConductorMessage::Message {
                         id: MessageId::new(),
                         role: MessageRole::System,
