@@ -272,6 +272,16 @@ impl<B: LlmBackend + 'static> Conductor<B> {
                     ready: self.warmup_complete,
                 })
                 .await;
+
+                // Send welcome message if ready
+                if self.warmup_complete {
+                    self.send(ConductorMessage::Message {
+                        id: MessageId::new(),
+                        role: MessageRole::System,
+                        content: "Ready to chat! Type a message below.".to_string(),
+                    })
+                    .await;
+                }
             }
 
             SurfaceEvent::Disconnected { event_id, .. } => {
