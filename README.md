@@ -1,6 +1,6 @@
 # ai-way
 
-> **Work in Progress**: This project is under active development. Features may change, and documentation is being updated regularly.
+> **Work in Progress**: This project is under active development; and at a very early unstable-ish state. Features may change, and documentation is being updated regularly.
 
 Privacy-first local AI runtime. Your AI, your data, your rules.
 
