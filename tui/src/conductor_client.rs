@@ -106,7 +106,10 @@ impl ConductorClient {
                 let backend = OllamaBackend::from_env();
 
                 // Create Conductor config from environment
-                let conductor_config = ConductorConfig::from_env();
+                // Disable warmup so TUI starts immediately responsive
+                // The first user message will warm up the model instead
+                let mut conductor_config = ConductorConfig::from_env();
+                conductor_config.warmup_on_start = false;
 
                 // Create the Conductor
                 let conductor = Conductor::new(backend, conductor_config, tx);

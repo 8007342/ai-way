@@ -209,30 +209,29 @@ impl App {
         // Target ~10 FPS for terminal-style animations
         let frame_duration = Duration::from_millis(100);
 
-        // Render initial frame immediately so user sees UI during warmup
-        self.render(terminal)?;
-
-        // Start the Conductor (includes warmup which may take time)
-        self.conductor.start().await?;
-
-        // Connect this surface
-        self.conductor.connect().await?;
-
-        // Render again to show Ready state
-        self.process_conductor_messages();
-        self.render(terminal)?;
-
         // Create async event stream for non-blocking terminal events
         let mut event_stream = EventStream::new();
+
+        // Track startup phases
+        enum StartupPhase {
+            NeedStart,
+            NeedConnect,
+            Done,
+        }
+        let mut startup_phase = StartupPhase::NeedStart;
+
+        // Render initial frame immediately so user sees UI
+        self.render(terminal)?;
 
         while self.running {
             let frame_start = Instant::now();
 
-            // Poll for terminal events using async select (non-blocking)
+            // Use select to handle events WHILE doing startup
+            // This ensures we remain responsive even during slow startup
             tokio::select! {
                 biased;
 
-                // Check for terminal events
+                // Check for terminal events - highest priority
                 maybe_event = event_stream.next() => {
                     if let Some(Ok(event)) = maybe_event {
                         match event {
@@ -247,8 +246,44 @@ impl App {
                     }
                 }
 
-                // Short timeout to continue with other tasks
-                _ = tokio::time::sleep(Duration::from_millis(1)) => {}
+                // Frame tick - do work and render
+                _ = tokio::time::sleep(Duration::from_millis(16)) => {
+                    // Handle startup phases incrementally
+                    match startup_phase {
+                        StartupPhase::NeedStart => {
+                            // Use a short timeout so we don't block too long
+                            match tokio::time::timeout(
+                                Duration::from_millis(50),
+                                self.conductor.start()
+                            ).await {
+                                Ok(Ok(())) => startup_phase = StartupPhase::NeedConnect,
+                                Ok(Err(e)) => {
+                                    tracing::warn!("Conductor start error: {}", e);
+                                    startup_phase = StartupPhase::NeedConnect;
+                                }
+                                Err(_) => {
+                                    // Timeout - will retry next frame
+                                }
+                            }
+                        }
+                        StartupPhase::NeedConnect => {
+                            match tokio::time::timeout(
+                                Duration::from_millis(50),
+                                self.conductor.connect()
+                            ).await {
+                                Ok(Ok(())) => startup_phase = StartupPhase::Done,
+                                Ok(Err(e)) => {
+                                    tracing::warn!("Conductor connect error: {}", e);
+                                    startup_phase = StartupPhase::Done;
+                                }
+                                Err(_) => {
+                                    // Timeout - will retry next frame
+                                }
+                            }
+                        }
+                        StartupPhase::Done => {}
+                    }
+                }
             }
 
             // Poll conductor for streaming tokens
