@@ -16,7 +16,10 @@
 use std::io;
 use std::time::{Duration, Instant};
 
-use crossterm::event::{self, Event, KeyCode, KeyEventKind, KeyModifiers, MouseEventKind};
+use crossterm::event::{
+    self, Event, EventStream, KeyCode, KeyEventKind, KeyModifiers, MouseEventKind,
+};
+use futures::StreamExt;
 use ratatui::backend::CrosstermBackend;
 use ratatui::layout::Rect;
 use ratatui::style::{Color, Style};
@@ -219,20 +222,33 @@ impl App {
         self.process_conductor_messages();
         self.render(terminal)?;
 
+        // Create async event stream for non-blocking terminal events
+        let mut event_stream = EventStream::new();
+
         while self.running {
             let frame_start = Instant::now();
 
-            // Poll for terminal events (non-blocking)
-            if event::poll(Duration::from_millis(1))? {
-                match event::read()? {
-                    // Only handle Press events (not Release or Repeat)
-                    Event::Key(key) if key.kind == KeyEventKind::Press => {
-                        self.handle_key(key).await
+            // Poll for terminal events using async select (non-blocking)
+            tokio::select! {
+                biased;
+
+                // Check for terminal events
+                maybe_event = event_stream.next() => {
+                    if let Some(Ok(event)) = maybe_event {
+                        match event {
+                            // Only handle Press events (not Release or Repeat)
+                            Event::Key(key) if key.kind == KeyEventKind::Press => {
+                                self.handle_key(key).await
+                            }
+                            Event::Mouse(mouse) => self.handle_mouse(mouse).await,
+                            Event::Resize(w, h) => self.handle_resize(w, h).await,
+                            _ => {}
+                        }
                     }
-                    Event::Mouse(mouse) => self.handle_mouse(mouse).await,
-                    Event::Resize(w, h) => self.handle_resize(w, h).await,
-                    _ => {}
                 }
+
+                // Short timeout to continue with other tasks
+                _ = tokio::time::sleep(Duration::from_millis(1)) => {}
             }
 
             // Poll conductor for streaming tokens
