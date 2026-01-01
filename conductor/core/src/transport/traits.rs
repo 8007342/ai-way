@@ -3,7 +3,7 @@
 //! Core trait definitions for Conductor-Surface communication.
 //!
 //! Two traits define the two sides of the connection:
-//! - `SurfaceTransport`: Client side (TUI, WebUI, etc.)
+//! - `SurfaceTransport`: Client side (TUI, `WebUI`, etc.)
 //! - `ConductorTransport`: Server side (Conductor daemon)
 
 use std::fmt;
@@ -24,7 +24,7 @@ impl ConnectionId {
         use std::sync::atomic::{AtomicU64, Ordering};
         static COUNTER: AtomicU64 = AtomicU64::new(0);
         let id = COUNTER.fetch_add(1, Ordering::SeqCst);
-        Self(format!("conn_{}", id))
+        Self(format!("conn_{id}"))
     }
 }
 
@@ -64,14 +64,14 @@ pub enum TransportError {
 impl fmt::Display for TransportError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            Self::ConnectionFailed(msg) => write!(f, "Connection failed: {}", msg),
+            Self::ConnectionFailed(msg) => write!(f, "Connection failed: {msg}"),
             Self::ConnectionClosed => write!(f, "Connection closed"),
-            Self::SendFailed(msg) => write!(f, "Send failed: {}", msg),
-            Self::ReceiveFailed(msg) => write!(f, "Receive failed: {}", msg),
-            Self::SerializationError(msg) => write!(f, "Serialization error: {}", msg),
-            Self::AuthenticationFailed(msg) => write!(f, "Authentication failed: {}", msg),
-            Self::IoError(e) => write!(f, "IO error: {}", e),
-            Self::InvalidState(msg) => write!(f, "Invalid state: {}", msg),
+            Self::SendFailed(msg) => write!(f, "Send failed: {msg}"),
+            Self::ReceiveFailed(msg) => write!(f, "Receive failed: {msg}"),
+            Self::SerializationError(msg) => write!(f, "Serialization error: {msg}"),
+            Self::AuthenticationFailed(msg) => write!(f, "Authentication failed: {msg}"),
+            Self::IoError(e) => write!(f, "IO error: {e}"),
+            Self::InvalidState(msg) => write!(f, "Invalid state: {msg}"),
         }
     }
 }
@@ -108,13 +108,13 @@ pub trait SurfaceTransport: Send + Sync {
     /// Gracefully closes the connection.
     async fn disconnect(&mut self) -> Result<(), TransportError>;
 
-    /// Send a SurfaceEvent to the Conductor
+    /// Send a `SurfaceEvent` to the Conductor
     async fn send(&self, event: SurfaceEvent) -> Result<(), TransportError>;
 
-    /// Receive a ConductorMessage (blocks until message available)
+    /// Receive a `ConductorMessage` (blocks until message available)
     async fn recv(&mut self) -> Result<ConductorMessage, TransportError>;
 
-    /// Try to receive a ConductorMessage (non-blocking)
+    /// Try to receive a `ConductorMessage` (non-blocking)
     fn try_recv(&mut self) -> Option<ConductorMessage>;
 
     /// Check if currently connected

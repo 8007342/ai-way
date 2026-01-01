@@ -12,7 +12,7 @@ use ratatui::style::Color;
 // ============================================================================
 
 /// Body - soft pink (main color)
-pub const AXOLOTL_BODY: Color = Color::Rgb(255, 182, 193);       // Light pink
+pub const AXOLOTL_BODY: Color = Color::Rgb(255, 182, 193); // Light pink
 
 /// Body shadow - slightly darker pink for depth
 pub const AXOLOTL_BODY_SHADOW: Color = Color::Rgb(219, 148, 160);

@@ -64,11 +64,7 @@ impl BackgroundTask {
         let filled = (self.progress as usize * width) / 100;
         let empty = width.saturating_sub(filled);
 
-        format!(
-            "{}{}",
-            "█".repeat(filled),
-            "░".repeat(empty)
-        )
+        format!("{}{}", "█".repeat(filled), "░".repeat(empty))
     }
 }
 
@@ -82,13 +78,12 @@ impl TaskState {
     /// Create a new task state manager
     pub fn new() -> Self {
         // Get the state directory from environment or default
-        let state_dir = std::env::var("YOLLAYAH_STATE_DIR")
-            .unwrap_or_else(|_| {
-                // Try to find relative to script dir
-                std::env::var("SCRIPT_DIR")
-                    .map(|s| format!("{}/.state", s))
-                    .unwrap_or_else(|_| ".state".to_string())
-            });
+        let state_dir = std::env::var("YOLLAYAH_STATE_DIR").unwrap_or_else(|_| {
+            // Try to find relative to script dir
+            std::env::var("SCRIPT_DIR")
+                .map(|s| format!("{}/.state", s))
+                .unwrap_or_else(|_| ".state".to_string())
+        });
 
         Self {
             tasks_dir: PathBuf::from(state_dir).join("tasks"),
@@ -135,8 +130,8 @@ impl TaskState {
             .trim()
             .to_string();
 
-        let status_str = fs::read_to_string(task_dir.join("status"))
-            .unwrap_or_else(|_| "unknown".to_string());
+        let status_str =
+            fs::read_to_string(task_dir.join("status")).unwrap_or_else(|_| "unknown".to_string());
 
         let progress: u8 = fs::read_to_string(task_dir.join("progress"))
             .ok()
@@ -176,9 +171,9 @@ impl TaskState {
 
     /// Check if there are any active tasks
     pub fn has_active_tasks(&self) -> bool {
-        self.cached_tasks.iter().any(|t| {
-            matches!(t.status, TaskStatus::Running | TaskStatus::Pending)
-        })
+        self.cached_tasks
+            .iter()
+            .any(|t| matches!(t.status, TaskStatus::Running | TaskStatus::Pending))
     }
 
     /// Get status of a specific task by ID

@@ -25,9 +25,9 @@ use crate::transport::traits::{ConductorTransport, ConnectionId, TransportError}
 pub struct UnixSocketServer {
     /// Path to the socket file
     socket_path: PathBuf,
-    /// The bound listener (None until listen() is called)
+    /// The bound listener (None until `listen()` is called)
     listener: Option<UnixListener>,
-    /// Active connections: ConnectionId -> ConnectionHandle
+    /// Active connections: `ConnectionId` -> `ConnectionHandle`
     connections: Arc<RwLock<HashMap<ConnectionId, ConnectionHandle>>>,
 }
 
@@ -43,6 +43,7 @@ impl UnixSocketServer {
     /// # Arguments
     ///
     /// * `socket_path` - Path where the socket file will be created
+    #[must_use]
     pub fn new(socket_path: PathBuf) -> Self {
         Self {
             socket_path,
@@ -52,6 +53,7 @@ impl UnixSocketServer {
     }
 
     /// Create a server using the default socket path
+    #[must_use]
     pub fn with_default_path() -> Self {
         Self::new(super::default_socket_path())
     }
@@ -70,7 +72,7 @@ impl UnixSocketServer {
 
     /// Validate peer credentials
     ///
-    /// On Linux, uses SO_PEERCRED to verify the connecting process
+    /// On Linux, uses `SO_PEERCRED` to verify the connecting process
     /// runs as the same user as the Conductor.
     #[cfg(target_os = "linux")]
     fn validate_peer(stream: &UnixStream) -> Result<(), TransportError> {
@@ -86,8 +88,8 @@ impl UnixSocketServer {
                 fd,
                 libc::SOL_SOCKET,
                 libc::SO_PEERCRED,
-                &mut cred as *mut _ as *mut libc::c_void,
-                &mut len,
+                (&raw mut cred).cast::<libc::c_void>(),
+                &raw mut len,
             );
 
             if result < 0 {
@@ -134,22 +136,29 @@ impl ConductorTransport for UnixSocketServer {
             std::fs::create_dir_all(parent).map_err(|e| {
                 TransportError::IoError(std::io::Error::new(
                     e.kind(),
-                    format!("Failed to create directory {:?}: {}", parent, e),
+                    format!("Failed to create directory {parent:?}: {e}"),
                 ))
             })?;
         }
 
-        // Remove existing socket file if present
-        if self.socket_path.exists() {
-            std::fs::remove_file(&self.socket_path).map_err(|e| {
-                TransportError::IoError(std::io::Error::new(
+        // Remove existing socket file if present (atomic approach to avoid TOCTOU)
+        // We attempt removal unconditionally - if it doesn't exist, that's fine
+        match std::fs::remove_file(&self.socket_path) {
+            Ok(()) => {
+                tracing::debug!(path = ?self.socket_path, "Removed existing socket file");
+            }
+            Err(e) if e.kind() == std::io::ErrorKind::NotFound => {
+                // File doesn't exist, which is fine
+            }
+            Err(e) => {
+                return Err(TransportError::IoError(std::io::Error::new(
                     e.kind(),
                     format!("Failed to remove old socket {:?}: {}", self.socket_path, e),
-                ))
-            })?;
+                )));
+            }
         }
 
-        // Bind and listen
+        // Bind and listen - now atomic with removal above
         let listener = UnixListener::bind(&self.socket_path)?;
 
         // Set restrictive permissions
@@ -285,8 +294,7 @@ impl ConductorTransport for UnixSocketServer {
                 .map_err(|_| TransportError::SendFailed("Channel closed".to_string()))
         } else {
             Err(TransportError::SendFailed(format!(
-                "Unknown connection: {}",
-                conn_id
+                "Unknown connection: {conn_id}"
             )))
         }
     }

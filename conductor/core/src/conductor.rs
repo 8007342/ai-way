@@ -10,7 +10,7 @@
 //! # Design Philosophy
 //!
 //! The Conductor is UI-agnostic. It doesn't know or care whether it's talking to
-//! a TUI, WebUI, mobile app, or test harness. It communicates through:
+//! a TUI, `WebUI`, mobile app, or test harness. It communicates through:
 //! - `ConductorMessage`: Commands sent TO the UI surface
 //! - `SurfaceEvent`: Events received FROM the UI surface
 //!
@@ -66,6 +66,7 @@ impl Default for ConductorConfig {
 
 impl ConductorConfig {
     /// Create configuration from environment variables
+    #[must_use]
     pub fn from_env() -> Self {
         Self {
             model: std::env::var("YOLLAYAH_MODEL").unwrap_or_else(|_| "yollayah".to_string()),
@@ -121,11 +122,7 @@ pub struct Conductor<B: LlmBackend> {
 
 impl<B: LlmBackend + 'static> Conductor<B> {
     /// Create a new Conductor with the given backend
-    pub fn new(
-        backend: B,
-        config: ConductorConfig,
-        tx: mpsc::Sender<ConductorMessage>,
-    ) -> Self {
+    pub fn new(backend: B, config: ConductorConfig, tx: mpsc::Sender<ConductorMessage>) -> Self {
         let session = Session::new_with_limits(
             config.model.clone(),
             config.limits.max_session_messages,
@@ -225,8 +222,8 @@ impl<B: LlmBackend + 'static> Conductor<B> {
     async fn warmup(&mut self) -> anyhow::Result<()> {
         self.set_state(ConductorState::WarmingUp).await;
 
-        let request = LlmRequest::new("Say hi in 5 words or less.", &self.config.model)
-            .with_stream(true);
+        let request =
+            LlmRequest::new("Say hi in 5 words or less.", &self.config.model).with_stream(true);
 
         match self.backend.send_streaming(&request).await {
             Ok(mut rx) => {
@@ -267,7 +264,8 @@ impl<B: LlmBackend + 'static> Conductor<B> {
                 self.ack(event_id).await;
 
                 // Send current state to new surface
-                self.send(ConductorMessage::State { state: self.state }).await;
+                self.send(ConductorMessage::State { state: self.state })
+                    .await;
                 self.send(ConductorMessage::SessionInfo {
                     session_id: self.session.id.clone(),
                     model: self.config.model.clone(),
@@ -295,7 +293,7 @@ impl<B: LlmBackend + 'static> Conductor<B> {
                     }
                     ValidationResult::Invalid(reason) => {
                         tracing::warn!(reason = %reason, "Rejected user message");
-                        self.notify(NotifyLevel::Warning, &format!("Invalid message: {}", reason))
+                        self.notify(NotifyLevel::Warning, &format!("Invalid message: {reason}"))
                             .await;
                     }
                     ValidationResult::RateLimited(reason) => {
@@ -318,7 +316,7 @@ impl<B: LlmBackend + 'static> Conductor<B> {
                     }
                     ValidationResult::Invalid(reason) => {
                         tracing::warn!(command = %command, reason = %reason, "Rejected user command");
-                        self.notify(NotifyLevel::Warning, &format!("Invalid command: {}", reason))
+                        self.notify(NotifyLevel::Warning, &format!("Invalid command: {reason}"))
                             .await;
                     }
                     ValidationResult::RateLimited(reason) => {
@@ -344,8 +342,7 @@ impl<B: LlmBackend + 'static> Conductor<B> {
             SurfaceEvent::AvatarClicked { event_id } => {
                 self.ack(event_id).await;
                 // Avatar was clicked - could trigger playful behavior
-                self.avatar.current_gesture =
-                    Some(crate::avatar::AvatarGesture::Wave);
+                self.avatar.current_gesture = Some(crate::avatar::AvatarGesture::Wave);
                 self.send_avatar_gesture().await;
             }
 
@@ -385,10 +382,10 @@ impl<B: LlmBackend + 'static> Conductor<B> {
                 recoverable,
             } => {
                 self.ack(event_id).await;
-                if !recoverable {
-                    tracing::error!("Surface error (fatal): {}", error);
-                } else {
+                if recoverable {
                     tracing::warn!("Surface error (recoverable): {}", error);
+                } else {
+                    tracing::error!("Surface error (fatal): {}", error);
                 }
             }
 
@@ -410,8 +407,7 @@ impl<B: LlmBackend + 'static> Conductor<B> {
                     None
                 } else {
                     Some(format!(
-                        "Unsupported protocol version: {} (expected 1)",
-                        protocol_version
+                        "Unsupported protocol version: {protocol_version} (expected 1)"
                     ))
                 };
 
@@ -427,7 +423,8 @@ impl<B: LlmBackend + 'static> Conductor<B> {
 
                 if accepted {
                     // Send current state
-                    self.send(ConductorMessage::State { state: self.state }).await;
+                    self.send(ConductorMessage::State { state: self.state })
+                        .await;
                     self.send(ConductorMessage::SessionInfo {
                         session_id: self.session.id.clone(),
                         model: self.config.model.clone(),
@@ -462,13 +459,12 @@ impl<B: LlmBackend + 'static> Conductor<B> {
         // Start processing
         self.set_state(ConductorState::Thinking).await;
 
-        // Build request with context
-        let context = self.session.build_context(self.config.max_context_messages);
-        let mut request = LlmRequest::new(&content, &self.config.model)
-            .with_stream(true);
+        // Build request with conversation history
+        let history = self.session.build_context(self.config.max_context_messages);
+        let mut request = LlmRequest::new(&content, &self.config.model).with_stream(true);
 
-        if !context.is_empty() {
-            request = request.with_context(context);
+        if !history.is_empty() {
+            request = request.with_context(history);
         }
 
         if let Some(ref system) = self.config.system_prompt {
@@ -484,8 +480,8 @@ impl<B: LlmBackend + 'static> Conductor<B> {
                 self.set_state(ConductorState::Responding).await;
             }
             Err(e) => {
-                self.session.add_system_message(format!("Error: {}", e));
-                self.notify(NotifyLevel::Error, &format!("Failed to send message: {}", e))
+                self.session.add_system_message(format!("Error: {e}"));
+                self.notify(NotifyLevel::Error, &format!("Failed to send message: {e}"))
                     .await;
                 self.set_state(ConductorState::Ready).await;
             }
@@ -615,11 +611,13 @@ impl<B: LlmBackend + 'static> Conductor<B> {
     async fn handle_command(&mut self, command: &str, args: &[String]) -> anyhow::Result<()> {
         match command {
             "help" => {
-                self.session.add_system_message(
-                    "Available commands: /help, /clear, /quit".to_string(),
-                );
-                self.notify(NotifyLevel::Info, "Available commands: /help, /clear, /quit")
-                    .await;
+                self.session
+                    .add_system_message("Available commands: /help, /clear, /quit".to_string());
+                self.notify(
+                    NotifyLevel::Info,
+                    "Available commands: /help, /clear, /quit",
+                )
+                .await;
             }
             "clear" => {
                 self.session.clear_history();
@@ -637,7 +635,7 @@ impl<B: LlmBackend + 'static> Conductor<B> {
             _ => {
                 self.notify(
                     NotifyLevel::Warning,
-                    &format!("Unknown command: /{}", command),
+                    &format!("Unknown command: /{command}"),
                 )
                 .await;
             }
@@ -672,10 +670,12 @@ impl<B: LlmBackend + 'static> Conductor<B> {
                     .await;
             }
             AvatarCommand::Mood(mood) => {
-                self.send(ConductorMessage::AvatarMood { mood: *mood }).await;
+                self.send(ConductorMessage::AvatarMood { mood: *mood })
+                    .await;
             }
             AvatarCommand::Size(size) => {
-                self.send(ConductorMessage::AvatarSize { size: *size }).await;
+                self.send(ConductorMessage::AvatarSize { size: *size })
+                    .await;
             }
             AvatarCommand::Gesture(gesture) => {
                 self.send(ConductorMessage::AvatarGesture {
@@ -760,8 +760,7 @@ impl<B: LlmBackend + 'static> Conductor<B> {
                 // These affect avatar positioning, handled elsewhere
             }
             TC::Celebrate { task_id } => {
-                self.avatar.current_reaction =
-                    Some(crate::avatar::AvatarReaction::Tada);
+                self.avatar.current_reaction = Some(crate::avatar::AvatarReaction::Tada);
                 self.send(ConductorMessage::AvatarReact {
                     reaction: crate::avatar::AvatarReaction::Tada,
                     duration_ms: 2500,
@@ -880,10 +879,7 @@ mod tests {
             Ok(rx)
         }
 
-        async fn send(
-            &self,
-            _request: &LlmRequest,
-        ) -> anyhow::Result<crate::backend::LlmResponse> {
+        async fn send(&self, _request: &LlmRequest) -> anyhow::Result<crate::backend::LlmResponse> {
             Ok(crate::backend::LlmResponse {
                 content: "Hello!".to_string(),
                 model: "mock".to_string(),

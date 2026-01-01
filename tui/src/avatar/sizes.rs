@@ -82,40 +82,40 @@ fn base_palette() -> Vec<(char, char, ratatui::style::Color)> {
         ('b', '█', AXOLOTL_BODY_SHADOW),
         ('H', '█', AXOLOTL_BODY_HIGHLIGHT),
         // Body contours
-        ('T', '▀', AXOLOTL_BODY),           // Top half
-        ('L', '▄', AXOLOTL_BODY),           // Lower half
+        ('T', '▀', AXOLOTL_BODY), // Top half
+        ('L', '▄', AXOLOTL_BODY), // Lower half
         ('t', '▀', AXOLOTL_BODY_SHADOW),
         ('l', '▄', AXOLOTL_BODY_SHADOW),
-        ('[', '▌', AXOLOTL_BODY),           // Left half
-        (']', '▐', AXOLOTL_BODY),           // Right half
+        ('[', '▌', AXOLOTL_BODY), // Left half
+        (']', '▐', AXOLOTL_BODY), // Right half
         // Gills
         ('G', '█', AXOLOTL_GILLS),
         ('g', '█', AXOLOTL_GILLS_HIGHLIGHT),
-        (')', '▐', AXOLOTL_GILLS),          // Right gill edge
-        ('(', '▌', AXOLOTL_GILLS),          // Left gill edge
-        ('/', '▀', AXOLOTL_GILLS),          // Gill top
-        ('\\', '▄', AXOLOTL_GILLS),         // Gill bottom
+        (')', '▐', AXOLOTL_GILLS),  // Right gill edge
+        ('(', '▌', AXOLOTL_GILLS),  // Left gill edge
+        ('/', '▀', AXOLOTL_GILLS),  // Gill top
+        ('\\', '▄', AXOLOTL_GILLS), // Gill bottom
         // Eyes (character accents)
-        ('o', 'o', AXOLOTL_EYES),           // Open eye
-        ('.', '.', AXOLOTL_EYES),           // Tiny eye
-        ('-', '-', AXOLOTL_EYES),           // Closed/blink
-        ('^', '^', AXOLOTL_EYES),           // Happy eye
-        ('*', '*', AXOLOTL_EYE_SHINE),      // Sparkle
+        ('o', 'o', AXOLOTL_EYES),      // Open eye
+        ('.', '.', AXOLOTL_EYES),      // Tiny eye
+        ('-', '-', AXOLOTL_EYES),      // Closed/blink
+        ('^', '^', AXOLOTL_EYES),      // Happy eye
+        ('*', '*', AXOLOTL_EYE_SHINE), // Sparkle
         // Mouth (character accents)
-        ('w', 'w', AXOLOTL_MOUTH),          // Smile
-        ('v', 'v', AXOLOTL_MOUTH),          // Small smile
-        ('n', 'n', AXOLOTL_MOUTH),          // Uncertain
-        ('O', 'O', AXOLOTL_MOUTH),          // Surprised
+        ('w', 'w', AXOLOTL_MOUTH), // Smile
+        ('v', 'v', AXOLOTL_MOUTH), // Small smile
+        ('n', 'n', AXOLOTL_MOUTH), // Uncertain
+        ('O', 'O', AXOLOTL_MOUTH), // Surprised
         // Belly
         ('V', '█', AXOLOTL_BELLY),
         ('v', '▀', AXOLOTL_BELLY),
         // Effects
-        ('W', '~', WATER_BLUE),             // Water
-        ('U', '°', BUBBLE),                 // Bubble
-        ('!', '!', MOOD_HAPPY),             // Excited
-        ('?', '?', MOOD_THINKING),          // Thinking
-        ('X', 'x', MOOD_ERROR),             // Error
-        ('#', '♪', MOOD_HAPPY),             // Music note
+        ('W', '~', WATER_BLUE),    // Water
+        ('U', '°', BUBBLE),        // Bubble
+        ('!', '!', MOOD_HAPPY),    // Excited
+        ('?', '?', MOOD_THINKING), // Thinking
+        ('X', 'x', MOOD_ERROR),    // Error
+        ('#', '♪', MOOD_HAPPY),    // Music note
     ]
 }
 
@@ -132,16 +132,7 @@ fn load_tiny() -> SpriteSheet {
         "idle".to_string(),
         build_animation(
             "idle",
-            &[
-                (&[
-                    " TLLT ",
-                    " BooBL",
-                ], 2000),
-                (&[
-                    " TLLT ",
-                    " B--BL",
-                ], 150),
-            ],
+            &[(&[" TLLT ", " BooBL"], 2000), (&[" TLLT ", " B--BL"], 150)],
             &p,
             true,
         ),
@@ -152,16 +143,7 @@ fn load_tiny() -> SpriteSheet {
         "thinking".to_string(),
         build_animation(
             "thinking",
-            &[
-                (&[
-                    "?TLLT ",
-                    " BooBL",
-                ], 400),
-                (&[
-                    " TLLT?",
-                    " Bo.BL",
-                ], 400),
-            ],
+            &[(&["?TLLT ", " BooBL"], 400), (&[" TLLT?", " Bo.BL"], 400)],
             &p,
             true,
         ),
@@ -172,16 +154,7 @@ fn load_tiny() -> SpriteSheet {
         "talking".to_string(),
         build_animation(
             "talking",
-            &[
-                (&[
-                    " TLLT ",
-                    " BoOBL",
-                ], 200),
-                (&[
-                    " TLLT ",
-                    " BooBL",
-                ], 200),
-            ],
+            &[(&[" TLLT ", " BoOBL"], 200), (&[" TLLT ", " BooBL"], 200)],
             &p,
             true,
         ),
@@ -190,17 +163,7 @@ fn load_tiny() -> SpriteSheet {
     // Happy
     animations.insert(
         "happy".to_string(),
-        build_animation(
-            "happy",
-            &[
-                (&[
-                    " TLLT!",
-                    " B^^BL",
-                ], 300),
-            ],
-            &p,
-            true,
-        ),
+        build_animation("happy", &[(&[" TLLT!", " B^^BL"], 300)], &p, true),
     );
 
     SpriteSheet {
@@ -223,16 +186,15 @@ fn load_small() -> SpriteSheet {
         build_animation(
             "idle",
             &[
-                (&[
-                    "  /TLT\\  ",
-                    " GBo oBG ",
-                    "  \\LwL/  ",
-                ], 2000),
-                (&[
-                    "  /TLT\\  ",
-                    " GBo oBG ",
-                    "  \\L-L/  ",  // blink + mouth change
-                ], 150),
+                (&["  /TLT\\  ", " GBo oBG ", "  \\LwL/  "], 2000),
+                (
+                    &[
+                        "  /TLT\\  ",
+                        " GBo oBG ",
+                        "  \\L-L/  ", // blink + mouth change
+                    ],
+                    150,
+                ),
             ],
             &p,
             true,
@@ -245,16 +207,8 @@ fn load_small() -> SpriteSheet {
         build_animation(
             "thinking",
             &[
-                (&[
-                    " ?/TLT\\  ",
-                    " GBo oBG ",
-                    "  \\LnL/  ",
-                ], 500),
-                (&[
-                    "  /TLT\\? ",
-                    " GBo.oBG ",
-                    "  \\LnL/  ",
-                ], 500),
+                (&[" ?/TLT\\  ", " GBo oBG ", "  \\LnL/  "], 500),
+                (&["  /TLT\\? ", " GBo.oBG ", "  \\LnL/  "], 500),
             ],
             &p,
             true,
@@ -267,16 +221,8 @@ fn load_small() -> SpriteSheet {
         build_animation(
             "talking",
             &[
-                (&[
-                    "  /TLT\\  ",
-                    " GBo oBG ",
-                    "  \\LOL/  ",
-                ], 200),
-                (&[
-                    "  /TLT\\  ",
-                    " GBo oBG ",
-                    "  \\LwL/  ",
-                ], 200),
+                (&["  /TLT\\  ", " GBo oBG ", "  \\LOL/  "], 200),
+                (&["  /TLT\\  ", " GBo oBG ", "  \\LwL/  "], 200),
             ],
             &p,
             true,
@@ -289,16 +235,8 @@ fn load_small() -> SpriteSheet {
         build_animation(
             "happy",
             &[
-                (&[
-                    "! /TLT\\ !",
-                    " GB^ ^BG ",
-                    "  \\LwL/  ",
-                ], 300),
-                (&[
-                    " !/TLT\\! ",
-                    " GB^ ^BG ",
-                    "  \\LwL/  ",
-                ], 300),
+                (&["! /TLT\\ !", " GB^ ^BG ", "  \\LwL/  "], 300),
+                (&[" !/TLT\\! ", " GB^ ^BG ", "  \\LwL/  "], 300),
             ],
             &p,
             true,
@@ -311,16 +249,8 @@ fn load_small() -> SpriteSheet {
         build_animation(
             "swimming",
             &[
-                (&[
-                    "  /TLT\\WW",
-                    " GBo oBG ",
-                    "  \\LwL/  ",
-                ], 300),
-                (&[
-                    " W/TLT\\ W",
-                    " GBo oBG ",
-                    "  \\LwL/WW",
-                ], 300),
+                (&["  /TLT\\WW", " GBo oBG ", "  \\LwL/  "], 300),
+                (&[" W/TLT\\ W", " GBo oBG ", "  \\LwL/WW"], 300),
             ],
             &p,
             true,
@@ -347,20 +277,26 @@ fn load_medium() -> SpriteSheet {
         build_animation(
             "idle",
             &[
-                (&[
-                    "    /TTTT\\    ",
-                    "  G BBo oBB G ",
-                    " GG BB w BB GG",
-                    "    BVVVVB    ",
-                    "   L  LL  L   ",
-                ], 2500),
-                (&[
-                    "    /TTTT\\    ",
-                    "  G BB- -BB G ",
-                    " GG BB w BB GG",
-                    "    BVVVVB    ",
-                    "   L  LL  L   ",
-                ], 150),
+                (
+                    &[
+                        "    /TTTT\\    ",
+                        "  G BBo oBB G ",
+                        " GG BB w BB GG",
+                        "    BVVVVB    ",
+                        "   L  LL  L   ",
+                    ],
+                    2500,
+                ),
+                (
+                    &[
+                        "    /TTTT\\    ",
+                        "  G BB- -BB G ",
+                        " GG BB w BB GG",
+                        "    BVVVVB    ",
+                        "   L  LL  L   ",
+                    ],
+                    150,
+                ),
             ],
             &p,
             true,
@@ -373,20 +309,26 @@ fn load_medium() -> SpriteSheet {
         build_animation(
             "thinking",
             &[
-                (&[
-                    "   ?/TTTT\\    ",
-                    "  G BBo.oBB G ",
-                    " GG BB n BB GG",
-                    "    BVVVVB    ",
-                    "   L  LL  L   ",
-                ], 600),
-                (&[
-                    "    /TTTT\\?   ",
-                    "  G BBo oBB G ",
-                    " GG BB n BB GG",
-                    "    BVVVVB    ",
-                    "   L  LL  L   ",
-                ], 600),
+                (
+                    &[
+                        "   ?/TTTT\\    ",
+                        "  G BBo.oBB G ",
+                        " GG BB n BB GG",
+                        "    BVVVVB    ",
+                        "   L  LL  L   ",
+                    ],
+                    600,
+                ),
+                (
+                    &[
+                        "    /TTTT\\?   ",
+                        "  G BBo oBB G ",
+                        " GG BB n BB GG",
+                        "    BVVVVB    ",
+                        "   L  LL  L   ",
+                    ],
+                    600,
+                ),
             ],
             &p,
             true,
@@ -399,20 +341,26 @@ fn load_medium() -> SpriteSheet {
         build_animation(
             "talking",
             &[
-                (&[
-                    "    /TTTT\\    ",
-                    "  G BBo oBB G ",
-                    " GG BB O BB GG",
-                    "    BVVVVB    ",
-                    "   L  LL  L   ",
-                ], 200),
-                (&[
-                    "    /TTTT\\    ",
-                    "  G BBo oBB G ",
-                    " GG BB w BB GG",
-                    "    BVVVVB    ",
-                    "   L  LL  L   ",
-                ], 200),
+                (
+                    &[
+                        "    /TTTT\\    ",
+                        "  G BBo oBB G ",
+                        " GG BB O BB GG",
+                        "    BVVVVB    ",
+                        "   L  LL  L   ",
+                    ],
+                    200,
+                ),
+                (
+                    &[
+                        "    /TTTT\\    ",
+                        "  G BBo oBB G ",
+                        " GG BB w BB GG",
+                        "    BVVVVB    ",
+                        "   L  LL  L   ",
+                    ],
+                    200,
+                ),
             ],
             &p,
             true,
@@ -425,20 +373,26 @@ fn load_medium() -> SpriteSheet {
         build_animation(
             "happy",
             &[
-                (&[
-                    "  ! /TTTT\\ !  ",
-                    "  G BB^ ^BB G ",
-                    " GG BB w BB GG",
-                    "    BVVVVB    ",
-                    "   L  LL  L   ",
-                ], 300),
-                (&[
-                    " !  /TTTT\\  ! ",
-                    "  G BB^ ^BB G ",
-                    " GG BB w BB GG",
-                    "    BVVVVB    ",
-                    "   L  LL  L   ",
-                ], 300),
+                (
+                    &[
+                        "  ! /TTTT\\ !  ",
+                        "  G BB^ ^BB G ",
+                        " GG BB w BB GG",
+                        "    BVVVVB    ",
+                        "   L  LL  L   ",
+                    ],
+                    300,
+                ),
+                (
+                    &[
+                        " !  /TTTT\\  ! ",
+                        "  G BB^ ^BB G ",
+                        " GG BB w BB GG",
+                        "    BVVVVB    ",
+                        "   L  LL  L   ",
+                    ],
+                    300,
+                ),
             ],
             &p,
             true,
@@ -451,20 +405,26 @@ fn load_medium() -> SpriteSheet {
         build_animation(
             "swimming",
             &[
-                (&[
-                    "    /TTTT\\ WW ",
-                    "  G BBo oBB G ",
-                    " GG BB w BB GG",
-                    "    BVVVVB    ",
-                    "   L  LL  LWW ",
-                ], 300),
-                (&[
-                    "  WW/TTTT\\    ",
-                    "  G BBo oBB G ",
-                    " GG BB w BB GG",
-                    "    BVVVVB    ",
-                    " WW L  LL  L  ",
-                ], 300),
+                (
+                    &[
+                        "    /TTTT\\ WW ",
+                        "  G BBo oBB G ",
+                        " GG BB w BB GG",
+                        "    BVVVVB    ",
+                        "   L  LL  LWW ",
+                    ],
+                    300,
+                ),
+                (
+                    &[
+                        "  WW/TTTT\\    ",
+                        "  G BBo oBB G ",
+                        " GG BB w BB GG",
+                        "    BVVVVB    ",
+                        " WW L  LL  L  ",
+                    ],
+                    300,
+                ),
             ],
             &p,
             true,
@@ -477,20 +437,26 @@ fn load_medium() -> SpriteSheet {
         build_animation(
             "waiting",
             &[
-                (&[
-                    "   #/TTTT\\    ",
-                    "  G BBo oBB G ",
-                    " GG BB w BB GG",
-                    "    BVVVVB    ",
-                    "   L  LL  L   ",
-                ], 800),
-                (&[
-                    "    /TTTT\\#   ",
-                    "  G BBo oBB G ",
-                    " GG BB w BB GG",
-                    "    BVVVVB    ",
-                    "   L  LL  L   ",
-                ], 800),
+                (
+                    &[
+                        "   #/TTTT\\    ",
+                        "  G BBo oBB G ",
+                        " GG BB w BB GG",
+                        "    BVVVVB    ",
+                        "   L  LL  L   ",
+                    ],
+                    800,
+                ),
+                (
+                    &[
+                        "    /TTTT\\#   ",
+                        "  G BBo oBB G ",
+                        " GG BB w BB GG",
+                        "    BVVVVB    ",
+                        "   L  LL  L   ",
+                    ],
+                    800,
+                ),
             ],
             &p,
             true,
@@ -503,20 +469,26 @@ fn load_medium() -> SpriteSheet {
         build_animation(
             "error",
             &[
-                (&[
-                    "  X /TTTT\\ X  ",
-                    "  G BBo oBB G ",
-                    " GG BB n BB GG",
-                    "    BVVVVB    ",
-                    "   L  LL  L   ",
-                ], 500),
-                (&[
-                    " X  /TTTT\\  X ",
-                    "  G BB. .BB G ",
-                    " GG BB n BB GG",
-                    "    BVVVVB    ",
-                    "   L  LL  L   ",
-                ], 500),
+                (
+                    &[
+                        "  X /TTTT\\ X  ",
+                        "  G BBo oBB G ",
+                        " GG BB n BB GG",
+                        "    BVVVVB    ",
+                        "   L  LL  L   ",
+                    ],
+                    500,
+                ),
+                (
+                    &[
+                        " X  /TTTT\\  X ",
+                        "  G BB. .BB G ",
+                        " GG BB n BB GG",
+                        "    BVVVVB    ",
+                        "   L  LL  L   ",
+                    ],
+                    500,
+                ),
             ],
             &p,
             true,
@@ -563,26 +535,32 @@ fn load_large() -> SpriteSheet {
         build_animation(
             "idle",
             &[
-                (&[
-                    "        /TTTTTT\\        ",
-                    "      /TTTTTTTTTT\\      ",
-                    "   G  BBBBo  oBBBB  G   ",
-                    "  GGG BBBB w  BBBB GGG  ",
-                    "   G  BBBBBBBBBBBB  G   ",
-                    "      BBVVVVVVVVBB      ",
-                    "     L  L    L  L       ",
-                    "    WWW          WWW    ",
-                ], 3000),
-                (&[
-                    "        /TTTTTT\\        ",
-                    "      /TTTTTTTTTT\\      ",
-                    "   G  BBBB-  -BBBB  G   ",
-                    "  GGG BBBB w  BBBB GGG  ",
-                    "   G  BBBBBBBBBBBB  G   ",
-                    "      BBVVVVVVVVBB      ",
-                    "     L  L    L  L       ",
-                    "    WWW          WWW    ",
-                ], 200),
+                (
+                    &[
+                        "        /TTTTTT\\        ",
+                        "      /TTTTTTTTTT\\      ",
+                        "   G  BBBBo  oBBBB  G   ",
+                        "  GGG BBBB w  BBBB GGG  ",
+                        "   G  BBBBBBBBBBBB  G   ",
+                        "      BBVVVVVVVVBB      ",
+                        "     L  L    L  L       ",
+                        "    WWW          WWW    ",
+                    ],
+                    3000,
+                ),
+                (
+                    &[
+                        "        /TTTTTT\\        ",
+                        "      /TTTTTTTTTT\\      ",
+                        "   G  BBBB-  -BBBB  G   ",
+                        "  GGG BBBB w  BBBB GGG  ",
+                        "   G  BBBBBBBBBBBB  G   ",
+                        "      BBVVVVVVVVBB      ",
+                        "     L  L    L  L       ",
+                        "    WWW          WWW    ",
+                    ],
+                    200,
+                ),
             ],
             &p,
             true,
@@ -595,26 +573,32 @@ fn load_large() -> SpriteSheet {
         build_animation(
             "happy",
             &[
-                (&[
-                    "  !     !    !     !    ",
-                    "        /TTTTTT\\        ",
-                    "      /TTTTTTTTTT\\      ",
-                    "   G  BBBB^  ^BBBB  G   ",
-                    "  GGG BBBB w  BBBB GGG  ",
-                    "   G  BBBBBBBBBBBB  G   ",
-                    "      BBVVVVVVVVBB      ",
-                    "     L  L    L  L       ",
-                ], 250),
-                (&[
-                    "    !      !      !     ",
-                    "        /TTTTTT\\        ",
-                    "      /TTTTTTTTTT\\      ",
-                    "   G  BBBB^  ^BBBB  G   ",
-                    "  GGG BBBB w  BBBB GGG  ",
-                    "   G  BBBBBBBBBBBB  G   ",
-                    "      BBVVVVVVVVBB      ",
-                    "     L  L    L  L       ",
-                ], 250),
+                (
+                    &[
+                        "  !     !    !     !    ",
+                        "        /TTTTTT\\        ",
+                        "      /TTTTTTTTTT\\      ",
+                        "   G  BBBB^  ^BBBB  G   ",
+                        "  GGG BBBB w  BBBB GGG  ",
+                        "   G  BBBBBBBBBBBB  G   ",
+                        "      BBVVVVVVVVBB      ",
+                        "     L  L    L  L       ",
+                    ],
+                    250,
+                ),
+                (
+                    &[
+                        "    !      !      !     ",
+                        "        /TTTTTT\\        ",
+                        "      /TTTTTTTTTT\\      ",
+                        "   G  BBBB^  ^BBBB  G   ",
+                        "  GGG BBBB w  BBBB GGG  ",
+                        "   G  BBBBBBBBBBBB  G   ",
+                        "      BBVVVVVVVVBB      ",
+                        "     L  L    L  L       ",
+                    ],
+                    250,
+                ),
             ],
             &p,
             true,
@@ -627,26 +611,32 @@ fn load_large() -> SpriteSheet {
         build_animation(
             "thinking",
             &[
-                (&[
-                    "       ???              ",
-                    "        /TTTTTT\\        ",
-                    "      /TTTTTTTTTT\\      ",
-                    "   G  BBBBo .oBBBB  G   ",
-                    "  GGG BBBB n  BBBB GGG  ",
-                    "   G  BBBBBBBBBBBB  G   ",
-                    "      BBVVVVVVVVBB      ",
-                    "     L  L    L  L       ",
-                ], 700),
-                (&[
-                    "              ???       ",
-                    "        /TTTTTT\\        ",
-                    "      /TTTTTTTTTT\\      ",
-                    "   G  BBBBo  oBBBB  G   ",
-                    "  GGG BBBB n  BBBB GGG  ",
-                    "   G  BBBBBBBBBBBB  G   ",
-                    "      BBVVVVVVVVBB      ",
-                    "     L  L    L  L       ",
-                ], 700),
+                (
+                    &[
+                        "       ???              ",
+                        "        /TTTTTT\\        ",
+                        "      /TTTTTTTTTT\\      ",
+                        "   G  BBBBo .oBBBB  G   ",
+                        "  GGG BBBB n  BBBB GGG  ",
+                        "   G  BBBBBBBBBBBB  G   ",
+                        "      BBVVVVVVVVBB      ",
+                        "     L  L    L  L       ",
+                    ],
+                    700,
+                ),
+                (
+                    &[
+                        "              ???       ",
+                        "        /TTTTTT\\        ",
+                        "      /TTTTTTTTTT\\      ",
+                        "   G  BBBBo  oBBBB  G   ",
+                        "  GGG BBBB n  BBBB GGG  ",
+                        "   G  BBBBBBBBBBBB  G   ",
+                        "      BBVVVVVVVVBB      ",
+                        "     L  L    L  L       ",
+                    ],
+                    700,
+                ),
             ],
             &p,
             true,
@@ -659,26 +649,32 @@ fn load_large() -> SpriteSheet {
         build_animation(
             "waiting",
             &[
-                (&[
-                    "     #      #           ",
-                    "        /TTTTTT\\        ",
-                    "      /TTTTTTTTTT\\      ",
-                    "   G  BBBBo  oBBBB  G   ",
-                    "  GGG BBBB w  BBBB GGG  ",
-                    "   G  BBBBBBBBBBBB  G   ",
-                    "      BBVVVVVVVVBB      ",
-                    "     L  L    L  L  WWW  ",
-                ], 500),
-                (&[
-                    "          #      #      ",
-                    "        /TTTTTT\\        ",
-                    "      /TTTTTTTTTT\\      ",
-                    "   G  BBBBo  oBBBB  G   ",
-                    "  GGG BBBB O  BBBB GGG  ",
-                    "   G  BBBBBBBBBBBB  G   ",
-                    "      BBVVVVVVVVBB      ",
-                    " WWW L  L    L  L       ",
-                ], 500),
+                (
+                    &[
+                        "     #      #           ",
+                        "        /TTTTTT\\        ",
+                        "      /TTTTTTTTTT\\      ",
+                        "   G  BBBBo  oBBBB  G   ",
+                        "  GGG BBBB w  BBBB GGG  ",
+                        "   G  BBBBBBBBBBBB  G   ",
+                        "      BBVVVVVVVVBB      ",
+                        "     L  L    L  L  WWW  ",
+                    ],
+                    500,
+                ),
+                (
+                    &[
+                        "          #      #      ",
+                        "        /TTTTTT\\        ",
+                        "      /TTTTTTTTTT\\      ",
+                        "   G  BBBBo  oBBBB  G   ",
+                        "  GGG BBBB O  BBBB GGG  ",
+                        "   G  BBBBBBBBBBBB  G   ",
+                        "      BBVVVVVVVVBB      ",
+                        " WWW L  L    L  L       ",
+                    ],
+                    500,
+                ),
             ],
             &p,
             true,
@@ -714,26 +710,32 @@ fn load_large() -> SpriteSheet {
         build_animation(
             "error",
             &[
-                (&[
-                    "    X        X          ",
-                    "        /TTTTTT\\        ",
-                    "      /TTTTTTTTTT\\      ",
-                    "   G  BBBBo  oBBBB  G   ",
-                    "  GGG BBBB n  BBBB GGG  ",
-                    "   G  BBBBBBBBBBBB  G   ",
-                    "      BBVVVVVVVVBB      ",
-                    "     L  L    L  L       ",
-                ], 600),
-                (&[
-                    "         X        X     ",
-                    "        /TTTTTT\\        ",
-                    "      /TTTTTTTTTT\\      ",
-                    "   G  BBBB.  .BBBB  G   ",
-                    "  GGG BBBB n  BBBB GGG  ",
-                    "   G  BBBBBBBBBBBB  G   ",
-                    "      BBVVVVVVVVBB      ",
-                    "     L  L    L  L       ",
-                ], 600),
+                (
+                    &[
+                        "    X        X          ",
+                        "        /TTTTTT\\        ",
+                        "      /TTTTTTTTTT\\      ",
+                        "   G  BBBBo  oBBBB  G   ",
+                        "  GGG BBBB n  BBBB GGG  ",
+                        "   G  BBBBBBBBBBBB  G   ",
+                        "      BBVVVVVVVVBB      ",
+                        "     L  L    L  L       ",
+                    ],
+                    600,
+                ),
+                (
+                    &[
+                        "         X        X     ",
+                        "        /TTTTTT\\        ",
+                        "      /TTTTTTTTTT\\      ",
+                        "   G  BBBB.  .BBBB  G   ",
+                        "  GGG BBBB n  BBBB GGG  ",
+                        "   G  BBBBBBBBBBBB  G   ",
+                        "      BBVVVVVVVVBB      ",
+                        "     L  L    L  L       ",
+                    ],
+                    600,
+                ),
             ],
             &p,
             true,
@@ -746,26 +748,32 @@ fn load_large() -> SpriteSheet {
         build_animation(
             "talking",
             &[
-                (&[
-                    "        /TTTTTT\\        ",
-                    "      /TTTTTTTTTT\\      ",
-                    "   G  BBBBo  oBBBB  G   ",
-                    "  GGG BBBB O  BBBB GGG  ",
-                    "   G  BBBBBBBBBBBB  G   ",
-                    "      BBVVVVVVVVBB      ",
-                    "     L  L    L  L       ",
-                    "    WWW          WWW    ",
-                ], 200),
-                (&[
-                    "        /TTTTTT\\        ",
-                    "      /TTTTTTTTTT\\      ",
-                    "   G  BBBBo  oBBBB  G   ",
-                    "  GGG BBBB w  BBBB GGG  ",
-                    "   G  BBBBBBBBBBBB  G   ",
-                    "      BBVVVVVVVVBB      ",
-                    "     L  L    L  L       ",
-                    "    WWW          WWW    ",
-                ], 200),
+                (
+                    &[
+                        "        /TTTTTT\\        ",
+                        "      /TTTTTTTTTT\\      ",
+                        "   G  BBBBo  oBBBB  G   ",
+                        "  GGG BBBB O  BBBB GGG  ",
+                        "   G  BBBBBBBBBBBB  G   ",
+                        "      BBVVVVVVVVBB      ",
+                        "     L  L    L  L       ",
+                        "    WWW          WWW    ",
+                    ],
+                    200,
+                ),
+                (
+                    &[
+                        "        /TTTTTT\\        ",
+                        "      /TTTTTTTTTT\\      ",
+                        "   G  BBBBo  oBBBB  G   ",
+                        "  GGG BBBB w  BBBB GGG  ",
+                        "   G  BBBBBBBBBBBB  G   ",
+                        "      BBVVVVVVVVBB      ",
+                        "     L  L    L  L       ",
+                        "    WWW          WWW    ",
+                    ],
+                    200,
+                ),
             ],
             &p,
             true,

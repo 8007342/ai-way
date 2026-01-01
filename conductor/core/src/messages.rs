@@ -1,7 +1,7 @@
 //! Conductor Messages
 //!
 //! Messages sent from the Conductor to UI surfaces. These represent all the ways
-//! the orchestration layer can communicate with any connected UI (TUI, WebUI, GUI, etc.).
+//! the orchestration layer can communicate with any connected UI (TUI, `WebUI`, GUI, etc.).
 //!
 //! # Design Philosophy
 //!
@@ -9,7 +9,7 @@
 //! and task management. UI surfaces are pure renderers that display what the Conductor
 //! tells them to. This separation enables:
 //!
-//! - Hot-swappable UI surfaces (switch from TUI to WebUI mid-session)
+//! - Hot-swappable UI surfaces (switch from TUI to `WebUI` mid-session)
 //! - Multiple simultaneous surfaces (TUI + mobile notification)
 //! - Headless operation for testing and automation
 //! - Clean separation of concerns
@@ -245,7 +245,7 @@ impl MessageId {
         use std::sync::atomic::{AtomicU64, Ordering};
         static COUNTER: AtomicU64 = AtomicU64::new(0);
         let id = COUNTER.fetch_add(1, Ordering::SeqCst);
-        Self(format!("msg_{}", id))
+        Self(format!("msg_{id}"))
     }
 }
 
@@ -278,7 +278,7 @@ impl SessionId {
             .duration_since(UNIX_EPOCH)
             .unwrap_or_default()
             .as_millis();
-        Self(format!("session_{}_{}", timestamp, count))
+        Self(format!("session_{timestamp}_{count}"))
     }
 }
 
@@ -335,6 +335,7 @@ pub enum ConductorState {
 
 impl ConductorState {
     /// Human-readable description
+    #[must_use]
     pub fn description(&self) -> &'static str {
         match self {
             Self::Initializing => "Starting up...",

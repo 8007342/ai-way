@@ -38,6 +38,7 @@ impl UnixSocketClient {
     /// # Arguments
     ///
     /// * `socket_path` - Path to the Conductor's socket file
+    #[must_use]
     pub fn new(socket_path: PathBuf) -> Self {
         Self {
             socket_path,
@@ -48,11 +49,13 @@ impl UnixSocketClient {
     }
 
     /// Create a client using the default socket path
+    #[must_use]
     pub fn with_default_path() -> Self {
         Self::new(super::default_socket_path())
     }
 
     /// Get the socket path
+    #[must_use]
     pub fn socket_path(&self) -> &PathBuf {
         &self.socket_path
     }
@@ -168,9 +171,7 @@ impl SurfaceTransport for UnixSocketClient {
 
     async fn send(&self, event: SurfaceEvent) -> Result<(), TransportError> {
         if !self.connected.load(Ordering::SeqCst) {
-            return Err(TransportError::InvalidState(
-                "Not connected".to_string(),
-            ));
+            return Err(TransportError::InvalidState("Not connected".to_string()));
         }
 
         if let Some(ref tx) = self.event_tx {
@@ -178,9 +179,7 @@ impl SurfaceTransport for UnixSocketClient {
                 .await
                 .map_err(|_| TransportError::SendFailed("Channel closed".to_string()))
         } else {
-            Err(TransportError::InvalidState(
-                "Not connected".to_string(),
-            ))
+            Err(TransportError::InvalidState("Not connected".to_string()))
         }
     }
 
@@ -188,9 +187,7 @@ impl SurfaceTransport for UnixSocketClient {
         if let Some(ref mut rx) = self.msg_rx {
             rx.recv().await.ok_or(TransportError::ConnectionClosed)
         } else {
-            Err(TransportError::InvalidState(
-                "Not connected".to_string(),
-            ))
+            Err(TransportError::InvalidState("Not connected".to_string()))
         }
     }
 

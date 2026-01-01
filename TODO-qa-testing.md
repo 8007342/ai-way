@@ -69,15 +69,16 @@ Tests are implemented using `#[cfg(test)]` modules within each source file, foll
 | conductor-core | tasks.rs | 9 |
 | conductor-core | session.rs | 9 |
 | conductor-core | avatar.rs | 5 |
+| conductor-core | accessibility.rs | 5 |
 | conductor-core | messages.rs | 3 |
 | conductor-core | events.rs | 3 |
 | conductor-core | conductor.rs | 2 |
 | conductor-core | (other) | 30 |
-| **conductor-core total** | | **121** |
+| **conductor-core total** | | **126** |
 | tui | display.rs | 56 |
 | tui | (other) | 3 |
 | **tui total** | | **59** |
-| **Grand Total** | | **180** |
+| **Grand Total** | | **185** |
 
 ## Feature Creep Items (Do Later)
 

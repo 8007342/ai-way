@@ -1,7 +1,7 @@
 //! Conductor Core - Headless Meta-Agent Orchestration for ai-way
 //!
 //! This crate provides the core orchestration logic for ai-way, completely
-//! independent of any UI framework. It can drive a TUI, WebUI, native GUI,
+//! independent of any UI framework. It can drive a TUI, web UI, native GUI,
 //! mobile app, or run headless for testing/automation.
 //!
 //! # Architecture
@@ -97,6 +97,7 @@
 //! - [`tasks`]: Background task management
 //! - [`conductor`]: Main Conductor struct
 //! - [`transport`]: IPC transport layer (Unix sockets, WebSocket)
+//! - [`accessibility`]: Accessibility support for screen readers and assistive tech
 //!
 //! # No TUI Dependencies
 //!
@@ -108,6 +109,7 @@
 #![warn(clippy::pedantic)]
 #![allow(clippy::module_name_repetitions)]
 
+pub mod accessibility;
 pub mod avatar;
 pub mod backend;
 pub mod conductor;
@@ -123,15 +125,20 @@ pub use avatar::{
     AvatarCommand, AvatarGesture, AvatarMood, AvatarPosition, AvatarReaction, AvatarSize,
     AvatarState, CommandParser, PeekDirection, TaskCommand,
 };
-pub use backend::{BackendConfig, LlmBackend, LlmRequest, LlmResponse, OllamaBackend, StreamingToken};
+pub use backend::{
+    BackendConfig, LlmBackend, LlmRequest, LlmResponse, OllamaBackend, StreamingToken,
+};
 pub use conductor::{Conductor, ConductorConfig};
 pub use events::{ScrollDirection, SurfaceCapabilities, SurfaceEvent, SurfaceType};
 pub use messages::{
     ConductorMessage, ConductorState, EventId, MessageId, MessageRole, NotifyLevel, SessionId,
 };
-pub use session::{ConversationMessage, Session, SessionMetadata, SessionState};
 pub use security::{
     CommandRejectionReason, CommandValidator, ConductorLimits, InputValidator, SecurityConfig,
     ValidationResult,
 };
+pub use session::{ConversationMessage, Session, SessionMetadata, SessionState};
 pub use tasks::{Task, TaskCreationError, TaskId, TaskManager, TaskStatus};
+
+// Accessibility exports
+pub use accessibility::{Accessible, Urgency};

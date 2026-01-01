@@ -33,10 +33,11 @@ impl TaskId {
             .unwrap_or_default()
             .as_millis();
 
-        Self(format!("task_{}_{}", timestamp, count))
+        Self(format!("task_{timestamp}_{count}"))
     }
 
     /// Get the string value
+    #[must_use]
     pub fn as_str(&self) -> &str {
         &self.0
     }
@@ -65,7 +66,8 @@ pub enum TaskStatus {
 
 impl TaskStatus {
     /// Parse status from a string (for filesystem state)
-    pub fn from_str(s: &str) -> Self {
+    #[must_use]
+    pub fn parse(s: &str) -> Self {
         match s.trim().to_lowercase().as_str() {
             "pending" => Self::Pending,
             "running" => Self::Running,
@@ -77,6 +79,7 @@ impl TaskStatus {
     }
 
     /// Get a status icon (for UI display)
+    #[must_use]
     pub fn icon(&self) -> &'static str {
         match self {
             Self::Pending => "...",
@@ -88,17 +91,19 @@ impl TaskStatus {
     }
 
     /// Unicode icon variant
+    #[must_use]
     pub fn icon_unicode(&self) -> &'static str {
         match self {
-            Self::Pending => "\u{23f3}",  // hourglass
-            Self::Running => "\u{1f504}", // counterclockwise arrows
-            Self::Done => "\u{2705}",     // check mark
-            Self::Failed => "\u{274c}",   // cross mark
+            Self::Pending => "\u{23f3}",   // hourglass
+            Self::Running => "\u{1f504}",  // counterclockwise arrows
+            Self::Done => "\u{2705}",      // check mark
+            Self::Failed => "\u{274c}",    // cross mark
             Self::Cancelled => "\u{26d4}", // no entry
         }
     }
 
     /// Human-readable label
+    #[must_use]
     pub fn label(&self) -> &'static str {
         match self {
             Self::Pending => "Pending",
@@ -110,11 +115,13 @@ impl TaskStatus {
     }
 
     /// Whether this status indicates the task is complete (done, failed, or cancelled)
+    #[must_use]
     pub fn is_terminal(&self) -> bool {
         matches!(self, Self::Done | Self::Failed | Self::Cancelled)
     }
 
     /// Whether this status indicates the task is active
+    #[must_use]
     pub fn is_active(&self) -> bool {
         matches!(self, Self::Pending | Self::Running)
     }
@@ -155,6 +162,7 @@ pub struct Task {
 
 impl Task {
     /// Create a new pending task
+    #[must_use]
     pub fn new(id: TaskId, agent: String, description: String) -> Self {
         let now = std::time::SystemTime::now()
             .duration_since(std::time::UNIX_EPOCH)
@@ -207,7 +215,7 @@ impl Task {
         self.touch();
     }
 
-    /// Update the updated_at timestamp
+    /// Update the `updated_at` timestamp
     fn touch(&mut self) {
         self.updated_at = std::time::SystemTime::now()
             .duration_since(std::time::UNIX_EPOCH)
@@ -216,6 +224,7 @@ impl Task {
     }
 
     /// Generate a progress bar string
+    #[must_use]
     pub fn progress_bar(&self, width: usize) -> String {
         let filled = (self.progress as usize * width) / 100;
         let empty = width.saturating_sub(filled);
@@ -224,14 +233,15 @@ impl Task {
     }
 
     /// Unicode progress bar
+    #[must_use]
     pub fn progress_bar_unicode(&self, width: usize) -> String {
         let filled = (self.progress as usize * width) / 100;
         let empty = width.saturating_sub(filled);
 
         format!(
             "{}{}",
-            "\u{2588}".repeat(filled),  // full block
-            "\u{2591}".repeat(empty)    // light shade
+            "\u{2588}".repeat(filled), // full block
+            "\u{2591}".repeat(empty)   // light shade
         )
     }
 }
@@ -239,6 +249,7 @@ impl Task {
 /// Map agent ID to family name
 ///
 /// Yollayah's specialist agents are her "family members" with distinct personalities.
+#[must_use]
 pub fn agent_to_family_name(agent_id: &str) -> String {
     match agent_id {
         "ethical-hacker" => "Cousin Rita".to_string(),
@@ -265,7 +276,7 @@ pub fn agent_to_family_name(agent_id: &str) -> String {
 /// Task manager state
 ///
 /// Tracks all background tasks for the Conductor.
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Default)]
 pub struct TaskManager {
     /// All tasks, keyed by ID
     tasks: std::collections::HashMap<TaskId, Task>,
@@ -277,18 +288,6 @@ pub struct TaskManager {
     max_total_tasks: usize,
     /// Age after which completed tasks are cleaned up (0 = never)
     task_cleanup_age_ms: u64,
-}
-
-impl Default for TaskManager {
-    fn default() -> Self {
-        Self {
-            tasks: std::collections::HashMap::new(),
-            task_order: Vec::new(),
-            max_active_tasks: 0,
-            max_total_tasks: 0,
-            task_cleanup_age_ms: 0,
-        }
-    }
 }
 
 /// Error when task creation fails
@@ -314,10 +313,10 @@ impl std::fmt::Display for TaskCreationError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             Self::TooManyActiveTasks { limit, current } => {
-                write!(f, "Too many active tasks: {} (limit: {})", current, limit)
+                write!(f, "Too many active tasks: {current} (limit: {limit})")
             }
             Self::TooManyTotalTasks { limit, current } => {
-                write!(f, "Too many total tasks: {} (limit: {})", current, limit)
+                write!(f, "Too many total tasks: {current} (limit: {limit})")
             }
         }
     }
@@ -327,11 +326,13 @@ impl std::error::Error for TaskCreationError {}
 
 impl TaskManager {
     /// Create a new task manager
+    #[must_use]
     pub fn new() -> Self {
         Self::default()
     }
 
     /// Create a new task manager with limits
+    #[must_use]
     pub fn new_with_limits(
         max_active_tasks: usize,
         max_total_tasks: usize,
@@ -430,6 +431,7 @@ impl TaskManager {
     }
 
     /// Get a task by ID
+    #[must_use]
     pub fn get(&self, id: &TaskId) -> Option<&Task> {
         self.tasks.get(id)
     }
@@ -462,9 +464,7 @@ impl TaskManager {
 
     /// Get all tasks in creation order
     pub fn all_tasks(&self) -> impl Iterator<Item = &Task> {
-        self.task_order
-            .iter()
-            .filter_map(|id| self.tasks.get(id))
+        self.task_order.iter().filter_map(|id| self.tasks.get(id))
     }
 
     /// Get active tasks (pending or running)
@@ -478,16 +478,19 @@ impl TaskManager {
     }
 
     /// Check if there are any active tasks
+    #[must_use]
     pub fn has_active_tasks(&self) -> bool {
         self.tasks.values().any(|t| t.status.is_active())
     }
 
     /// Get count of active tasks
+    #[must_use]
     pub fn active_count(&self) -> usize {
         self.tasks.values().filter(|t| t.status.is_active()).count()
     }
 
     /// Get total task count
+    #[must_use]
     pub fn total_count(&self) -> usize {
         self.tasks.len()
     }
@@ -539,10 +542,10 @@ mod tests {
 
     #[test]
     fn test_task_status_parse() {
-        assert_eq!(TaskStatus::from_str("running"), TaskStatus::Running);
-        assert_eq!(TaskStatus::from_str("DONE"), TaskStatus::Done);
-        assert_eq!(TaskStatus::from_str("  failed  "), TaskStatus::Failed);
-        assert_eq!(TaskStatus::from_str("unknown"), TaskStatus::Pending);
+        assert_eq!(TaskStatus::parse("running"), TaskStatus::Running);
+        assert_eq!(TaskStatus::parse("DONE"), TaskStatus::Done);
+        assert_eq!(TaskStatus::parse("  failed  "), TaskStatus::Failed);
+        assert_eq!(TaskStatus::parse("unknown"), TaskStatus::Pending);
     }
 
     #[test]
@@ -597,12 +600,19 @@ mod tests {
         let mut manager = TaskManager::new_with_limits(2, 5, 0);
 
         // Can create tasks up to active limit
-        assert!(manager.try_create_task("agent1".to_string(), "Task 1".to_string()).is_ok());
-        assert!(manager.try_create_task("agent2".to_string(), "Task 2".to_string()).is_ok());
+        assert!(manager
+            .try_create_task("agent1".to_string(), "Task 1".to_string())
+            .is_ok());
+        assert!(manager
+            .try_create_task("agent2".to_string(), "Task 2".to_string())
+            .is_ok());
 
         // Third active task should fail
         let result = manager.try_create_task("agent3".to_string(), "Task 3".to_string());
-        assert!(matches!(result, Err(TaskCreationError::TooManyActiveTasks { .. })));
+        assert!(matches!(
+            result,
+            Err(TaskCreationError::TooManyActiveTasks { .. })
+        ));
 
         // Complete one task
         for task in manager.tasks.values_mut() {
@@ -613,7 +623,9 @@ mod tests {
         }
 
         // Now we can create another
-        assert!(manager.try_create_task("agent3".to_string(), "Task 3".to_string()).is_ok());
+        assert!(manager
+            .try_create_task("agent3".to_string(), "Task 3".to_string())
+            .is_ok());
     }
 
     #[test]
@@ -621,13 +633,22 @@ mod tests {
         let mut manager = TaskManager::new_with_limits(10, 3, 0);
 
         // Can create up to total limit
-        assert!(manager.try_create_task("agent1".to_string(), "Task 1".to_string()).is_ok());
-        assert!(manager.try_create_task("agent2".to_string(), "Task 2".to_string()).is_ok());
-        assert!(manager.try_create_task("agent3".to_string(), "Task 3".to_string()).is_ok());
+        assert!(manager
+            .try_create_task("agent1".to_string(), "Task 1".to_string())
+            .is_ok());
+        assert!(manager
+            .try_create_task("agent2".to_string(), "Task 2".to_string())
+            .is_ok());
+        assert!(manager
+            .try_create_task("agent3".to_string(), "Task 3".to_string())
+            .is_ok());
 
         // Fourth task should fail due to total limit
         let result = manager.try_create_task("agent4".to_string(), "Task 4".to_string());
-        assert!(matches!(result, Err(TaskCreationError::TooManyTotalTasks { .. })));
+        assert!(matches!(
+            result,
+            Err(TaskCreationError::TooManyTotalTasks { .. })
+        ));
     }
 
     #[test]
@@ -636,10 +657,9 @@ mod tests {
 
         // Should be able to create many tasks without limits
         for i in 0..100 {
-            assert!(manager.try_create_task(
-                format!("agent{}", i),
-                format!("Task {}", i)
-            ).is_ok());
+            assert!(manager
+                .try_create_task(format!("agent{}", i), format!("Task {}", i))
+                .is_ok());
         }
 
         assert_eq!(manager.total_count(), 100);

@@ -51,9 +51,7 @@ impl AnimationEngine {
         }
 
         let frame = &animation.frames[self.current_frame];
-        let frame_duration = Duration::from_millis(
-            (frame.duration_ms as f32 / self.speed) as u64
-        );
+        let frame_duration = Duration::from_millis((frame.duration_ms as f32 / self.speed) as u64);
 
         self.frame_time += delta;
 

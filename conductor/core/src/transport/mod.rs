@@ -1,8 +1,8 @@
 //! Transport Layer for Conductor-Surface IPC
 //!
 //! Provides abstraction over different transport mechanisms:
-//! - InProcess: Direct channel communication (embedded mode)
-//! - UnixSocket: Local IPC via Unix domain sockets
+//! - `InProcess`: Direct channel communication (embedded mode)
+//! - `UnixSocket`: Local IPC via Unix domain sockets
 //! - WebSocket: Remote IPC for web/mobile surfaces (future)
 //!
 //! # Design Philosophy
@@ -15,7 +15,7 @@
 //!
 //! # Security
 //!
-//! - Unix sockets use SO_PEERCRED to validate peer UID
+//! - Unix sockets use `SO_PEERCRED` to validate peer UID
 //! - Socket files are created with 0600 permissions
 //! - No network exposure by default
 
@@ -30,7 +30,7 @@ pub mod unix_socket;
 pub use config::{TransportConfig, TransportType};
 pub use frame::{FrameDecoder, FrameEncoder};
 pub use in_process::InProcessTransport;
-pub use traits::{ConnectionId, ConductorTransport, SurfaceTransport, TransportError};
+pub use traits::{ConductorTransport, ConnectionId, SurfaceTransport, TransportError};
 
 #[cfg(unix)]
 pub use unix_socket::{UnixSocketClient, UnixSocketServer};

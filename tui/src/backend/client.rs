@@ -106,22 +106,15 @@ impl BackendClient {
                         while let Some(pos) = buffer.find('\n') {
                             let line = buffer[..pos].trim();
                             if !line.is_empty() {
-                                if let Ok(data) =
-                                    serde_json::from_str::<serde_json::Value>(line)
-                                {
+                                if let Ok(data) = serde_json::from_str::<serde_json::Value>(line) {
                                     if let Some(token) =
                                         data.get("response").and_then(|r| r.as_str())
                                     {
                                         full_response.push_str(token);
-                                        let _ = tx
-                                            .send(StreamingToken::Token(token.to_string()))
-                                            .await;
+                                        let _ =
+                                            tx.send(StreamingToken::Token(token.to_string())).await;
                                     }
-                                    if data
-                                        .get("done")
-                                        .and_then(|d| d.as_bool())
-                                        .unwrap_or(false)
-                                    {
+                                    if data.get("done").and_then(|d| d.as_bool()).unwrap_or(false) {
                                         let _ = tx
                                             .send(StreamingToken::Complete {
                                                 message: full_response,
@@ -147,11 +140,7 @@ impl BackendClient {
 
     /// Send a message and wait for complete response (non-streaming)
     /// Used for quick queries like generating goodbye messages
-    pub async fn send_message_sync(
-        &self,
-        message: &str,
-        model: &str,
-    ) -> anyhow::Result<String> {
+    pub async fn send_message_sync(&self, message: &str, model: &str) -> anyhow::Result<String> {
         match &self.connection {
             BackendConnection::DirectOllama { host, port } => {
                 let url = format!("http://{}:{}/api/generate", host, port);
@@ -162,11 +151,7 @@ impl BackendClient {
                     "stream": false,
                 });
 
-                let response = self.http_client
-                    .post(&url)
-                    .json(&request)
-                    .send()
-                    .await?;
+                let response = self.http_client.post(&url).json(&request).send().await?;
 
                 let data: serde_json::Value = response.json().await?;
                 let response_text = data
