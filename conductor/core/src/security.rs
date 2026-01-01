@@ -69,6 +69,7 @@ impl Default for ConductorLimits {
 
 impl ConductorLimits {
     /// Create limits from environment variables with fallback to defaults
+    #[must_use]
     pub fn from_env() -> Self {
         let default = Self::default();
         Self {
@@ -129,11 +130,13 @@ pub enum ValidationResult {
 
 impl ValidationResult {
     /// Check if the result indicates valid input
+    #[must_use]
     pub fn is_valid(&self) -> bool {
         matches!(self, Self::Valid)
     }
 
     /// Get the error message if invalid
+    #[must_use]
     pub fn error_message(&self) -> Option<&str> {
         match self {
             Self::Valid => None,
@@ -158,6 +161,7 @@ pub struct InputValidator {
 
 impl InputValidator {
     /// Create a new input validator with the given limits
+    #[must_use]
     pub fn new(limits: ConductorLimits) -> Self {
         Self {
             limits,
@@ -244,8 +248,7 @@ impl InputValidator {
                 .any(|c| c.is_control() && c != '\n' && c != '\t')
             {
                 return ValidationResult::Invalid(format!(
-                    "Argument {} contains control characters",
-                    i
+                    "Argument {i} contains control characters"
                 ));
             }
         }
@@ -303,12 +306,12 @@ pub enum CommandRejectionReason {
 impl std::fmt::Display for CommandRejectionReason {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            Self::NotAllowed(cmd) => write!(f, "Command '{}' is not allowed", cmd),
+            Self::NotAllowed(cmd) => write!(f, "Command '{cmd}' is not allowed"),
             Self::RateLimitExceeded => write!(f, "Too many commands in response"),
-            Self::InvalidState(msg) => write!(f, "Command not allowed in current state: {}", msg),
-            Self::InvalidArguments(msg) => write!(f, "Invalid command arguments: {}", msg),
-            Self::UnknownAgent(agent) => write!(f, "Unknown agent '{}' not in allowlist", agent),
-            Self::InvalidTaskDescription(msg) => write!(f, "Invalid task description: {}", msg),
+            Self::InvalidState(msg) => write!(f, "Command not allowed in current state: {msg}"),
+            Self::InvalidArguments(msg) => write!(f, "Invalid command arguments: {msg}"),
+            Self::UnknownAgent(agent) => write!(f, "Unknown agent '{agent}' not in allowlist"),
+            Self::InvalidTaskDescription(msg) => write!(f, "Invalid task description: {msg}"),
         }
     }
 }
@@ -338,6 +341,7 @@ pub struct CommandValidator {
 
 impl CommandValidator {
     /// Create a new command validator with default allowlists
+    #[must_use]
     pub fn new(limits: &ConductorLimits) -> Self {
         Self {
             allowed_commands: Self::default_allowed_commands(),
@@ -350,6 +354,7 @@ impl CommandValidator {
     }
 
     /// Create a validator with custom allowlists
+    #[must_use]
     pub fn with_allowlists(
         limits: &ConductorLimits,
         allowed_commands: HashSet<String>,
@@ -378,7 +383,7 @@ impl CommandValidator {
             "task",
         ]
         .iter()
-        .map(|s| s.to_string())
+        .map(std::string::ToString::to_string)
         .collect()
     }
 
@@ -397,7 +402,7 @@ impl CommandValidator {
             "relational-database-expert",
         ]
         .iter()
-        .map(|s| s.to_string())
+        .map(std::string::ToString::to_string)
         .collect()
     }
 
@@ -416,7 +421,7 @@ impl CommandValidator {
         let count = self.commands_in_response.fetch_add(1, Ordering::SeqCst) + 1;
         if count > self.max_commands_per_response as u32 {
             let reason = CommandRejectionReason::RateLimitExceeded;
-            self.log_rejection(&format!("{:?}", cmd), reason.clone());
+            self.log_rejection(&format!("{cmd:?}"), reason.clone());
             return Err(reason);
         }
 
@@ -476,13 +481,13 @@ impl CommandValidator {
                 // Validate agent against allowlist
                 if !self.allowed_agents.contains(agent) {
                     let reason = CommandRejectionReason::UnknownAgent(agent.clone());
-                    self.log_rejection(&format!("task start {}", agent), reason.clone());
+                    self.log_rejection(&format!("task start {agent}"), reason.clone());
                     return Err(reason);
                 }
 
                 // Validate description
                 if let Err(reason) = self.validate_task_description(description) {
-                    self.log_rejection(&format!("task start {}", agent), reason.clone());
+                    self.log_rejection(&format!("task start {agent}"), reason.clone());
                     return Err(reason);
                 }
 
@@ -490,9 +495,7 @@ impl CommandValidator {
             }
             TaskCommand::Progress { task_id, percent } => {
                 // Validate task_id format
-                if let Err(reason) = self.validate_task_id(task_id) {
-                    return Err(reason);
-                }
+                self.validate_task_id(task_id)?;
                 // percent is already bounded by u8 and min(100) in parser
                 if *percent > 100 {
                     return Err(CommandRejectionReason::InvalidArguments(
@@ -629,6 +632,7 @@ pub struct SecurityConfig {
 
 impl SecurityConfig {
     /// Create from environment variables
+    #[must_use]
     pub fn from_env() -> Self {
         Self {
             limits: ConductorLimits::from_env(),

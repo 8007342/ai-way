@@ -47,7 +47,7 @@ yollayah.sh
 - [ ] Integration test of message flow
 - [ ] Developer mode (PJ) debug panel
 
-### Phase 3: IPC Transport Layer (IN PROGRESS - ~70%)
+### Phase 3: IPC Transport Layer (IN PROGRESS - ~85%)
 - [x] Abstract transport trait (SurfaceTransport/ConductorTransport)
 - [x] Unix Socket server transport (ConductorTransport impl)
 - [x] Unix Socket client transport (SurfaceTransport impl)
@@ -58,8 +58,8 @@ yollayah.sh
 - [x] SO_PEERCRED validation on Linux for Unix sockets
 - [ ] WebSocket transport implementation (optional feature)
 - [ ] yollayah.sh updates to launch Conductor as separate process
-- [ ] Reconnection handling
-- [ ] ConductorClient refactor to use transport abstraction
+- [x] Reconnection handling (try_reconnect with exponential backoff)
+- [x] ConductorClient refactor to use transport abstraction (ClientMode enum)
 
 ### Phase 4: Process Separation (PENDING)
 - [ ] Conductor as standalone binary (conductor-daemon)
@@ -100,4 +100,4 @@ _Items discovered during refactor that should NOT block this work:_
 
 ---
 
-**Last Updated**: 2025-12-31
+**Last Updated**: 2026-01-01

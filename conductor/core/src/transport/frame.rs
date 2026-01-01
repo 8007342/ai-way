@@ -36,8 +36,8 @@ const MIN_BUFFER_CAPACITY: usize = 4096;
 /// - JSON serialization fails
 /// - Resulting frame exceeds `MAX_FRAME_SIZE`
 pub fn encode<T: Serialize>(msg: &T) -> Result<Vec<u8>, TransportError> {
-    let json = serde_json::to_vec(msg)
-        .map_err(|e| TransportError::SerializationError(e.to_string()))?;
+    let json =
+        serde_json::to_vec(msg).map_err(|e| TransportError::SerializationError(e.to_string()))?;
 
     if json.len() > MAX_FRAME_SIZE {
         return Err(TransportError::SerializationError(format!(
@@ -60,6 +60,7 @@ pub struct FrameEncoder;
 
 impl FrameEncoder {
     /// Create a new encoder
+    #[must_use]
     pub fn new() -> Self {
         Self
     }
@@ -88,6 +89,7 @@ impl Default for FrameDecoder {
 
 impl FrameDecoder {
     /// Create a new decoder with default buffer capacity
+    #[must_use]
     pub fn new() -> Self {
         Self {
             buffer: Vec::with_capacity(MIN_BUFFER_CAPACITY),
@@ -106,6 +108,7 @@ impl FrameDecoder {
     }
 
     /// Get the number of bytes available in the buffer
+    #[must_use]
     pub fn available(&self) -> usize {
         self.buffer.len() - self.read_pos
     }
@@ -126,14 +129,13 @@ impl FrameDecoder {
 
         // Read length (big-endian u32)
         let len_bytes = &self.buffer[self.read_pos..self.read_pos + 4];
-        let len = u32::from_be_bytes([len_bytes[0], len_bytes[1], len_bytes[2], len_bytes[3]])
-            as usize;
+        let len =
+            u32::from_be_bytes([len_bytes[0], len_bytes[1], len_bytes[2], len_bytes[3]]) as usize;
 
         // Validate frame size
         if len > MAX_FRAME_SIZE {
             return Err(TransportError::SerializationError(format!(
-                "Frame size {} exceeds maximum {}",
-                len, MAX_FRAME_SIZE
+                "Frame size {len} exceeds maximum {MAX_FRAME_SIZE}"
             )));
         }
 

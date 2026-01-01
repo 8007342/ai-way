@@ -18,7 +18,9 @@ use async_trait::async_trait;
 use futures::StreamExt;
 use tokio::sync::mpsc;
 
-use super::traits::{BackendConfig, LlmBackend, LlmRequest, LlmResponse, ModelInfo, StreamingToken};
+use super::traits::{
+    BackendConfig, LlmBackend, LlmRequest, LlmResponse, ModelInfo, StreamingToken,
+};
 
 /// Ollama backend client
 #[derive(Clone)]
@@ -44,7 +46,8 @@ impl OllamaBackend {
         }
     }
 
-    /// Create from BackendConfig
+    /// Create from `BackendConfig`
+    #[must_use]
     pub fn from_config(config: &BackendConfig) -> Option<Self> {
         match config {
             BackendConfig::Ollama { host, port } => Some(Self::new(host.clone(), *port)),
@@ -53,6 +56,7 @@ impl OllamaBackend {
     }
 
     /// Create from environment variables
+    #[must_use]
     pub fn from_env() -> Self {
         let host = std::env::var("OLLAMA_HOST")
             .or_else(|_| std::env::var("YOLLAYAH_OLLAMA_HOST"))
@@ -92,7 +96,7 @@ impl OllamaBackend {
 
         if let Some(ref context) = request.context {
             full_prompt.push_str(context);
-            full_prompt.push_str("\n");
+            full_prompt.push('\n');
         }
 
         full_prompt.push_str(&request.prompt);
@@ -108,13 +112,13 @@ impl Default for OllamaBackend {
 
 #[async_trait]
 impl LlmBackend for OllamaBackend {
-    fn name(&self) -> &str {
+    fn name(&self) -> &'static str {
         "Ollama"
     }
 
     async fn health_check(&self) -> bool {
         self.http_client
-            .get(&self.tags_url())
+            .get(self.tags_url())
             .timeout(Duration::from_secs(5))
             .send()
             .await
@@ -144,11 +148,12 @@ impl LlmBackend for OllamaBackend {
         }
 
         if request.max_tokens > 0 {
-            let options = json_request["options"]
-                .as_object_mut()
-                .map(|o| {
-                    o.insert("num_predict".to_string(), serde_json::json!(request.max_tokens));
-                });
+            let options = json_request["options"].as_object_mut().map(|o| {
+                o.insert(
+                    "num_predict".to_string(),
+                    serde_json::json!(request.max_tokens),
+                );
+            });
             if options.is_none() {
                 json_request["options"] = serde_json::json!({
                     "num_predict": request.max_tokens
@@ -167,7 +172,7 @@ impl LlmBackend for OllamaBackend {
         if !response.status().is_success() {
             let status = response.status();
             let body = response.text().await.unwrap_or_default();
-            anyhow::bail!("Ollama returned {}: {}", status, body);
+            anyhow::bail!("Ollama returned {status}: {body}");
         }
 
         let mut stream = response.bytes_stream();
@@ -186,9 +191,7 @@ impl LlmBackend for OllamaBackend {
                         while let Some(pos) = buffer.find('\n') {
                             let line = buffer[..pos].trim();
                             if !line.is_empty() {
-                                if let Ok(data) =
-                                    serde_json::from_str::<serde_json::Value>(line)
-                                {
+                                if let Ok(data) = serde_json::from_str::<serde_json::Value>(line) {
                                     // Extract token
                                     if let Some(token) =
                                         data.get("response").and_then(|r| r.as_str())
@@ -207,7 +210,7 @@ impl LlmBackend for OllamaBackend {
                                     // Check if done
                                     if data
                                         .get("done")
-                                        .and_then(|d| d.as_bool())
+                                        .and_then(serde_json::Value::as_bool)
                                         .unwrap_or(false)
                                     {
                                         let _ = tx
@@ -260,11 +263,12 @@ impl LlmBackend for OllamaBackend {
         }
 
         if request.max_tokens > 0 {
-            let options = json_request["options"]
-                .as_object_mut()
-                .map(|o| {
-                    o.insert("num_predict".to_string(), serde_json::json!(request.max_tokens));
-                });
+            let options = json_request["options"].as_object_mut().map(|o| {
+                o.insert(
+                    "num_predict".to_string(),
+                    serde_json::json!(request.max_tokens),
+                );
+            });
             if options.is_none() {
                 json_request["options"] = serde_json::json!({
                     "num_predict": request.max_tokens
@@ -282,7 +286,7 @@ impl LlmBackend for OllamaBackend {
         if !response.status().is_success() {
             let status = response.status();
             let body = response.text().await.unwrap_or_default();
-            anyhow::bail!("Ollama returned {}: {}", status, body);
+            anyhow::bail!("Ollama returned {status}: {body}");
         }
 
         let data: serde_json::Value = response.json().await?;
@@ -295,7 +299,7 @@ impl LlmBackend for OllamaBackend {
 
         let tokens_used = data
             .get("eval_count")
-            .and_then(|c| c.as_u64())
+            .and_then(serde_json::Value::as_u64)
             .map(|c| c as u32);
 
         Ok(LlmResponse {
@@ -309,7 +313,7 @@ impl LlmBackend for OllamaBackend {
     async fn list_models(&self) -> anyhow::Result<Vec<ModelInfo>> {
         let response = self
             .http_client
-            .get(&self.tags_url())
+            .get(self.tags_url())
             .timeout(Duration::from_secs(10))
             .send()
             .await?;
@@ -317,7 +321,7 @@ impl LlmBackend for OllamaBackend {
         if !response.status().is_success() {
             let status = response.status();
             let body = response.text().await.unwrap_or_default();
-            anyhow::bail!("Ollama returned {}: {}", status, body);
+            anyhow::bail!("Ollama returned {status}: {body}");
         }
 
         let data: serde_json::Value = response.json().await?;
@@ -329,7 +333,7 @@ impl LlmBackend for OllamaBackend {
                 arr.iter()
                     .filter_map(|m| {
                         let name = m.get("name")?.as_str()?.to_string();
-                        let size = m.get("size").and_then(|s| s.as_u64());
+                        let size = m.get("size").and_then(serde_json::Value::as_u64);
                         let parameters = m
                             .get("details")
                             .and_then(|d| d.get("parameter_size"))
@@ -373,20 +377,21 @@ mod tests {
         assert_eq!(backend.build_prompt(&request), "Hello");
 
         // With system
-        let request = LlmRequest::new("Hello", "test")
-            .with_system("Be helpful");
+        let request = LlmRequest::new("Hello", "test").with_system("Be helpful");
         assert_eq!(backend.build_prompt(&request), "Be helpful\n\nHello");
 
         // With context
-        let request = LlmRequest::new("Hello", "test")
-            .with_context("Previous: Hi");
+        let request = LlmRequest::new("Hello", "test").with_context("Previous: Hi");
         assert_eq!(backend.build_prompt(&request), "Previous: Hi\nHello");
 
         // With both
         let request = LlmRequest::new("Hello", "test")
             .with_system("Be helpful")
             .with_context("Previous: Hi");
-        assert_eq!(backend.build_prompt(&request), "Be helpful\n\nPrevious: Hi\nHello");
+        assert_eq!(
+            backend.build_prompt(&request),
+            "Be helpful\n\nPrevious: Hi\nHello"
+        );
     }
 
     #[test]

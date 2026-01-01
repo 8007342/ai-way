@@ -21,17 +21,17 @@
 //! ```
 
 pub mod app;
+pub mod avatar;
+pub mod backend;
 pub mod compositor;
 pub mod conductor_client;
 pub mod display;
-pub mod avatar;
-pub mod widgets;
-pub mod backend;
 pub mod events;
-pub mod theme;
 pub mod tasks;
+pub mod theme;
+pub mod widgets;
 
 pub use app::App;
 pub use conductor_client::ConductorClient;
-pub use display::{DisplayMessage, DisplayState, DisplayAvatarState, DisplayTask};
-pub use tasks::{TaskPanel, TaskState, BackgroundTask};
+pub use display::{DisplayAvatarState, DisplayMessage, DisplayState, DisplayTask};
+pub use tasks::{BackgroundTask, TaskPanel, TaskState};

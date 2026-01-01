@@ -172,18 +172,18 @@ pub enum PeekDirection {
 /// Reaction animations (contextual responses)
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub enum Reaction {
-    Laugh,      // Ha ha!
-    Gasp,       // Surprised!
-    Hmm,        // Thinking...
-    Tada,       // Celebration!
-    Oops,       // Made a mistake
-    Love,       // Heart eyes
-    Blush,      // Embarrassed
-    Wink,       // Playful wink
-    Cry,        // Sad tears
-    Angry,      // Frustrated
-    Sleepy,     // Tired
-    Dizzy,      // Confused spinning
+    Laugh,  // Ha ha!
+    Gasp,   // Surprised!
+    Hmm,    // Thinking...
+    Tada,   // Celebration!
+    Oops,   // Made a mistake
+    Love,   // Heart eyes
+    Blush,  // Embarrassed
+    Wink,   // Playful wink
+    Cry,    // Sad tears
+    Angry,  // Frustrated
+    Sleepy, // Tired
+    Dizzy,  // Confused spinning
 }
 
 /// Parser for avatar commands embedded in text
@@ -304,12 +304,18 @@ impl CommandParser {
                 // Description is the rest, possibly quoted
                 let desc_parts = &args[2..];
                 let description = desc_parts.join(" ").trim_matches('"').to_string();
-                Some(AvatarCommand::Task(TaskCommand::Start { agent, description }))
+                Some(AvatarCommand::Task(TaskCommand::Start {
+                    agent,
+                    description,
+                }))
             }
             "progress" if args.len() >= 3 => {
                 let task_id = args[1].to_string();
                 let percent: u8 = args[2].parse().ok()?;
-                Some(AvatarCommand::Task(TaskCommand::Progress { task_id, percent: percent.min(100) }))
+                Some(AvatarCommand::Task(TaskCommand::Progress {
+                    task_id,
+                    percent: percent.min(100),
+                }))
             }
             "done" if args.len() >= 2 => {
                 let task_id = args[1].to_string();
@@ -387,8 +393,12 @@ impl CommandParser {
         match args[0] {
             "tl" | "topleft" | "top-left" => Some(AvatarCommand::MoveTo(Position::TopLeft)),
             "tr" | "topright" | "top-right" => Some(AvatarCommand::MoveTo(Position::TopRight)),
-            "bl" | "bottomleft" | "bottom-left" => Some(AvatarCommand::MoveTo(Position::BottomLeft)),
-            "br" | "bottomright" | "bottom-right" => Some(AvatarCommand::MoveTo(Position::BottomRight)),
+            "bl" | "bottomleft" | "bottom-left" => {
+                Some(AvatarCommand::MoveTo(Position::BottomLeft))
+            }
+            "br" | "bottomright" | "bottom-right" => {
+                Some(AvatarCommand::MoveTo(Position::BottomRight))
+            }
             "center" | "middle" => Some(AvatarCommand::MoveTo(Position::Center)),
             "follow" => Some(AvatarCommand::MoveTo(Position::Follow)),
             _ => {
@@ -482,7 +492,10 @@ mod tests {
         let mut parser = CommandParser::new();
         let result = parser.parse("Hello [yolla:move center] world!");
         assert_eq!(result, "Hello  world!");
-        assert_eq!(parser.next_command(), Some(AvatarCommand::MoveTo(Position::Center)));
+        assert_eq!(
+            parser.next_command(),
+            Some(AvatarCommand::MoveTo(Position::Center))
+        );
     }
 
     #[test]
@@ -490,8 +503,14 @@ mod tests {
         let mut parser = CommandParser::new();
         let result = parser.parse("[yolla:mood happy][yolla:move tr]Hi!");
         assert_eq!(result, "Hi!");
-        assert_eq!(parser.next_command(), Some(AvatarCommand::Mood(Mood::Happy)));
-        assert_eq!(parser.next_command(), Some(AvatarCommand::MoveTo(Position::TopRight)));
+        assert_eq!(
+            parser.next_command(),
+            Some(AvatarCommand::Mood(Mood::Happy))
+        );
+        assert_eq!(
+            parser.next_command(),
+            Some(AvatarCommand::MoveTo(Position::TopRight))
+        );
     }
 
     #[test]

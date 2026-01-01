@@ -7,12 +7,13 @@ use std::path::PathBuf;
 use serde::{Deserialize, Serialize};
 
 /// Transport type selection
-#[derive(Clone, Debug, Serialize, Deserialize)]
+#[derive(Clone, Debug, Serialize, Deserialize, Default)]
 pub enum TransportType {
     /// Direct in-process channels (embedded mode)
     ///
     /// This is the default when the TUI embeds the Conductor directly.
     /// No IPC overhead, but no process separation.
+    #[default]
     InProcess,
 
     /// Unix domain socket (local process separation)
@@ -39,12 +40,6 @@ pub enum TransportType {
         /// Require authentication token
         require_auth: bool,
     },
-}
-
-impl Default for TransportType {
-    fn default() -> Self {
-        Self::InProcess
-    }
 }
 
 /// Transport configuration
@@ -99,6 +94,7 @@ impl Default for TransportConfig {
 
 impl TransportConfig {
     /// Create configuration for embedded (in-process) mode
+    #[must_use]
     pub fn embedded() -> Self {
         Self {
             transport: TransportType::InProcess,
@@ -108,6 +104,7 @@ impl TransportConfig {
 
     /// Create configuration for local Unix socket mode
     #[cfg(unix)]
+    #[must_use]
     pub fn local() -> Self {
         Self {
             transport: TransportType::UnixSocket { path: None },
@@ -127,29 +124,28 @@ impl TransportConfig {
     /// - `CONDUCTOR_HEARTBEAT_INTERVAL`: Heartbeat interval in ms
     /// - `CONDUCTOR_RECONNECT_ATTEMPTS`: Number of reconnection attempts
     pub fn from_env() -> Self {
-        let transport =
-            match std::env::var("CONDUCTOR_TRANSPORT")
-                .as_deref()
-                .map(str::to_lowercase)
-            {
-                Ok(ref s) if s == "inprocess" || s == "embedded" => TransportType::InProcess,
+        let transport = match std::env::var("CONDUCTOR_TRANSPORT")
+            .as_deref()
+            .map(str::to_lowercase)
+        {
+            Ok(ref s) if s == "inprocess" || s == "embedded" => TransportType::InProcess,
 
-                #[cfg(unix)]
-                Ok(ref s) if s == "unix" || s == "socket" => TransportType::UnixSocket {
-                    path: std::env::var("CONDUCTOR_SOCKET").ok().map(PathBuf::from),
-                },
+            #[cfg(unix)]
+            Ok(ref s) if s == "unix" || s == "socket" => TransportType::UnixSocket {
+                path: std::env::var("CONDUCTOR_SOCKET").ok().map(PathBuf::from),
+            },
 
-                #[cfg(feature = "websocket")]
-                Ok(ref s) if s == "websocket" || s == "ws" => TransportType::WebSocket {
-                    listen_addr: std::env::var("CONDUCTOR_WS_ADDR")
-                        .unwrap_or_else(|_| "127.0.0.1:8765".into()),
-                    require_auth: std::env::var("CONDUCTOR_WS_AUTH")
-                        .map(|v| v == "1" || v.to_lowercase() == "true")
-                        .unwrap_or(true),
-                },
+            #[cfg(feature = "websocket")]
+            Ok(ref s) if s == "websocket" || s == "ws" => TransportType::WebSocket {
+                listen_addr: std::env::var("CONDUCTOR_WS_ADDR")
+                    .unwrap_or_else(|_| "127.0.0.1:8765".into()),
+                require_auth: std::env::var("CONDUCTOR_WS_AUTH")
+                    .map(|v| v == "1" || v.to_lowercase() == "true")
+                    .unwrap_or(true),
+            },
 
-                _ => TransportType::default(),
-            };
+            _ => TransportType::default(),
+        };
 
         let heartbeat_enabled = std::env::var("CONDUCTOR_HEARTBEAT")
             .map(|v| v != "0" && v.to_lowercase() != "false")
@@ -182,12 +178,14 @@ impl TransportConfig {
     }
 
     /// Check if this is an in-process (embedded) configuration
+    #[must_use]
     pub fn is_embedded(&self) -> bool {
         matches!(self.transport, TransportType::InProcess)
     }
 
     /// Check if this is a Unix socket configuration
     #[cfg(unix)]
+    #[must_use]
     pub fn is_unix_socket(&self) -> bool {
         matches!(self.transport, TransportType::UnixSocket { .. })
     }
@@ -195,8 +193,9 @@ impl TransportConfig {
 
 /// Get the default Unix socket path
 ///
-/// Uses XDG_RUNTIME_DIR if available, otherwise /tmp/ai-way-$UID/
+/// Uses `XDG_RUNTIME_DIR` if available, otherwise /tmp/ai-way-$UID/
 #[cfg(unix)]
+#[must_use]
 pub fn default_socket_path() -> PathBuf {
     if let Ok(runtime_dir) = std::env::var("XDG_RUNTIME_DIR") {
         PathBuf::from(runtime_dir)
@@ -204,7 +203,7 @@ pub fn default_socket_path() -> PathBuf {
             .join("conductor.sock")
     } else {
         let uid = unsafe { libc::getuid() };
-        PathBuf::from(format!("/tmp/ai-way-{}/conductor.sock", uid))
+        PathBuf::from(format!("/tmp/ai-way-{uid}/conductor.sock"))
     }
 }
 

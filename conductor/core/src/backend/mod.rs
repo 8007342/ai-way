@@ -1,12 +1,12 @@
 //! LLM Backend Integration
 //!
-//! This module provides abstracted access to LLM backends (Ollama, OpenAI, etc.)
+//! This module provides abstracted access to LLM backends (Ollama, `OpenAI`, etc.)
 //! through a common trait interface.
 //!
 //! # Available Backends
 //!
 //! - **Ollama**: Local LLM server (default)
-//! - More to come: OpenAI, Anthropic, etc.
+//! - More to come: `OpenAI`, Anthropic, etc.
 //!
 //! # Usage
 //!
@@ -22,6 +22,4 @@ mod ollama;
 mod traits;
 
 pub use ollama::OllamaBackend;
-pub use traits::{
-    BackendConfig, LlmBackend, LlmRequest, LlmResponse, ModelInfo, StreamingToken,
-};
+pub use traits::{BackendConfig, LlmBackend, LlmRequest, LlmResponse, ModelInfo, StreamingToken};

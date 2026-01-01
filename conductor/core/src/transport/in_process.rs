@@ -62,6 +62,7 @@ impl InProcessTransport {
     /// // Use transport in Surface
     /// transport.send(SurfaceEvent::Connected { ... }).await?;
     /// ```
+    #[must_use]
     pub fn new_pair() -> (
         Self,
         mpsc::Receiver<SurfaceEvent>,
@@ -80,6 +81,7 @@ impl InProcessTransport {
     }
 
     /// Create with custom channel capacity
+    #[must_use]
     pub fn new_pair_with_capacity(
         capacity: usize,
     ) -> (
@@ -126,7 +128,10 @@ impl SurfaceTransport for InProcessTransport {
     }
 
     async fn recv(&mut self) -> Result<ConductorMessage, TransportError> {
-        self.msg_rx.recv().await.ok_or(TransportError::ConnectionClosed)
+        self.msg_rx
+            .recv()
+            .await
+            .ok_or(TransportError::ConnectionClosed)
     }
 
     fn try_recv(&mut self) -> Option<ConductorMessage> {
@@ -229,7 +234,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_in_process_channel_closed() {
-        let (mut transport, event_rx, _msg_tx) = InProcessTransport::new_pair();
+        let (transport, event_rx, _msg_tx) = InProcessTransport::new_pair();
 
         // Drop the event receiver
         drop(event_rx);

@@ -126,11 +126,7 @@ impl SpriteSheet {
 ///     "  BBB  ",
 /// ];
 /// ```
-pub fn build_frame(
-    pattern: &[&str],
-    palette: &[(char, char, Color)],
-    duration_ms: u64,
-) -> Frame {
+pub fn build_frame(pattern: &[&str], palette: &[(char, char, Color)], duration_ms: u64) -> Frame {
     let color_map: HashMap<char, (char, Color)> = palette
         .iter()
         .map(|&(key, ch, color)| (key, (ch, color)))

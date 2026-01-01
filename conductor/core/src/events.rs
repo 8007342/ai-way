@@ -17,7 +17,7 @@ use crate::tasks::TaskId;
 /// Events from UI Surface to Conductor
 ///
 /// These events tell the Conductor what the user is doing or what's happening
-/// in the UI. The Conductor responds with ConductorMessages.
+/// in the UI. The Conductor responds with `ConductorMessages`.
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub enum SurfaceEvent {
     // ============================================
@@ -36,7 +36,7 @@ pub enum SurfaceEvent {
     /// Handshake request (first message after transport connect)
     ///
     /// Sent immediately after transport connection is established.
-    /// The Conductor responds with HandshakeAck.
+    /// The Conductor responds with `HandshakeAck`.
     Handshake {
         /// Event ID for acknowledgment
         event_id: EventId,
@@ -152,7 +152,7 @@ pub enum SurfaceEvent {
     // ============================================
     // Capability Response
     // ============================================
-    /// Response to QueryCapabilities
+    /// Response to `QueryCapabilities`
     CapabilitiesReport {
         /// Event ID for acknowledgment
         event_id: EventId,
@@ -186,10 +186,11 @@ impl SurfaceEvent {
         use std::sync::atomic::{AtomicU64, Ordering};
         static COUNTER: AtomicU64 = AtomicU64::new(0);
         let id = COUNTER.fetch_add(1, Ordering::SeqCst);
-        EventId(format!("evt_{}", id))
+        EventId(format!("evt_{id}"))
     }
 
     /// Get the event ID if this event has one
+    #[must_use]
     pub fn event_id(&self) -> Option<&EventId> {
         match self {
             Self::Connected { event_id, .. }
@@ -232,6 +233,7 @@ pub enum SurfaceType {
 
 impl SurfaceType {
     /// Human-readable name
+    #[must_use]
     pub fn name(&self) -> &str {
         match self {
             Self::Tui => "Terminal",
@@ -277,6 +279,7 @@ pub struct SurfaceCapabilities {
 
 impl SurfaceCapabilities {
     /// Create capabilities for a standard TUI
+    #[must_use]
     pub fn tui() -> Self {
         Self {
             color: true,
@@ -296,6 +299,7 @@ impl SurfaceCapabilities {
     }
 
     /// Create capabilities for a web UI
+    #[must_use]
     pub fn web() -> Self {
         Self {
             color: true,
@@ -315,6 +319,7 @@ impl SurfaceCapabilities {
     }
 
     /// Create minimal capabilities for headless/testing
+    #[must_use]
     pub fn headless() -> Self {
         Self {
             color: false,

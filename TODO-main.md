@@ -15,6 +15,7 @@ Master index for all TODO tracking documents. Check here first to find pending w
 |----------|--------|-------------|
 | [TODO-rich-ux.md](TODO-rich-ux.md) | SUPERSEDED | Original UX plan (now Rust-based, not Python Textual) |
 | [agents/TODO.md](agents/TODO.md) | ONGOING | Agent profiles and future enhancements |
+| [TODO-documentation.md](TODO-documentation.md) | ROLLING | Documentation updates needed for user docs |
 
 ## Principles
 

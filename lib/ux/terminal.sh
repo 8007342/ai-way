@@ -207,6 +207,163 @@ ux_show_all_ready() {
 }
 
 # ============================================================================
+# Conductor Daemon Support
+# ============================================================================
+
+# Path to the Conductor daemon binary
+CONDUCTOR_DIR="${SCRIPT_DIR}/conductor"
+CONDUCTOR_DAEMON="${CONDUCTOR_DIR}/target/release/conductor-daemon"
+CONDUCTOR_DAEMON_DEBUG="${CONDUCTOR_DIR}/target/debug/conductor-daemon"
+
+# Check if daemon mode is enabled via CONDUCTOR_TRANSPORT
+# Returns 0 (true) if daemon mode is needed, 1 (false) otherwise
+conductor_needs_daemon() {
+    local transport="${CONDUCTOR_TRANSPORT:-inprocess}"
+    transport=$(echo "$transport" | tr '[:upper:]' '[:lower:]')
+
+    case "$transport" in
+        unix|socket)
+            return 0
+            ;;
+        *)
+            return 1
+            ;;
+    esac
+}
+
+# Get the path to the conductor daemon binary (prefer release, fall back to debug)
+conductor_daemon_binary() {
+    if [[ -x "$CONDUCTOR_DAEMON" ]]; then
+        echo "$CONDUCTOR_DAEMON"
+    elif [[ -x "$CONDUCTOR_DAEMON_DEBUG" ]]; then
+        echo "$CONDUCTOR_DAEMON_DEBUG"
+    fi
+}
+
+# Get the conductor socket path
+conductor_socket_path() {
+    if [[ -n "${CONDUCTOR_SOCKET:-}" ]]; then
+        echo "$CONDUCTOR_SOCKET"
+    elif [[ -n "${XDG_RUNTIME_DIR:-}" ]]; then
+        echo "${XDG_RUNTIME_DIR}/ai-way/conductor.sock"
+    else
+        echo "/tmp/ai-way-$(id -u)/conductor.sock"
+    fi
+}
+
+# Get the conductor PID file path
+conductor_pid_path() {
+    if [[ -n "${XDG_RUNTIME_DIR:-}" ]]; then
+        echo "${XDG_RUNTIME_DIR}/ai-way/conductor.pid"
+    else
+        echo "/tmp/ai-way-$(id -u)/conductor.pid"
+    fi
+}
+
+# Check if conductor daemon is running
+conductor_is_running() {
+    local pid_file
+    pid_file="$(conductor_pid_path)"
+
+    if [[ -f "$pid_file" ]]; then
+        local pid
+        pid=$(cat "$pid_file" 2>/dev/null)
+        if [[ -n "$pid" ]] && kill -0 "$pid" 2>/dev/null; then
+            return 0
+        fi
+    fi
+
+    # Also check if socket exists and is responsive
+    local socket
+    socket="$(conductor_socket_path)"
+    [[ -S "$socket" ]]
+}
+
+# Ensure the conductor daemon is running
+# Starts it if not already running, waits for socket to be ready
+conductor_ensure_running() {
+    local daemon_bin socket_path socket_dir max_wait=10
+
+    daemon_bin="$(conductor_daemon_binary)"
+    socket_path="$(conductor_socket_path)"
+    socket_dir="$(dirname "$socket_path")"
+
+    # Check if already running
+    if conductor_is_running; then
+        log_ux "DEBUG" "Conductor daemon already running"
+        return 0
+    fi
+
+    # Check if daemon binary exists
+    if [[ -z "$daemon_bin" ]]; then
+        log_ux "ERROR" "Conductor daemon binary not found"
+        ux_error "Conductor daemon not built. Run: cargo build --release -p conductor-daemon"
+        return 1
+    fi
+
+    # Ensure socket directory exists
+    if [[ ! -d "$socket_dir" ]]; then
+        mkdir -p "$socket_dir" || {
+            log_ux "ERROR" "Failed to create socket directory: $socket_dir"
+            return 1
+        }
+    fi
+
+    log_ux "INFO" "Starting Conductor daemon..."
+    ux_info "Starting Conductor daemon..."
+
+    # Start daemon in background
+    "$daemon_bin" &
+    local daemon_pid=$!
+
+    # Wait for socket to appear
+    local waited=0
+    while [[ ! -S "$socket_path" ]] && [[ $waited -lt $max_wait ]]; do
+        sleep 0.5
+        waited=$((waited + 1))
+
+        # Check if daemon died
+        if ! kill -0 "$daemon_pid" 2>/dev/null; then
+            log_ux "ERROR" "Conductor daemon exited unexpectedly"
+            ux_error "Conductor daemon failed to start"
+            return 1
+        fi
+    done
+
+    if [[ ! -S "$socket_path" ]]; then
+        log_ux "ERROR" "Conductor socket not created after ${max_wait}s"
+        ux_error "Conductor daemon failed to create socket"
+        kill "$daemon_pid" 2>/dev/null || true
+        return 1
+    fi
+
+    log_ux "INFO" "Conductor daemon started (PID: $daemon_pid)"
+    ux_success "Conductor daemon ready"
+    return 0
+}
+
+# Stop the conductor daemon
+conductor_stop() {
+    local pid_file socket_path
+
+    pid_file="$(conductor_pid_path)"
+    socket_path="$(conductor_socket_path)"
+
+    if [[ -f "$pid_file" ]]; then
+        local pid
+        pid=$(cat "$pid_file" 2>/dev/null)
+        if [[ -n "$pid" ]]; then
+            log_ux "INFO" "Stopping Conductor daemon (PID: $pid)"
+            kill "$pid" 2>/dev/null || true
+            rm -f "$pid_file"
+        fi
+    fi
+
+    # Clean up socket if it exists
+    rm -f "$socket_path" 2>/dev/null || true
+}
+
+# ============================================================================
 # Rich Terminal UI (Rust TUI)
 # ============================================================================
 
@@ -319,6 +476,15 @@ ux_launch_tui() {
         return 1
     fi
 
+    # If using daemon mode, ensure conductor is running first
+    if conductor_needs_daemon; then
+        log_ux "INFO" "Daemon mode enabled, ensuring Conductor is running"
+        if ! conductor_ensure_running; then
+            log_ux "ERROR" "Failed to start Conductor daemon"
+            return 1
+        fi
+    fi
+
     log_ux "INFO" "Launching rich TUI: $tui_bin"
 
     # Export model info for TUI to use
@@ -332,7 +498,12 @@ ux_launch_tui() {
 
     # Launch TUI (it takes over the terminal)
     "$tui_bin"
-    return $?
+    local exit_code=$?
+
+    # Note: We don't stop the daemon here - it may be serving other surfaces
+    # Use 'conductor_stop' explicitly if needed
+
+    return $exit_code
 }
 
 # Start UI - tries TUI first, falls back to bash

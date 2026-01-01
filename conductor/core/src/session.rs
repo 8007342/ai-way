@@ -30,6 +30,7 @@ pub struct ConversationMessage {
 
 impl ConversationMessage {
     /// Create a new message
+    #[must_use]
     pub fn new(role: MessageRole, content: String) -> Self {
         Self {
             id: MessageId::new(),
@@ -41,6 +42,7 @@ impl ConversationMessage {
     }
 
     /// Create a new streaming message (content will be updated)
+    #[must_use]
     pub fn streaming(role: MessageRole) -> Self {
         Self {
             id: MessageId::new(),
@@ -94,6 +96,7 @@ pub struct SessionMetadata {
 
 impl SessionMetadata {
     /// Create new metadata
+    #[must_use]
     pub fn new(model: String) -> Self {
         let now = now_ms();
         Self {
@@ -149,6 +152,7 @@ pub struct Session {
 
 impl Session {
     /// Create a new session
+    #[must_use]
     pub fn new(model: String) -> Self {
         Self {
             id: SessionId::new(),
@@ -156,13 +160,14 @@ impl Session {
             metadata: SessionMetadata::new(model),
             messages: Vec::new(),
             current_streaming_id: None,
-            max_messages: 0,       // 0 = unlimited (backwards compatible)
-            max_content_bytes: 0,  // 0 = unlimited (backwards compatible)
+            max_messages: 0,      // 0 = unlimited (backwards compatible)
+            max_content_bytes: 0, // 0 = unlimited (backwards compatible)
             current_content_bytes: 0,
         }
     }
 
     /// Create a new session with limits
+    #[must_use]
     pub fn new_with_limits(model: String, max_messages: usize, max_content_bytes: usize) -> Self {
         Self {
             id: SessionId::new(),
@@ -177,6 +182,7 @@ impl Session {
     }
 
     /// Create a session with a specific ID
+    #[must_use]
     pub fn with_id(id: SessionId, model: String) -> Self {
         Self {
             id,
@@ -263,32 +269,38 @@ impl Session {
     }
 
     /// Get the current streaming message ID
+    #[must_use]
     pub fn streaming_message_id(&self) -> Option<&MessageId> {
         self.current_streaming_id.as_ref()
     }
 
     /// Check if currently streaming
+    #[must_use]
     pub fn is_streaming(&self) -> bool {
         self.current_streaming_id.is_some()
     }
 
     /// Get message by ID
+    #[must_use]
     pub fn get_message(&self, id: &MessageId) -> Option<&ConversationMessage> {
         self.messages.iter().find(|m| &m.id == id)
     }
 
     /// Get the last N messages for context
+    #[must_use]
     pub fn recent_messages(&self, count: usize) -> &[ConversationMessage] {
         let start = self.messages.len().saturating_sub(count);
         &self.messages[start..]
     }
 
     /// Get all messages
+    #[must_use]
     pub fn all_messages(&self) -> &[ConversationMessage] {
         &self.messages
     }
 
     /// Build context for LLM (message history as formatted text)
+    #[must_use]
     pub fn build_context(&self, max_messages: usize) -> String {
         let recent = self.recent_messages(max_messages);
         let mut context = String::new();
@@ -368,7 +380,8 @@ impl Session {
             }
 
             if removed < count {
-                self.current_content_bytes = self.current_content_bytes.saturating_sub(msg.content.len());
+                self.current_content_bytes =
+                    self.current_content_bytes.saturating_sub(msg.content.len());
                 removed += 1;
                 false
             } else {
@@ -389,13 +402,16 @@ impl Session {
 
         while self.current_content_bytes > self.max_content_bytes && !self.messages.is_empty() {
             // Find the oldest message that's not streaming
-            let oldest_idx = self.messages.iter().position(|msg| {
-                Some(&msg.id) != streaming_id.as_ref()
-            });
+            let oldest_idx = self
+                .messages
+                .iter()
+                .position(|msg| Some(&msg.id) != streaming_id.as_ref());
 
             if let Some(idx) = oldest_idx {
                 let removed = self.messages.remove(idx);
-                self.current_content_bytes = self.current_content_bytes.saturating_sub(removed.content.len());
+                self.current_content_bytes = self
+                    .current_content_bytes
+                    .saturating_sub(removed.content.len());
             } else {
                 // Only the streaming message remains, can't prune further
                 break;
@@ -415,16 +431,19 @@ impl Session {
     }
 
     /// Get current content size in bytes
+    #[must_use]
     pub fn content_bytes(&self) -> usize {
         self.current_content_bytes
     }
 
     /// Get current message count
+    #[must_use]
     pub fn message_count(&self) -> usize {
         self.messages.len()
     }
 
     /// Get configured limits
+    #[must_use]
     pub fn limits(&self) -> (usize, usize) {
         (self.max_messages, self.max_content_bytes)
     }
@@ -531,7 +550,11 @@ mod tests {
         assert_eq!(session.message_count(), 3);
 
         // Oldest messages should be removed
-        let messages: Vec<_> = session.all_messages().iter().map(|m| m.content.as_str()).collect();
+        let messages: Vec<_> = session
+            .all_messages()
+            .iter()
+            .map(|m| m.content.as_str())
+            .collect();
         assert!(!messages.contains(&"Message 1"));
         assert!(!messages.contains(&"Message 2"));
         assert!(messages.contains(&"Message 3"));

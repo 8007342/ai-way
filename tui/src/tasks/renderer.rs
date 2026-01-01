@@ -6,7 +6,7 @@ use ratatui::buffer::Buffer;
 use ratatui::layout::Rect;
 use ratatui::style::{Color, Style};
 
-use super::state::{TaskState, TaskStatus, BackgroundTask};
+use super::state::{BackgroundTask, TaskState, TaskStatus};
 
 /// Task panel widget
 pub struct TaskPanel {
@@ -88,10 +88,7 @@ impl TaskPanel {
         let border_style = Style::default().fg(Color::DarkGray);
 
         // Top border
-        let top = format!(
-            "╭{}╮",
-            "─".repeat(area.width.saturating_sub(2) as usize)
-        );
+        let top = format!("╭{}╮", "─".repeat(area.width.saturating_sub(2) as usize));
         buf.set_string(area.x, area.y, &top, border_style);
 
         // Side borders
@@ -101,11 +98,13 @@ impl TaskPanel {
         }
 
         // Bottom border
-        let bottom = format!(
-            "╰{}╯",
-            "─".repeat(area.width.saturating_sub(2) as usize)
+        let bottom = format!("╰{}╯", "─".repeat(area.width.saturating_sub(2) as usize));
+        buf.set_string(
+            area.x,
+            area.y + area.height.saturating_sub(1),
+            &bottom,
+            border_style,
         );
-        buf.set_string(area.x, area.y + area.height.saturating_sub(1), &bottom, border_style);
     }
 
     /// Draw a single task
@@ -113,24 +112,30 @@ impl TaskPanel {
         let inner_width = width.saturating_sub(2) as usize;
 
         // Line 1: Status icon + family name
-        let name_line = format!(
-            "{} {}",
-            task.status.icon(),
-            task.display_name()
-        );
+        let name_line = format!("{} {}", task.status.icon(), task.display_name());
         let name_style = match task.status {
             TaskStatus::Running => Style::default().fg(Color::Cyan),
             TaskStatus::Done => Style::default().fg(Color::Green),
             TaskStatus::Failed => Style::default().fg(Color::Red),
             _ => Style::default().fg(Color::Yellow),
         };
-        buf.set_string(x, y, &name_line.chars().take(inner_width).collect::<String>(), name_style);
+        buf.set_string(
+            x,
+            y,
+            &name_line.chars().take(inner_width).collect::<String>(),
+            name_style,
+        );
 
         // Line 2: Progress bar
         let bar_width = inner_width.saturating_sub(6);
         let progress_bar = task.progress_bar(bar_width);
         let progress_str = format!("{} {:>3}%", progress_bar, task.progress);
-        buf.set_string(x, y + 1, &progress_str, Style::default().fg(Color::DarkGray));
+        buf.set_string(
+            x,
+            y + 1,
+            &progress_str,
+            Style::default().fg(Color::DarkGray),
+        );
 
         // Line 3: Description (truncated)
         let desc: String = task.description.chars().take(inner_width).collect();

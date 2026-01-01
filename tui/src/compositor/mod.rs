@@ -170,8 +170,7 @@ impl Compositor {
     /// Update render order based on z-indices
     fn update_render_order(&mut self) {
         self.render_order = self.layers.keys().copied().collect();
-        self.render_order.sort_by_key(|id| {
-            self.layers.get(id).map(|l| l.z_index).unwrap_or(0)
-        });
+        self.render_order
+            .sort_by_key(|id| self.layers.get(id).map(|l| l.z_index).unwrap_or(0));
     }
 }

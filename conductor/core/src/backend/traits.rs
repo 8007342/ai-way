@@ -1,12 +1,12 @@
 //! LLM Backend Traits
 //!
 //! Trait definitions for LLM backends. This abstraction allows the Conductor
-//! to work with different LLM providers (Ollama, OpenAI, Anthropic, etc.)
+//! to work with different LLM providers (Ollama, `OpenAI`, Anthropic, etc.)
 //! without changing core logic.
 //!
 //! # Design Philosophy
 //!
-//! The LlmBackend trait provides a common interface for:
+//! The `LlmBackend` trait provides a common interface for:
 //! - Sending prompts and receiving responses (streaming or batch)
 //! - Health checking the backend
 //! - Querying available models
@@ -74,12 +74,14 @@ impl LlmRequest {
     }
 
     /// Set streaming mode
+    #[must_use]
     pub fn with_stream(mut self, stream: bool) -> Self {
         self.stream = stream;
         self
     }
 
     /// Set temperature
+    #[must_use]
     pub fn with_temperature(mut self, temperature: f32) -> Self {
         self.temperature = temperature.clamp(0.0, 1.0);
         self
@@ -98,6 +100,7 @@ impl LlmRequest {
     }
 
     /// Set max tokens
+    #[must_use]
     pub fn with_max_tokens(mut self, max_tokens: u32) -> Self {
         self.max_tokens = max_tokens;
         self
@@ -137,7 +140,7 @@ pub struct ModelInfo {
 /// Implement this trait to add support for different LLM providers.
 #[async_trait]
 pub trait LlmBackend: Send + Sync {
-    /// Get the backend name (e.g., "Ollama", "OpenAI")
+    /// Get the backend name (e.g., "Ollama", "`OpenAI`")
     fn name(&self) -> &str;
 
     /// Check if the backend is healthy and reachable
@@ -223,6 +226,7 @@ impl BackendConfig {
     }
 
     /// Create Ollama configuration from environment
+    #[must_use]
     pub fn ollama_from_env() -> Self {
         let host = std::env::var("OLLAMA_HOST")
             .or_else(|_| std::env::var("YOLLAYAH_OLLAMA_HOST"))

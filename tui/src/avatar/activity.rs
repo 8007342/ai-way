@@ -200,14 +200,14 @@ fn build_overlay_frame(
 /// Create thinking overlay - thought bubble with animated dots
 pub fn thinking_overlay(size: OverlaySize) -> ActivityOverlay {
     let palette = vec![
-        ('O', '(', THOUGHT_BUBBLE),   // Bubble left
-        ('C', ')', THOUGHT_BUBBLE),   // Bubble right
-        ('_', '_', THOUGHT_BUBBLE),   // Bubble bottom
-        ('^', '^', THOUGHT_BUBBLE),   // Bubble top
-        ('.', '.', THOUGHT_DOT),      // Small dot
-        ('o', 'o', THOUGHT_DOT),      // Medium dot
-        ('*', '*', SPARKLE),          // Sparkle
-        ('?', '?', GEAR_COLOR),       // Question mark
+        ('O', '(', THOUGHT_BUBBLE), // Bubble left
+        ('C', ')', THOUGHT_BUBBLE), // Bubble right
+        ('_', '_', THOUGHT_BUBBLE), // Bubble bottom
+        ('^', '^', THOUGHT_BUBBLE), // Bubble top
+        ('.', '.', THOUGHT_DOT),    // Small dot
+        ('o', 'o', THOUGHT_DOT),    // Medium dot
+        ('*', '*', SPARKLE),        // Sparkle
+        ('?', '?', GEAR_COLOR),     // Question mark
     ];
 
     match size {
@@ -236,24 +236,12 @@ pub fn thinking_overlay(size: OverlaySize) -> ActivityOverlay {
         OverlaySize::Medium => ActivityOverlay {
             frames: vec![
                 build_overlay_frame(
-                    &[
-                        " .o. ",
-                        ".   .",
-                        "o ? o",
-                        ".   .",
-                        " .o. ",
-                    ],
+                    &[" .o. ", ".   .", "o ? o", ".   .", " .o. "],
                     &palette,
                     400,
                 ),
                 build_overlay_frame(
-                    &[
-                        " o.o ",
-                        "o   o",
-                        ". ? .",
-                        "o   o",
-                        " o.o ",
-                    ],
+                    &[" o.o ", "o   o", ". ? .", "o   o", " o.o "],
                     &palette,
                     400,
                 ),
@@ -310,11 +298,11 @@ pub fn thinking_overlay(size: OverlaySize) -> ActivityOverlay {
 /// Create construction overlay - hard hat and tools
 pub fn construction_overlay(size: OverlaySize) -> ActivityOverlay {
     let palette = vec![
-        ('H', '=', Color::Yellow),    // Hard hat
-        ('h', '█', Color::Yellow),    // Hard hat body
-        ('T', '/', TOOL_COLOR),       // Tool
-        ('t', '\\', TOOL_COLOR),      // Tool
-        ('.', '.', SPARKLE),          // Spark
+        ('H', '=', Color::Yellow), // Hard hat
+        ('h', '█', Color::Yellow), // Hard hat body
+        ('T', '/', TOOL_COLOR),    // Tool
+        ('t', '\\', TOOL_COLOR),   // Tool
+        ('.', '.', SPARKLE),       // Spark
     ];
 
     match size {
@@ -330,24 +318,8 @@ pub fn construction_overlay(size: OverlaySize) -> ActivityOverlay {
         },
         OverlaySize::Medium | OverlaySize::Large => ActivityOverlay {
             frames: vec![
-                build_overlay_frame(
-                    &[
-                        " HHH ",
-                        " hhh ",
-                        "T   t",
-                    ],
-                    &palette,
-                    400,
-                ),
-                build_overlay_frame(
-                    &[
-                        " HHH.",
-                        " hhh ",
-                        "T . t",
-                    ],
-                    &palette,
-                    200,
-                ),
+                build_overlay_frame(&[" HHH ", " hhh ", "T   t"], &palette, 400),
+                build_overlay_frame(&[" HHH.", " hhh ", "T . t"], &palette, 200),
             ],
             current_frame: 0,
             frame_time: Duration::ZERO,
@@ -360,11 +332,11 @@ pub fn construction_overlay(size: OverlaySize) -> ActivityOverlay {
 /// Create study overlay - glasses and book
 pub fn study_overlay(size: OverlaySize) -> ActivityOverlay {
     let palette = vec![
-        ('G', 'o', Color::Rgb(100, 100, 100)),  // Glasses
-        ('-', '-', Color::Rgb(100, 100, 100)),  // Glasses bridge
-        ('B', '█', BOOK_COLOR),                  // Book
-        ('b', '▀', BOOK_COLOR),                  // Book top
-        ('*', '*', SPARKLE),                     // Sparkle
+        ('G', 'o', Color::Rgb(100, 100, 100)), // Glasses
+        ('-', '-', Color::Rgb(100, 100, 100)), // Glasses bridge
+        ('B', '█', BOOK_COLOR),                // Book
+        ('b', '▀', BOOK_COLOR),                // Book top
+        ('*', '*', SPARKLE),                   // Sparkle
     ];
 
     match size {
@@ -380,24 +352,8 @@ pub fn study_overlay(size: OverlaySize) -> ActivityOverlay {
         },
         OverlaySize::Medium | OverlaySize::Large => ActivityOverlay {
             frames: vec![
-                build_overlay_frame(
-                    &[
-                        "G-G  ",
-                        "     ",
-                        " bBb ",
-                    ],
-                    &palette,
-                    600,
-                ),
-                build_overlay_frame(
-                    &[
-                        "G-G *",
-                        "     ",
-                        " bBb ",
-                    ],
-                    &palette,
-                    300,
-                ),
+                build_overlay_frame(&["G-G  ", "     ", " bBb "], &palette, 600),
+                build_overlay_frame(&["G-G *", "     ", " bBb "], &palette, 300),
             ],
             current_frame: 0,
             frame_time: Duration::ZERO,
@@ -410,9 +366,9 @@ pub fn study_overlay(size: OverlaySize) -> ActivityOverlay {
 /// Create engineering overlay - gears turning
 pub fn engineering_overlay(size: OverlaySize) -> ActivityOverlay {
     let palette = vec![
-        ('*', '*', GEAR_COLOR),       // Gear tooth
-        ('o', 'o', GEAR_COLOR),       // Gear center
-        ('.', '.', SPARKLE),          // Spark
+        ('*', '*', GEAR_COLOR), // Gear tooth
+        ('o', 'o', GEAR_COLOR), // Gear center
+        ('.', '.', SPARKLE),    // Spark
     ];
 
     match size {
@@ -428,24 +384,8 @@ pub fn engineering_overlay(size: OverlaySize) -> ActivityOverlay {
         },
         OverlaySize::Medium | OverlaySize::Large => ActivityOverlay {
             frames: vec![
-                build_overlay_frame(
-                    &[
-                        " *o* ",
-                        "*o o*",
-                        " *o* ",
-                    ],
-                    &palette,
-                    200,
-                ),
-                build_overlay_frame(
-                    &[
-                        "*o*o*",
-                        "o . o",
-                        "*o*o*",
-                    ],
-                    &palette,
-                    200,
-                ),
+                build_overlay_frame(&[" *o* ", "*o o*", " *o* "], &palette, 200),
+                build_overlay_frame(&["*o*o*", "o . o", "*o*o*"], &palette, 200),
             ],
             current_frame: 0,
             frame_time: Duration::ZERO,
@@ -458,10 +398,10 @@ pub fn engineering_overlay(size: OverlaySize) -> ActivityOverlay {
 /// Create cooking overlay - chef hat and steam
 pub fn cooking_overlay(size: OverlaySize) -> ActivityOverlay {
     let palette = vec![
-        ('C', '█', Color::White),     // Chef hat
-        ('c', '▀', Color::White),     // Chef hat top
-        ('~', '~', Color::Rgb(200, 200, 200)),  // Steam
-        ('s', '°', Color::Rgb(180, 180, 180)),  // Steam particle
+        ('C', '█', Color::White),              // Chef hat
+        ('c', '▀', Color::White),              // Chef hat top
+        ('~', '~', Color::Rgb(200, 200, 200)), // Steam
+        ('s', '°', Color::Rgb(180, 180, 180)), // Steam particle
     ];
 
     match size {
@@ -477,24 +417,8 @@ pub fn cooking_overlay(size: OverlaySize) -> ActivityOverlay {
         },
         OverlaySize::Medium | OverlaySize::Large => ActivityOverlay {
             frames: vec![
-                build_overlay_frame(
-                    &[
-                        " s ~ s ",
-                        "  ccc  ",
-                        "  CCC  ",
-                    ],
-                    &palette,
-                    300,
-                ),
-                build_overlay_frame(
-                    &[
-                        " ~ s ~ ",
-                        "  ccc  ",
-                        "  CCC  ",
-                    ],
-                    &palette,
-                    300,
-                ),
+                build_overlay_frame(&[" s ~ s ", "  ccc  ", "  CCC  "], &palette, 300),
+                build_overlay_frame(&[" ~ s ~ ", "  ccc  ", "  CCC  "], &palette, 300),
             ],
             current_frame: 0,
             frame_time: Duration::ZERO,
@@ -507,10 +431,10 @@ pub fn cooking_overlay(size: OverlaySize) -> ActivityOverlay {
 /// Create security overlay - shield
 pub fn security_overlay(size: OverlaySize) -> ActivityOverlay {
     let palette = vec![
-        ('S', '█', SHIELD_COLOR),     // Shield body
-        ('s', '▀', SHIELD_COLOR),     // Shield top
-        ('v', 'v', SHIELD_COLOR),     // Shield bottom
-        ('*', '*', SPARKLE),          // Sparkle
+        ('S', '█', SHIELD_COLOR), // Shield body
+        ('s', '▀', SHIELD_COLOR), // Shield top
+        ('v', 'v', SHIELD_COLOR), // Shield bottom
+        ('*', '*', SPARKLE),      // Sparkle
     ];
 
     match size {
@@ -526,24 +450,8 @@ pub fn security_overlay(size: OverlaySize) -> ActivityOverlay {
         },
         OverlaySize::Medium | OverlaySize::Large => ActivityOverlay {
             frames: vec![
-                build_overlay_frame(
-                    &[
-                        " sSs ",
-                        " SSS ",
-                        "  v  ",
-                    ],
-                    &palette,
-                    400,
-                ),
-                build_overlay_frame(
-                    &[
-                        "*sSs*",
-                        " SSS ",
-                        "  v  ",
-                    ],
-                    &palette,
-                    200,
-                ),
+                build_overlay_frame(&[" sSs ", " SSS ", "  v  "], &palette, 400),
+                build_overlay_frame(&["*sSs*", " SSS ", "  v  "], &palette, 200),
             ],
             current_frame: 0,
             frame_time: Duration::ZERO,
@@ -556,10 +464,10 @@ pub fn security_overlay(size: OverlaySize) -> ActivityOverlay {
 /// Create gardening overlay - leaf and water drops
 pub fn gardening_overlay(size: OverlaySize) -> ActivityOverlay {
     let palette = vec![
-        ('L', '♣', LEAF_COLOR),       // Leaf
-        ('l', '~', LEAF_COLOR),       // Leaf small
-        ('.', '.', Color::Cyan),      // Water drop
-        ('o', 'o', Color::Cyan),      // Water drop large
+        ('L', '♣', LEAF_COLOR),  // Leaf
+        ('l', '~', LEAF_COLOR),  // Leaf small
+        ('.', '.', Color::Cyan), // Water drop
+        ('o', 'o', Color::Cyan), // Water drop large
     ];
 
     match size {
@@ -575,24 +483,8 @@ pub fn gardening_overlay(size: OverlaySize) -> ActivityOverlay {
         },
         OverlaySize::Medium | OverlaySize::Large => ActivityOverlay {
             frames: vec![
-                build_overlay_frame(
-                    &[
-                        " L.L ",
-                        ".   .",
-                        " l l ",
-                    ],
-                    &palette,
-                    350,
-                ),
-                build_overlay_frame(
-                    &[
-                        ".L L.",
-                        " . . ",
-                        "l   l",
-                    ],
-                    &palette,
-                    350,
-                ),
+                build_overlay_frame(&[" L.L ", ".   .", " l l "], &palette, 350),
+                build_overlay_frame(&[".L L.", " . . ", "l   l"], &palette, 350),
             ],
             current_frame: 0,
             frame_time: Duration::ZERO,

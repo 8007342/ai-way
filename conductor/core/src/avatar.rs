@@ -1,7 +1,7 @@
 //! Avatar State and Command Parsing
 //!
 //! This module contains the avatar STATE and command parsing logic.
-//! RENDERING is handled by the UI surface (TUI, WebUI, etc.).
+//! RENDERING is handled by the UI surface (TUI, `WebUI`, etc.).
 //!
 //! # Design Philosophy
 //!
@@ -12,7 +12,7 @@
 //!
 //! This separation means:
 //! - A TUI can render blocky ASCII art sprites
-//! - A WebUI can render SVG or Canvas animations
+//! - A `WebUI` can render SVG or Canvas animations
 //! - A mobile app can render 3D animated meshes
 //! - All from the same avatar state!
 
@@ -21,7 +21,7 @@ use std::collections::VecDeque;
 use serde::{Deserialize, Serialize};
 
 /// Avatar positions
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize, Default)]
 pub enum AvatarPosition {
     /// Top-left corner
     TopLeft,
@@ -30,6 +30,7 @@ pub enum AvatarPosition {
     /// Bottom-left corner
     BottomLeft,
     /// Bottom-right corner
+    #[default]
     BottomRight,
     /// Center of screen
     Center,
@@ -44,16 +45,11 @@ pub enum AvatarPosition {
     },
 }
 
-impl Default for AvatarPosition {
-    fn default() -> Self {
-        Self::BottomRight
-    }
-}
-
 /// Avatar emotional moods
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize, Default)]
 pub enum AvatarMood {
     /// Default happy state
+    #[default]
     Happy,
     /// Deep in thought
     Thinking,
@@ -71,14 +67,9 @@ pub enum AvatarMood {
     Curious,
 }
 
-impl Default for AvatarMood {
-    fn default() -> Self {
-        Self::Happy
-    }
-}
-
 impl AvatarMood {
     /// Suggested animation name for this mood
+    #[must_use]
     pub fn suggested_animation(&self) -> &'static str {
         match self {
             Self::Happy | Self::Excited => "happy",
@@ -92,22 +83,17 @@ impl AvatarMood {
 }
 
 /// Avatar sizes
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize, Default)]
 pub enum AvatarSize {
     /// Tiny (unobtrusive)
     Tiny,
     /// Small
     Small,
     /// Normal size
+    #[default]
     Medium,
     /// Large (attention-grabbing)
     Large,
-}
-
-impl Default for AvatarSize {
-    fn default() -> Self {
-        Self::Medium
-    }
 }
 
 /// Gesture animations (short, one-time)
@@ -139,6 +125,7 @@ pub enum AvatarGesture {
 
 impl AvatarGesture {
     /// Default duration in milliseconds for this gesture
+    #[must_use]
     pub fn default_duration_ms(&self) -> u32 {
         match self {
             Self::Wave => 1500,
@@ -156,6 +143,7 @@ impl AvatarGesture {
     }
 
     /// Suggested animation name for this gesture
+    #[must_use]
     pub fn suggested_animation(&self) -> &'static str {
         match self {
             Self::Wave | Self::Bounce | Self::Dance => "happy",
@@ -168,22 +156,17 @@ impl AvatarGesture {
 }
 
 /// Direction for peek gesture
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize, Default)]
 pub enum PeekDirection {
     /// Peek from left
     Left,
     /// Peek from right
+    #[default]
     Right,
     /// Peek from top
     Top,
     /// Peek from bottom
     Bottom,
-}
-
-impl Default for PeekDirection {
-    fn default() -> Self {
-        Self::Right
-    }
 }
 
 /// Reaction animations (contextual, expressive)
@@ -217,6 +200,7 @@ pub enum AvatarReaction {
 
 impl AvatarReaction {
     /// Default duration in milliseconds for this reaction
+    #[must_use]
     pub fn default_duration_ms(&self) -> u32 {
         match self {
             Self::Laugh => 2000,
@@ -235,6 +219,7 @@ impl AvatarReaction {
     }
 
     /// Suggested animation name for this reaction
+    #[must_use]
     pub fn suggested_animation(&self) -> &'static str {
         match self {
             Self::Laugh | Self::Tada | Self::Love => "happy",
@@ -346,6 +331,7 @@ pub struct CommandParser {
 
 impl CommandParser {
     /// Create a new command parser
+    #[must_use]
     pub fn new() -> Self {
         Self {
             commands: VecDeque::new(),
@@ -397,7 +383,7 @@ impl CommandParser {
 
     /// Parse a single command (without the [yolla: prefix])
     fn parse_command(&self, cmd: &str) -> Option<AvatarCommand> {
-        let parts: Vec<&str> = cmd.trim().split_whitespace().collect();
+        let parts: Vec<&str> = cmd.split_whitespace().collect();
         if parts.is_empty() {
             return None;
         }
@@ -439,9 +425,7 @@ impl CommandParser {
             "wink" => Some(AvatarCommand::React(AvatarReaction::Wink)),
 
             // Custom sprites (future)
-            "sprite" if parts.len() > 1 => {
-                Some(AvatarCommand::CustomSprite(parts[1..].join(" ")))
-            }
+            "sprite" if parts.len() > 1 => Some(AvatarCommand::CustomSprite(parts[1..].join(" "))),
 
             // Task management
             "task" => self.parse_task(&parts[1..]),
@@ -457,9 +441,7 @@ impl CommandParser {
 
         // Named position
         match args[0] {
-            "tl" | "topleft" | "top-left" => {
-                Some(AvatarCommand::MoveTo(AvatarPosition::TopLeft))
-            }
+            "tl" | "topleft" | "top-left" => Some(AvatarCommand::MoveTo(AvatarPosition::TopLeft)),
             "tr" | "topright" | "top-right" => {
                 Some(AvatarCommand::MoveTo(AvatarPosition::TopRight))
             }
@@ -639,6 +621,7 @@ impl CommandParser {
     }
 
     /// Check if there are pending commands
+    #[must_use]
     pub fn has_commands(&self) -> bool {
         !self.commands.is_empty()
     }
@@ -697,6 +680,7 @@ impl Default for AvatarState {
 
 impl AvatarState {
     /// Create a new avatar state with defaults
+    #[must_use]
     pub fn new() -> Self {
         Self::default()
     }
@@ -708,7 +692,10 @@ impl AvatarState {
                 self.target_position = *pos;
                 self.wandering = false;
             }
-            AvatarCommand::PointAt { x_percent, y_percent } => {
+            AvatarCommand::PointAt {
+                x_percent,
+                y_percent,
+            } => {
                 self.target_position = AvatarPosition::Percent {
                     x: *x_percent,
                     y: *y_percent,
@@ -755,6 +742,7 @@ impl AvatarState {
     }
 
     /// Get the suggested animation name for current state
+    #[must_use]
     pub fn suggested_animation(&self) -> &'static str {
         if let Some(gesture) = &self.current_gesture {
             return gesture.suggested_animation();
@@ -811,7 +799,10 @@ mod tests {
         assert_eq!(result, "");
         assert_eq!(
             parser.next_command(),
-            Some(AvatarCommand::MoveTo(AvatarPosition::Percent { x: 50, y: 75 }))
+            Some(AvatarCommand::MoveTo(AvatarPosition::Percent {
+                x: 50,
+                y: 75
+            }))
         );
     }
 

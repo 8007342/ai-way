@@ -116,12 +116,22 @@ impl App {
         // Create layers with z-ordering
         let input_and_status_height = INPUT_HEIGHT + 1;
         let conversation = compositor.create_layer(
-            Rect::new(0, 0, area.width, area.height.saturating_sub(input_and_status_height)),
+            Rect::new(
+                0,
+                0,
+                area.width,
+                area.height.saturating_sub(input_and_status_height),
+            ),
             0,
         );
 
         let input = compositor.create_layer(
-            Rect::new(0, area.height.saturating_sub(input_and_status_height), area.width, INPUT_HEIGHT),
+            Rect::new(
+                0,
+                area.height.saturating_sub(input_and_status_height),
+                area.width,
+                INPUT_HEIGHT,
+            ),
             10,
         );
 
@@ -294,12 +304,18 @@ impl App {
                 let page_size = self.size.1.saturating_sub(INPUT_HEIGHT + 1) / 2;
                 let max_scroll = self.total_lines.saturating_sub(1);
                 self.scroll_offset = (self.scroll_offset + page_size as usize).min(max_scroll);
-                let _ = self.conductor.user_scrolled(ScrollDirection::Up, page_size as u32).await;
+                let _ = self
+                    .conductor
+                    .user_scrolled(ScrollDirection::Up, page_size as u32)
+                    .await;
             }
             KeyCode::PageDown => {
                 let page_size = self.size.1.saturating_sub(INPUT_HEIGHT + 1) / 2;
                 self.scroll_offset = self.scroll_offset.saturating_sub(page_size as usize);
-                let _ = self.conductor.user_scrolled(ScrollDirection::Down, page_size as u32).await;
+                let _ = self
+                    .conductor
+                    .user_scrolled(ScrollDirection::Down, page_size as u32)
+                    .await;
             }
             KeyCode::Home if key.modifiers.contains(KeyModifiers::CONTROL) => {
                 self.scroll_offset = self.total_lines.saturating_sub(1);
@@ -307,7 +323,10 @@ impl App {
             }
             KeyCode::End if key.modifiers.contains(KeyModifiers::CONTROL) => {
                 self.scroll_offset = 0;
-                let _ = self.conductor.user_scrolled(ScrollDirection::Bottom, 0).await;
+                let _ = self
+                    .conductor
+                    .user_scrolled(ScrollDirection::Bottom, 0)
+                    .await;
             }
 
             // Toggle dev mode
@@ -359,19 +378,18 @@ impl App {
             0,
             height.saturating_sub(input_and_status_height),
         );
-        self.compositor.resize_layer(self.layers.input, width, INPUT_HEIGHT);
+        self.compositor
+            .resize_layer(self.layers.input, width, INPUT_HEIGHT);
 
         // Status layer
-        self.compositor.move_layer(self.layers.status, 0, height.saturating_sub(1));
+        self.compositor
+            .move_layer(self.layers.status, 0, height.saturating_sub(1));
         self.compositor.resize_layer(self.layers.status, width, 1);
 
         // Task panel
         let task_panel_width = 32u16;
-        self.compositor.move_layer(
-            self.layers.tasks,
-            width.saturating_sub(task_panel_width),
-            0,
-        );
+        self.compositor
+            .move_layer(self.layers.tasks, width.saturating_sub(task_panel_width), 0);
         self.compositor.resize_layer(
             self.layers.tasks,
             task_panel_width,
@@ -386,10 +404,7 @@ impl App {
             self.avatar_target.0.min(max_x),
             self.avatar_target.1.min(max_y),
         );
-        self.avatar_pos = (
-            self.avatar_pos.0.min(max_x),
-            self.avatar_pos.1.min(max_y),
-        );
+        self.avatar_pos = (self.avatar_pos.0.min(max_x), self.avatar_pos.1.min(max_y));
 
         let _ = self.conductor.resized(width as u32, height as u32).await;
     }
@@ -428,8 +443,10 @@ impl App {
         self.move_towards_target();
 
         // Update layer visibility
-        self.compositor.set_visible(self.layers.avatar, self.display.avatar.visible);
-        self.compositor.move_layer(self.layers.avatar, self.avatar_pos.0, self.avatar_pos.1);
+        self.compositor
+            .set_visible(self.layers.avatar, self.display.avatar.visible);
+        self.compositor
+            .move_layer(self.layers.avatar, self.avatar_pos.0, self.avatar_pos.1);
 
         // Update task panel visibility
         let show_tasks = self.display.has_active_tasks();
@@ -472,7 +489,10 @@ impl App {
         let (bounds_w, bounds_h) = self.avatar.bounds();
         let input_and_status_height = INPUT_HEIGHT + 1;
         let max_x = self.size.0.saturating_sub(bounds_w + 2);
-        let max_y = self.size.1.saturating_sub(bounds_h + input_and_status_height + 2);
+        let max_y = self
+            .size
+            .1
+            .saturating_sub(bounds_h + input_and_status_height + 2);
 
         let (x, y) = match pos {
             conductor_core::AvatarPosition::TopLeft => (2, 1),
@@ -495,7 +515,10 @@ impl App {
         let (bounds_w, bounds_h) = self.avatar.bounds();
         let input_and_status_height = INPUT_HEIGHT + 1;
         let max_x = self.size.0.saturating_sub(bounds_w + 2);
-        let max_y = self.size.1.saturating_sub(bounds_h + input_and_status_height + 2);
+        let max_y = self
+            .size
+            .1
+            .saturating_sub(bounds_h + input_and_status_height + 2);
 
         let corner_bias = rand::random::<f32>();
 
@@ -623,11 +646,7 @@ impl App {
             buf.reset();
             let area = buf.area;
 
-            let visible_lines: Vec<_> = all_lines
-                .iter()
-                .skip(visible_start)
-                .take(height)
-                .collect();
+            let visible_lines: Vec<_> = all_lines.iter().skip(visible_start).take(height).collect();
 
             for (i, (line, style)) in visible_lines.iter().enumerate() {
                 let y = i as u16;
@@ -636,11 +655,19 @@ impl App {
                 }
 
                 let final_style = if has_content_above && i < 2 {
-                    let shade = if i == 0 { Color::Rgb(80, 80, 80) } else { Color::Rgb(120, 120, 120) };
+                    let shade = if i == 0 {
+                        Color::Rgb(80, 80, 80)
+                    } else {
+                        Color::Rgb(120, 120, 120)
+                    };
                     Style::default().fg(shade)
                 } else if has_content_below && i >= height.saturating_sub(2) {
                     let dist_from_bottom = height.saturating_sub(1).saturating_sub(i);
-                    let shade = if dist_from_bottom == 0 { Color::Rgb(80, 80, 80) } else { Color::Rgb(120, 120, 120) };
+                    let shade = if dist_from_bottom == 0 {
+                        Color::Rgb(80, 80, 80)
+                    } else {
+                        Color::Rgb(120, 120, 120)
+                    };
                     Style::default().fg(shade)
                 } else {
                     *style
@@ -659,7 +686,12 @@ impl App {
             let area = buf.area;
 
             let separator = "-".repeat(area.width as usize);
-            buf.set_string(area.x, area.y, &separator, Style::default().fg(Color::DarkGray));
+            buf.set_string(
+                area.x,
+                area.y,
+                &separator,
+                Style::default().fg(Color::DarkGray),
+            );
 
             let text_height = area.height.saturating_sub(1) as usize;
             let text_width = area.width.saturating_sub(1) as usize;
@@ -675,7 +707,10 @@ impl App {
                 .collect();
 
             let visible_lines: Vec<&String> = if wrapped_lines.len() > text_height {
-                wrapped_lines.iter().skip(wrapped_lines.len() - text_height).collect()
+                wrapped_lines
+                    .iter()
+                    .skip(wrapped_lines.len() - text_height)
+                    .collect()
             } else {
                 wrapped_lines.iter().collect()
             };
@@ -733,7 +768,10 @@ impl App {
     /// Render task panel layer
     fn render_tasks(&mut self) {
         let has_tasks = self.display.has_active_tasks();
-        let tasks: Vec<_> = self.display.tasks.iter()
+        let tasks: Vec<_> = self
+            .display
+            .tasks
+            .iter()
             .filter(|t| t.status.is_active())
             .cloned()
             .collect();
@@ -748,7 +786,10 @@ impl App {
     }
 
     /// Render tasks from display state to a buffer
-    fn render_display_tasks_to_buffer(buf: &mut ratatui::buffer::Buffer, tasks: &[crate::display::DisplayTask]) {
+    fn render_display_tasks_to_buffer(
+        buf: &mut ratatui::buffer::Buffer,
+        tasks: &[crate::display::DisplayTask],
+    ) {
         let area = buf.area;
         if area.width < 10 || area.height < 3 {
             return;
@@ -769,7 +810,11 @@ impl App {
             }
 
             // Task name
-            let name: String = task.display_name().chars().take(area.width as usize - 2).collect();
+            let name: String = task
+                .display_name()
+                .chars()
+                .take(area.width as usize - 2)
+                .collect();
             buf.set_string(area.x + 1, y, &name, Style::default().fg(YOLLAYAH_MAGENTA));
             y += 1;
 
@@ -777,7 +822,12 @@ impl App {
             let bar_width = (area.width as usize).saturating_sub(4).min(20);
             let progress_bar = task.progress_bar(bar_width);
             let progress_str = format!("[{}] {}%", progress_bar, task.progress);
-            buf.set_string(area.x + 2, y, &progress_str, Style::default().fg(Color::DarkGray));
+            buf.set_string(
+                area.x + 2,
+                y,
+                &progress_str,
+                Style::default().fg(Color::DarkGray),
+            );
             y += 2;
         }
     }
