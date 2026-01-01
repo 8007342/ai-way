@@ -97,6 +97,8 @@ impl ConductorClient {
     pub fn with_config(config: TransportConfig) -> Self {
         match &config.transport {
             TransportType::InProcess => {
+                info!("Starting in embedded mode (Conductor in-process)");
+
                 // Create channel for Conductor -> TUI messages
                 let (tx, rx) = mpsc::channel(100);
 
@@ -122,6 +124,8 @@ impl ConductorClient {
                 let socket_path = path
                     .clone()
                     .unwrap_or_else(conductor_core::transport::unix_socket::default_socket_path);
+
+                info!(socket = %socket_path.display(), "Starting in Unix socket mode (remote Conductor)");
 
                 let transport = UnixSocketClient::new(socket_path);
 
