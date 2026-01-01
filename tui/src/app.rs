@@ -206,11 +206,18 @@ impl App {
         // Target ~10 FPS for terminal-style animations
         let frame_duration = Duration::from_millis(100);
 
-        // Start the Conductor
+        // Render initial frame immediately so user sees UI during warmup
+        self.render(terminal)?;
+
+        // Start the Conductor (includes warmup which may take time)
         self.conductor.start().await?;
 
         // Connect this surface
         self.conductor.connect().await?;
+
+        // Render again to show Ready state
+        self.process_conductor_messages();
+        self.render(terminal)?;
 
         while self.running {
             let frame_start = Instant::now();
