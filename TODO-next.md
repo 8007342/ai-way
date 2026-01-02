@@ -1,8 +1,17 @@
 # TODO-next: Sprint Priorities
 
 **Generated**: 2026-01-02
-**Updated**: 2026-01-02 (Sprint 5 complete)
+**Updated**: 2026-01-02 (Epic planning session complete)
 **Triage Team**: Architect, Hacker, UX Specialist, QA
+
+---
+
+## Active Epics (2026-Q1)
+
+| Epic | File | Status | Target Sprint |
+|------|------|--------|---------------|
+| **Avatar Animation Evolution** | [TODO-epic-2026Q1-avatar-animation.md](TODO-epic-2026Q1-avatar-animation.md) | Execution | Sprint 6-9 |
+| **Multi-Surface Architecture** | [TODO-epic-2026Q1-multi-surface.md](TODO-epic-2026Q1-multi-surface.md) | Execution | Sprint 6-8 |
 
 ---
 
@@ -19,6 +28,11 @@
 | **TUI Block Refactor (P2.1)** | TUI | Protocol Block <-> ColoredCell conversions, color mapping functions |
 | **Sprint Workflow Documentation** | DevOps | `workflows/sprint.md` - Sprint phases, periodic reviews, TODO hierarchy |
 | **Security Findings Tracking** | Security | `TODO-security-findings.md` - Severity levels, active findings, audit schedule |
+| **Epic Workflow** | DevOps | `workflows/epic.md` - Milestone-based major features, planning team roles, lifecycle |
+| **TODO-Driven Development** | DevOps | `workflows/todo-driven-development.md` - Methodology, file hierarchy, agent guidelines |
+| **PRINCIPLES.md** | Governance | Ethical, technical, design, legal principles at repo root |
+| **Dependency Tracking** | DevOps | `deps.yaml` - Component freshness, external deps, security audit status |
+| **Disabled Tests Tracking** | QA | `TODO-disabled-tests.md` - Centralized `#[ignore]` test tracking with annotation convention |
 
 ### Sprint 4 Recap
 
@@ -40,38 +54,44 @@
 
 ## Top Priorities for Next Sprint (Sprint 6)
 
-### 1. Animation Evolution System (Phase P3.1-P3.2) [HIGH - Backend]
-**File**: `TODO-avatar-animation-system.md` Phase 3
+> Sprint 6 focuses on **Avatar Animation** (E-2026Q1-avatar-animation) and **Security Hardening** (E-2026Q1-multi-surface)
+
+### 1. Animation Evolution System (P3.1-P3.2) [HIGH - Backend]
+**Epic**: E-2026Q1-avatar-animation (Sprint 6)
+**File**: `TODO-epic-2026Q1-avatar-animation.md`
 
 **Why now**: All Phase 1 (protocol) and Phase 2 (TUI) work is complete.
 
 **Tasks**:
-- P3.1: Implement `EvolutionState` tracking in Conductor
+- P3.1: Implement `EvolutionContext` struct and storage
 - P3.2: Add evolution triggers (interaction count, session time)
-- Define evolution level thresholds and visual markers
+- Answer Q4: Define evolution level thresholds
+- Answer Q5: Define visual markers
 
 **Unblocks**: Progressive avatar personality
 
 ---
 
-### 2. Sprite Generation Pipeline (Phase P4.1-P4.2) [HIGH - Backend]
-**File**: `TODO-avatar-animation-system.md` Phase 4
+### 2. TUI Avatar Animation (P2.4-P2.5) [HIGH - TUI]
+**Epic**: E-2026Q1-avatar-animation (Sprint 6)
+**File**: `TODO-epic-2026Q1-avatar-animation.md`
 
-**Why now**: Security limits (P1.5) and cache (P1.4) are complete.
+**Why now**: P2.1 (Block refactor) is complete.
 
 **Tasks**:
-- P4.1: Implement `SpriteGenerator` trait
-- P4.2: Create procedural mood-based sprite variations
-- Add sprite blending/transitions
+- P2.4: Implement animation tick/update loop
+- P2.5: Partial rendering (dirty-rect tracking)
+- Frame interpolation and mood transitions
 
-**Unblocks**: Dynamic avatar expressions
+**Unblocks**: Living, breathing avatar in TUI
 
 ---
 
-### 3. Connection Pool Reuse (H-002) [HIGH - Backend]
-**File**: `TODO-security-findings.md` H-002
+### 3. Connection Pool Reuse (H-002) [HIGH - Security]
+**Epic**: E-2026Q1-multi-surface (Sprint 6)
+**File**: `TODO-epic-2026Q1-multi-surface.md`
 
-**Why now**: Security finding from Sprint 5 audit.
+**Why now**: HIGH security finding from Sprint 5 audit.
 
 **Tasks**:
 - Refactor `ConnectionPool` to use `Arc<Self>`
@@ -82,31 +102,33 @@
 
 ---
 
-### 4. TUI Avatar Animation (Phase P2.4) [MEDIUM - TUI]
-**File**: `TODO-avatar-animation-system.md` Phase 2
+### 4. Random ConnectionId (H-001) [HIGH - Security]
+**Epic**: E-2026Q1-multi-surface (Sprint 6)
+**File**: `TODO-epic-2026Q1-multi-surface.md`
 
-**Why now**: P2.1 (Block refactor) is complete.
+**Why now**: HIGH security finding - predictable IDs.
 
 **Tasks**:
-- P2.4: Implement animation tick/update loop
-- Add frame interpolation
-- Smooth transitions between moods
+- Replace sequential AtomicU64 with UUID
+- Use uuid crate (v4, serde)
+- Update tests
 
-**Unblocks**: Living, breathing avatar in TUI
+**Security**: Connection hijacking prevention
 
 ---
 
-### 5. Partial Rendering Support (Phase P2.5) [MEDIUM - TUI]
-**File**: `TODO-avatar-animation-system.md` Phase 2
+### 5. State Snapshot for Late-Joining Surfaces (4.3) [MEDIUM - Architecture]
+**Epic**: E-2026Q1-multi-surface (Sprint 6)
+**File**: `TODO-epic-2026Q1-multi-surface.md`
 
-**Why now**: Block rendering is aligned with protocol.
+**Why now**: Multi-surface architecture needs state sync.
 
 **Tasks**:
-- Implement dirty-rect tracking
-- Only re-render changed cells
-- Reduce TUI CPU usage during idle
+- Implement StateSnapshot message
+- Send on surface connect
+- Limit snapshot size (last N messages)
 
-**Performance**: Better battery life on laptops
+**Unblocks**: Multiple surfaces showing same session
 
 ---
 
@@ -123,13 +145,14 @@
 
 ## Work Streams Status
 
-| Stream | Priority | Status | Next Tasks |
-|--------|----------|--------|------------|
-| Avatar Protocol | HIGH | **Phase 1 Complete** | Phase 3 (Evolution) |
-| TUI Avatar Migration | MEDIUM | **P2.1 Complete** | P2.4 (Animation loop) |
-| Animation Evolution | MEDIUM | Ready to start | P3.1, P3.2 |
-| Dynamic Generation | MEDIUM | Ready to start | P4.1, P4.2 |
-| Surface Protocol | HIGH | **4.3 Complete** | 4.4 (WebSocket prep) |
+| Stream | Epic | Priority | Status | Next Tasks |
+|--------|------|----------|--------|------------|
+| Avatar Protocol | E-2026Q1-avatar-animation | HIGH | **Phase 1 Complete** | Phase 3 (Evolution) |
+| TUI Avatar Migration | E-2026Q1-avatar-animation | HIGH | **P2.1 Complete** | P2.4, P2.5 (Animation loop) |
+| Animation Evolution | E-2026Q1-avatar-animation | HIGH | Ready to start | P3.1, P3.2 |
+| Dynamic Generation | E-2026Q1-avatar-animation | MEDIUM | Sprint 8 | P4.1, P4.2 |
+| Surface Protocol | E-2026Q1-multi-surface | HIGH | **4.3 Partial** | State snapshot, Auth tokens |
+| Security Hardening | E-2026Q1-multi-surface | HIGH | In Progress | H-001, H-002 |
 
 ---
 
@@ -206,4 +229,27 @@
 
 ---
 
-**Next Review**: After animation evolution and sprite generation work
+**Next Review**: End of Sprint 6
+
+---
+
+## Sprint 7+ Preview
+
+### Sprint 7 (E-2026Q1-avatar-animation)
+- P3.3: Animation variants (2-3 per type)
+- P3.4: Micro-variation timing (jitter)
+- P2.5: Reduced-motion accessibility mode
+
+### Sprint 7 (E-2026Q1-multi-surface)
+- B4: macOS getpeereid() implementation
+- B5: Transport rate limiting
+- 5.3: Heartbeat enforcement
+
+### Sprint 8 (E-2026Q1-avatar-animation)
+- P4.1-P4.3: Sprite generation pipeline
+- Answer Q6: LLM involvement decision
+
+### Sprint 8 (E-2026Q1-multi-surface)
+- 5.1: TOML configuration file
+- M-001: auth_token resolution
+- Chaos tests

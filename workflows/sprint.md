@@ -2,6 +2,11 @@
 
 > High-level guide for running development sprints on ai-way.
 
+**Related Documents**:
+- [Epic Workflow](epic.md) - Major feature initiatives spanning multiple sprints
+- [TODO-Driven Development](todo-driven-development.md) - Complete methodology documentation
+- [PRINCIPLES.md](../PRINCIPLES.md) - Ethical, technical, and design guidelines
+
 ## Overview
 
 A sprint is a focused development cycle that includes planning, implementation, testing, and review phases. `TODO-next.md` serves as the root of all TODO references and sprint tracking.
@@ -99,7 +104,13 @@ TODO-next.md                    <- Sprint root (current priorities)
   +-- TODO-conductor-ux-split.md       <- Architecture refactor
   +-- TODO-integration-testing.md      <- Test coverage tracking
   +-- TODO-security-findings.md        <- Security issues and fixes
+  +-- TODO-disabled-tests.md           <- Centralized ignored test tracking
+  +-- TODO-epic-YYYYQN-*.md            <- Epic-level planning files
+
+deps.yaml                       <- Component and dependency tracking
 ```
+
+See [TODO-Driven Development](todo-driven-development.md) for complete file specifications.
 
 ---
 
@@ -139,4 +150,5 @@ feat: Sprint N - Brief summary of major changes
 
 | Version | Date | Changes |
 |---------|------|---------|
+| 1.1 | 2026-01-02 | Added related docs links, updated hierarchy with deps.yaml and epic files |
 | 1.0 | 2026-01-02 | Initial workflow documentation |

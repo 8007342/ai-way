@@ -1,0 +1,338 @@
+# Component dependency and freshness tracking
+# This file tracks internal components, their dependencies, and audit status.
+# Update this file when adding/removing dependencies or during sprint reviews.
+
+version: "1.0"
+last_audit: "2026-01-02"
+last_audit_sprint: 5
+
+# ============================================================================
+# Internal Components
+# ============================================================================
+components:
+  conductor-core:
+    path: conductor/core
+    last_modified_sprint: 5
+    status: active  # active, deprecated, experimental
+    depends_on:
+      - tokio
+      - tokio-stream
+      - reqwest
+      - futures
+      - serde
+      - serde_json
+      - crc32fast
+      - anyhow
+      - thiserror
+      - tracing
+      - tracing-subscriber
+      - chrono
+      - async-trait
+      - libc
+      - rand
+      - hex
+      - uuid
+      - parking_lot
+      - dashmap
+    optional_deps:
+      - tokio-tungstenite  # websocket feature
+    internal_deps: []
+    freshness: current  # current, needs-review, stale
+    notes: "Core orchestration, routing, messaging, avatar protocol, transport layer"
+    modules:
+      - accessibility
+      - animation
+      - avatar
+      - backend
+      - conductor
+      - conversation
+      - events
+      - messages
+      - routing
+      - security
+      - session
+      - streaming
+      - surface_registry
+      - tasks
+      - transport
+
+  conductor-daemon:
+    path: conductor/daemon
+    last_modified_sprint: 5
+    status: active
+    depends_on:
+      - clap
+      - tokio
+      - serde
+      - serde_json
+      - anyhow
+      - thiserror
+      - tracing
+      - tracing-subscriber
+      - libc
+      - nix
+      - dashmap
+    internal_deps:
+      - conductor-core
+    freshness: current
+    notes: "Standalone daemon binary for multi-surface orchestration"
+    modules:
+      - main
+      - server
+
+  yollayah-tui:
+    path: tui
+    last_modified_sprint: 5
+    status: active
+    depends_on:
+      - ratatui
+      - crossterm
+      - tokio
+      - tokio-stream
+      - tokio-tungstenite
+      - reqwest
+      - futures
+      - serde
+      - serde_json
+      - anyhow
+      - thiserror
+      - unicode-width
+      - textwrap
+      - tracing
+      - tracing-subscriber
+      - rand
+      - libc
+    internal_deps:
+      - conductor-core
+    freshness: current
+    notes: "Terminal UI for Yollayah - animated avatar, chat interface"
+    modules:
+      - app
+      - avatar
+      - backend
+      - compositor
+      - conductor_client
+      - display
+      - events
+      - icons
+      - tasks
+      - theme
+      - widgets
+
+# ============================================================================
+# External Dependencies
+# ============================================================================
+external_deps:
+  # Async Runtime
+  tokio:
+    version: "1.41"
+    license: MIT
+    security_reviewed: true
+    last_audit: "2026-01-02"
+    notes: "Core async runtime, heavily used"
+
+  tokio-stream:
+    version: "0.1"
+    license: MIT
+    security_reviewed: true
+    last_audit: "2026-01-02"
+    notes: "Stream utilities for tokio"
+
+  tokio-tungstenite:
+    version: "0.24"
+    license: MIT
+    security_reviewed: false
+    last_audit: null
+    notes: "WebSocket support - optional in conductor-core, used by TUI"
+
+  # HTTP/Network
+  reqwest:
+    version: "0.12"
+    license: MIT/Apache-2.0
+    security_reviewed: true
+    last_audit: "2026-01-02"
+    notes: "HTTP client for LLM backend communication"
+
+  futures:
+    version: "0.3"
+    license: MIT/Apache-2.0
+    security_reviewed: true
+    last_audit: "2026-01-02"
+
+  # Serialization
+  serde:
+    version: "1.0"
+    license: MIT/Apache-2.0
+    security_reviewed: true
+    last_audit: "2026-01-02"
+    notes: "Core serialization framework"
+
+  serde_json:
+    version: "1.0"
+    license: MIT/Apache-2.0
+    security_reviewed: true
+    last_audit: "2026-01-02"
+
+  # Frame Integrity
+  crc32fast:
+    version: "1.4"
+    license: MIT/Apache-2.0
+    security_reviewed: true
+    last_audit: "2026-01-02"
+    notes: "Frame integrity verification in transport layer"
+
+  # Error Handling
+  anyhow:
+    version: "1.0"
+    license: MIT/Apache-2.0
+    security_reviewed: true
+    last_audit: "2026-01-02"
+
+  thiserror:
+    version: "2.0"
+    license: MIT/Apache-2.0
+    security_reviewed: true
+    last_audit: "2026-01-02"
+
+  # Logging
+  tracing:
+    version: "0.1"
+    license: MIT
+    security_reviewed: true
+    last_audit: "2026-01-02"
+
+  tracing-subscriber:
+    version: "0.3"
+    license: MIT
+    security_reviewed: true
+    last_audit: "2026-01-02"
+
+  # Date/Time
+  chrono:
+    version: "0.4"
+    license: MIT/Apache-2.0
+    security_reviewed: true
+    last_audit: "2026-01-02"
+    notes: "Greeting context, time-based features"
+
+  # Async Utilities
+  async-trait:
+    version: "0.1"
+    license: MIT/Apache-2.0
+    security_reviewed: true
+    last_audit: "2026-01-02"
+
+  # System/Unix
+  libc:
+    version: "0.2"
+    license: MIT/Apache-2.0
+    security_reviewed: true
+    last_audit: "2026-01-02"
+    notes: "Unix socket peer credentials, POSIX"
+
+  nix:
+    version: "0.29"
+    license: MIT
+    security_reviewed: true
+    last_audit: "2026-01-02"
+    notes: "Signal handling, file permissions in daemon"
+
+  # Random/ID Generation
+  rand:
+    version: "0.8"
+    license: MIT/Apache-2.0
+    security_reviewed: true
+    last_audit: "2026-01-02"
+
+  hex:
+    version: "0.4"
+    license: MIT/Apache-2.0
+    security_reviewed: true
+    last_audit: "2026-01-02"
+
+  uuid:
+    version: "1.11"
+    license: MIT/Apache-2.0
+    security_reviewed: true
+    last_audit: "2026-01-02"
+    notes: "Used for unique identifiers (v4, serde)"
+
+  # Concurrency
+  parking_lot:
+    version: "0.12"
+    license: MIT/Apache-2.0
+    security_reviewed: true
+    last_audit: "2026-01-02"
+    notes: "Faster mutexes"
+
+  dashmap:
+    version: "6.0"
+    license: MIT
+    security_reviewed: true
+    last_audit: "2026-01-02"
+    notes: "Concurrent hashmap"
+
+  # TUI Framework
+  ratatui:
+    version: "0.29"
+    license: MIT
+    security_reviewed: true
+    last_audit: "2026-01-02"
+    notes: "Terminal UI framework"
+
+  crossterm:
+    version: "0.28"
+    license: MIT
+    security_reviewed: true
+    last_audit: "2026-01-02"
+    notes: "Cross-platform terminal manipulation"
+
+  # Text Processing
+  unicode-width:
+    version: "0.2"
+    license: MIT/Apache-2.0
+    security_reviewed: true
+    last_audit: "2026-01-02"
+
+  textwrap:
+    version: "0.16"
+    license: MIT
+    security_reviewed: true
+    last_audit: "2026-01-02"
+
+  # CLI
+  clap:
+    version: "4.5"
+    license: MIT/Apache-2.0
+    security_reviewed: true
+    last_audit: "2026-01-02"
+    notes: "CLI argument parsing for daemon"
+
+# ============================================================================
+# Dev Dependencies (not tracked for security, but listed for completeness)
+# ============================================================================
+dev_deps:
+  tokio-test:
+    version: "0.4"
+    used_by: [conductor-core, yollayah-tui]
+
+  pretty_assertions:
+    version: "1.4"
+    used_by: [conductor-core, yollayah-tui]
+
+  tempfile:
+    version: "3.10"
+    used_by: [conductor-core, conductor-daemon]
+
+# ============================================================================
+# Audit Notes
+# ============================================================================
+audit_notes:
+  sprint_5:
+    date: "2026-01-02"
+    reviewer: "Architect"
+    findings:
+      - "All core dependencies reviewed and approved"
+      - "tokio-tungstenite pending security review before WebSocket feature enabled"
+      - "No known CVEs in current dependency versions"
+    next_review: "Sprint 8 or when major version bumps occur"

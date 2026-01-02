@@ -289,25 +289,27 @@ The constraints document emphasizes that Yollayah should feel "alive" through:
     - `AnchorPoint` enum (9 positions with offset calculation)
     - Comprehensive unit tests for serialization and operations
 
-- [ ] **P1.2** Add `SpriteRequest` and `SpriteResponse` to `ConductorMessage` enum
+- [x] **P1.2** Add `SpriteRequest` and `SpriteResponse` to `ConductorMessage` enum ✓ Sprint 5
   - Dependencies: P1.1 ✓
   - Owner: Architect
   - Acceptance: Protocol compiles, can be sent over transport
 
-- [ ] **P1.3** Add `AnimationRequest` and `AnimationResponse` to protocol
+- [x] **P1.3** Add `AnimationRequest` and `AnimationResponse` to protocol ✓ Sprint 5
   - Dependencies: P1.1 ✓
   - Owner: Architect
   - Acceptance: Animation metadata can be transmitted
 
-- [ ] **P1.4** Implement `SpriteCache` in Conductor with LRU eviction
+- [x] **P1.4** Implement `SpriteCache` in Conductor with LRU eviction ✓ Sprint 5
   - Dependencies: P1.1 ✓
   - Owner: Backend
   - Acceptance: Cache respects memory budget, evicts correctly
+  - **Completed**: Created `conductor/core/src/avatar/cache.rs`
 
-- [ ] **P1.5** Add security limits to sprite handling
+- [x] **P1.5** Add security limits to sprite handling ✓ Sprint 5
   - Dependencies: P1.2
   - Owner: Hacker
   - Acceptance: All `MAX_*` constants enforced, tests for overflow
+  - **Completed**: Created `conductor/core/src/avatar/security.rs`
 
 - [ ] **P1.6** Update `SurfaceCapabilities` to include sprite-related capabilities
   - Dependencies: P1.2
@@ -320,10 +322,11 @@ The constraints document emphasizes that Yollayah should feel "alive" through:
 
 **Tasks:**
 
-- [ ] **P2.1** Refactor `ColoredCell` to use protocol `Block` type
+- [x] **P2.1** Refactor `ColoredCell` to use protocol `Block` type ✓ Sprint 5
   - Dependencies: P1.1
   - Owner: TUI
   - Acceptance: TUI renders using Block, no visual regression
+  - **Completed**: Protocol Block <-> ColoredCell conversions, color mapping functions
 
 - [ ] **P2.2** Implement sprite request/response handling in TUI
   - Dependencies: P1.2, P2.1

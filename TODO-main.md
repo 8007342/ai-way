@@ -2,11 +2,19 @@
 
 Master index for all TODO tracking documents. Check here first to find pending work.
 
+## Active Epics (2026-Q1)
+
+| Epic | Status | Description |
+|------|--------|-------------|
+| [TODO-epic-2026Q1-avatar-animation.md](TODO-epic-2026Q1-avatar-animation.md) | **EXECUTION** | Avatar evolution, sprite generation, TUI animation loop |
+| [TODO-epic-2026Q1-multi-surface.md](TODO-epic-2026Q1-multi-surface.md) | **EXECUTION** | Daemon architecture, multi-connection support, transport security |
+
 ## Active Refactors
 
 | Document | Status | Description |
 |----------|--------|-------------|
-| [TODO-conductor-ux-split.md](TODO-conductor-ux-split.md) | **IN PROGRESS** | TUI/Conductor separation with Unix Socket IPC |
+| [TODO-conductor-ux-split.md](TODO-conductor-ux-split.md) | **IN PROGRESS** | TUI/Conductor separation - see E-2026Q1-multi-surface |
+| [TODO-avatar-animation-system.md](TODO-avatar-animation-system.md) | **IN PROGRESS** | Avatar animation details - see E-2026Q1-avatar-animation |
 | [TODO-meta-agent-conductor-interactions.md](TODO-meta-agent-conductor-interactions.md) | **ACTIVE** | Meta-agent orchestration, agent delegation, avatar control |
 | [TODO-implementation-plan.md](TODO-implementation-plan.md) | **ACTIVE** | Detailed implementation plan with dependencies |
 | [TODO-qa-testing.md](TODO-qa-testing.md) | **PENDING** | Unit tests, integration tests, pre-commit hooks |
@@ -17,7 +25,7 @@ Master index for all TODO tracking documents. Check here first to find pending w
 | Document | Status | Description |
 |----------|--------|-------------|
 | [TODO-accessibility.md](TODO-accessibility.md) | **ACTIVE** | Accessibility roadmap (WCAG compliance, TTS, high contrast) |
-| [TODO-rich-ux.md](TODO-rich-ux.md) | SUPERSEDED | Original UX plan (now Rust-based, not Python Textual) |
+| ~~TODO-rich-ux.md~~ | SUPERSEDED | Original UX plan (now Rust-based, not Python Textual) - file removed |
 | [agents/TODO.md](agents/TODO.md) | ONGOING | Agent profiles and future enhancements |
 | [TODO-documentation.md](TODO-documentation.md) | ROLLING | Documentation updates needed for user docs |
 
@@ -85,4 +93,4 @@ Deep usability review by UX Specialist, Architect, and Ethical Hacker:
 
 ---
 
-**Last Updated**: 2026-01-01 (Accessibility + TUI UX deep dive)
+**Last Updated**: 2026-01-02 (Epic planning session - added E-2026Q1-avatar-animation, E-2026Q1-multi-surface)

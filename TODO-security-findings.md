@@ -33,43 +33,53 @@ _None currently identified._
 ### HIGH
 
 #### H-001: Sequential ConnectionId Generation
-**Location**: `conductor/core/src/surface.rs`
+**Location**: `conductor/core/src/surface_registry.rs`
 **Status**: Open
 **Found**: Sprint 5
+**Target**: Sprint 6
+**Epic**: E-2026Q1-multi-surface
 **Description**: ConnectionId uses sequential counter (AtomicU64). Predictable IDs could allow connection hijacking if combined with other vulnerabilities.
 **Recommendation**: Use cryptographically random UUIDs for production.
 **Mitigation**: Unix socket peer credential validation provides defense-in-depth.
 
 #### H-002: Connection Pool Reuse Not Implemented
-**Location**: `conductor/core/src/routing/pool.rs`
+**Location**: `conductor/core/src/routing/connection_pool.rs`
 **Status**: Open
 **Found**: Sprint 4
+**Target**: Sprint 6
+**Epic**: E-2026Q1-multi-surface
 **Description**: `PooledConnection::Drop` doesn't return connections to pool. Under high load, this could lead to connection exhaustion (DoS vector).
 **Recommendation**: Refactor to use Arc<ConnectionPool> with return channel.
-**Related**: `scenario_7_connection_pool` test is ignored pending fix.
+**Related**: `scenario_7_connection_pool` test is ignored pending fix (see TODO-disabled-tests.md).
 
 ### MEDIUM
 
 #### M-001: auth_token Field Unused
-**Location**: `conductor/core/src/surface.rs` (SurfaceCapabilities)
+**Location**: `conductor/core/src/events.rs` (SurfaceCapabilities)
 **Status**: Open
 **Found**: Sprint 5
+**Target**: Sprint 8
+**Epic**: E-2026Q1-multi-surface
 **Description**: The `auth_token` field exists but is never validated. False sense of security.
 **Recommendation**: Either implement token validation or remove the field.
 
 #### M-002: No Rate Limiting on Sprite Requests
-**Location**: `conductor/core/src/avatar/`
-**Status**: In Progress (Sprint 5 - P1.5)
+**Location**: `conductor/core/src/avatar/security.rs`
+**Status**: Implemented (Sprint 5 - P1.5)
 **Found**: Sprint 5
+**Epic**: E-2026Q1-avatar-animation
 **Description**: Malicious client could flood sprite requests, exhausting server resources.
 **Recommendation**: Implement token bucket rate limiting per connection.
+**Resolution**: Pending tracker and rate limiting implemented in avatar/security.rs.
 
 #### M-003: Unicode Character Validation Missing
-**Location**: `conductor/core/src/avatar/`
-**Status**: In Progress (Sprint 5 - P1.5)
+**Location**: `conductor/core/src/avatar/security.rs`
+**Status**: Implemented (Sprint 5 - P1.5)
 **Found**: Sprint 5
+**Epic**: E-2026Q1-avatar-animation
 **Description**: No validation of Unicode characters in sprite blocks. Could allow rendering exploits or terminal escape sequences.
 **Recommendation**: Whitelist allowed Unicode ranges per avatar constraints doc.
+**Resolution**: Unicode validation implemented with ALLOWED_UNICODE_RANGES whitelist.
 
 ### LOW
 

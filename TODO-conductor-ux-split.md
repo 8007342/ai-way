@@ -85,11 +85,11 @@ yollayah.sh
     - Updated Conductor with new_with_registry() and handle_event_from()
     - Updated daemon server.rs for per-connection channels
 
-#### 4.3 Surface Registration Protocol [Priority: High]
-- [ ] Extend handshake with capability declaration
-- [ ] Assign and validate ConnectionId
-- [ ] Send current state snapshot on connect
-- [ ] Implement surface authentication tokens
+#### 4.3 Surface Registration Protocol [Priority: High] - Partial ✓ Sprint 5
+- [x] Extend handshake with capability declaration ✓ Sprint 5
+- [x] Assign and validate ConnectionId ✓ Sprint 5
+- [ ] Send current state snapshot on connect (Sprint 6)
+- [ ] Implement surface authentication tokens (Sprint 6)
 
 #### 4.4 Transport Factory Pattern [Priority: Medium]
 - [ ] Create `transport/factory.rs` module
@@ -313,4 +313,4 @@ _Items discovered during refactor that should NOT block this work:_
 
 ---
 
-**Last Updated**: 2026-01-02 (Sprint 3 completion - Multi-surface refactor, Launcher updates)
+**Last Updated**: 2026-01-02 (Sprint 5 - See TODO-epic-2026Q1-multi-surface.md for Epic tracking)
