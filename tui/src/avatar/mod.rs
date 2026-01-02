@@ -13,7 +13,15 @@
 //! The animation system provides:
 //! - [`AvatarAnimator`]: Frame timing and mood transitions
 //! - [`DirtyTracker`]: Partial rendering for CPU optimization
+//!
+//! # Accessibility (P2.6)
+//!
+//! The accessibility module provides reduced-motion support:
+//! - [`accessibility::MotionPreference`]: Full, Reduced, or None motion modes
+//! - [`accessibility::detect_motion_preference`]: Auto-detect from `REDUCE_MOTION` env var
+//! - [`accessibility::AccessibleAnimator`]: Wrapper that respects preferences
 
+pub mod accessibility;
 mod activity;
 mod animation;
 mod animator;
@@ -28,6 +36,9 @@ use std::time::Duration;
 use ratatui::buffer::Buffer;
 use ratatui::style::Style;
 
+pub use accessibility::{
+    detect_motion_preference, parse_motion_preference, AccessibleAnimator, MotionPreference,
+};
 pub use activity::{Activity, ActivityManager, OverlaySize};
 pub use animation::AnimationEngine;
 pub use animator::{AvatarAnimator, MoodTransition};

@@ -329,7 +329,7 @@ impl ModelState {
         const ALPHA: f64 = 0.3;
         self.avg_ttft_ms = ALPHA * ttft_ms as f64 + (1.0 - ALPHA) * self.avg_ttft_ms;
         self.avg_tokens_per_sec = ALPHA * tokens_per_sec + (1.0 - ALPHA) * self.avg_tokens_per_sec;
-        self.error_rate *= (1.0 - ALPHA); // Decay error rate
+        self.error_rate *= 1.0 - ALPHA; // Decay error rate
 
         self.last_success = Some(Instant::now());
         self.consecutive_failures = 0;
@@ -571,7 +571,7 @@ impl RoutingPolicy {
     async fn get_candidates(&self, request: &RoutingRequest) -> Vec<(String, ModelState)> {
         let states = self.states.read().await;
         let profiles = self.profiles.read().await;
-        let task_class = request.classify();
+        let _task_class = request.classify();
 
         states
             .iter()

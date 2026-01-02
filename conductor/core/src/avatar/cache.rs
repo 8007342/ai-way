@@ -235,19 +235,14 @@ impl std::fmt::Display for CacheError {
             } => {
                 write!(
                     f,
-                    "Sprite dimensions {}x{} exceed maximum {}x{}",
-                    width, height, max_width, max_height
+                    "Sprite dimensions {width}x{height} exceed maximum {max_width}x{max_height}"
                 )
             }
             Self::TooManyBlocks { count, max } => {
-                write!(f, "Sprite has {} blocks, exceeds maximum {}", count, max)
+                write!(f, "Sprite has {count} blocks, exceeds maximum {max}")
             }
             Self::InvalidBlockCount { expected, actual } => {
-                write!(
-                    f,
-                    "Expected {} blocks for dimensions, got {}",
-                    expected, actual
-                )
+                write!(f, "Expected {expected} blocks for dimensions, got {actual}")
             }
             Self::SpriteTooLarge {
                 sprite_size,
@@ -255,8 +250,7 @@ impl std::fmt::Display for CacheError {
             } => {
                 write!(
                     f,
-                    "Sprite size {} bytes exceeds budget {} bytes",
-                    sprite_size, budget
+                    "Sprite size {sprite_size} bytes exceeds budget {budget} bytes"
                 )
             }
             Self::CannotEvict => {
@@ -469,7 +463,7 @@ impl SpriteCache {
     ///
     /// Returns the number of entries cleared.
     pub fn clear_session(&mut self, session_id: &str) -> usize {
-        let prefix = format!("{}:", session_id);
+        let prefix = format!("{session_id}:");
         let keys_to_remove: Vec<String> = self
             .entries
             .keys()
@@ -551,7 +545,7 @@ impl SpriteCache {
     /// ```
     #[must_use]
     pub fn session_key(session_id: &str, sprite_name: &str) -> String {
-        format!("{}:{}", session_id, sprite_name)
+        format!("{session_id}:{sprite_name}")
     }
 }
 

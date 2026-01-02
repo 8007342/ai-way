@@ -29,6 +29,7 @@ pub mod block;
 pub mod cache;
 pub mod evolution;
 pub mod security;
+pub mod variants;
 
 // Re-export block types at the avatar module level for convenience
 pub use block::{
@@ -57,6 +58,11 @@ pub use evolution::{
     THRESHOLD_EVOLVED_INTERACTIONS, THRESHOLD_EVOLVED_TIME_SECS, THRESHOLD_MATURE_INTERACTIONS,
     THRESHOLD_MATURE_TIME_SECS, THRESHOLD_TRANSCENDENT_INTERACTIONS,
     THRESHOLD_TRANSCENDENT_TIME_SECS,
+};
+
+// Re-export variants types
+pub use variants::{
+    available_variants_count, select_variant, AnimationType, AnimationVariant, VariantRegistry,
 };
 
 use std::collections::VecDeque;

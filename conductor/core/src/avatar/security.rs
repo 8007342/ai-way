@@ -1,7 +1,7 @@
 //! Avatar Security Validation Module
 //!
 //! This module provides security validation for avatar sprites and related data
-//! to prevent DoS attacks and resource exhaustion. It implements the security
+//! to prevent `DoS` attacks and resource exhaustion. It implements the security
 //! constraints defined in Phase P1.5 of the Avatar Animation System.
 //!
 //! # Security Invariants

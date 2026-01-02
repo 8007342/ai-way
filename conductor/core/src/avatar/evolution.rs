@@ -642,7 +642,7 @@ impl EvolutionContext {
     ///
     /// # Returns
     ///
-    /// A tuple of (interaction_progress, time_progress) where each is 0.0-1.0.
+    /// A tuple of (`interaction_progress`, `time_progress`) where each is 0.0-1.0.
     /// Both must reach 1.0 for level up.
     #[must_use]
     pub fn progress_to_next(&self) -> Option<EvolutionProgress> {
@@ -695,7 +695,7 @@ impl EvolutionContext {
 
     /// Reset evolution context to initial state
     ///
-    /// This preserves the created_at timestamp but resets all other values.
+    /// This preserves the `created_at` timestamp but resets all other values.
     pub fn reset(&mut self) {
         let now = SystemTime::now();
         self.level = EvolutionLevel::Nascent;

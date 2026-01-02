@@ -22,7 +22,9 @@
 pub mod config;
 pub mod factory;
 pub mod frame;
+pub mod heartbeat;
 pub mod in_process;
+pub mod rate_limit;
 pub mod traits;
 #[cfg(unix)]
 pub mod unix_socket;
@@ -31,7 +33,14 @@ pub mod unix_socket;
 pub use config::{TransportConfig, TransportType};
 pub use factory::create_surface_transport;
 pub use frame::{FrameDecoder, FrameEncoder};
+pub use heartbeat::{
+    ConnectionHealth, HeartbeatConfig, HeartbeatEvent, HeartbeatMonitor, HeartbeatTask,
+};
 pub use in_process::InProcessTransport;
+pub use rate_limit::{
+    apply_backpressure, ConnectionRateLimitMetrics, ConnectionRateLimiter, RateLimitConfig,
+    RateLimitError, RateLimitResult, TransportRateLimitMetrics, TransportRateLimiter,
+};
 pub use traits::{ConductorTransport, ConnectionId, SurfaceTransport, TransportError};
 
 #[cfg(unix)]
