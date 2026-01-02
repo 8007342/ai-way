@@ -324,6 +324,7 @@ fn create_test_conductor(
         system_prompt: None,
         limits: Default::default(),
         additional_agents: vec![],
+        ..Default::default()
     };
 
     let conductor = Conductor::new(backend, config, tx);

@@ -37,6 +37,7 @@ use crate::routing::{
 };
 use crate::security::{CommandValidator, ConductorLimits, InputValidator, ValidationResult};
 use crate::session::Session;
+use crate::surface_registry::{ConnectionId, SurfaceHandle, SurfaceRegistry};
 use crate::tasks::{TaskId, TaskManager};
 
 /// Conductor configuration
@@ -141,11 +142,11 @@ pub struct Conductor<B: LlmBackend> {
     tasks: TaskManager,
     /// Current operational state
     state: ConductorState,
-    /// Channel to send messages to UI surface
-    tx: mpsc::Sender<ConductorMessage>,
-    /// Connected surface info
-    surface_type: Option<SurfaceType>,
-    surface_capabilities: Option<SurfaceCapabilities>,
+    /// Registry of connected surfaces (multi-surface support)
+    registry: SurfaceRegistry,
+    /// Legacy single-surface channel (for backward compatibility)
+    /// When using the registry, this can be None
+    legacy_tx: Option<mpsc::Sender<ConductorMessage>>,
     /// Whether warmup is complete
     warmup_complete: bool,
     /// Current streaming message receiver
@@ -165,8 +166,32 @@ pub struct Conductor<B: LlmBackend> {
 }
 
 impl<B: LlmBackend + 'static> Conductor<B> {
-    /// Create a new Conductor with the given backend
+    /// Create a new Conductor with the given backend (legacy single-surface mode)
+    ///
+    /// This constructor maintains backward compatibility with existing code.
+    /// For multi-surface support, use `new_with_registry` instead.
     pub fn new(backend: B, config: ConductorConfig, tx: mpsc::Sender<ConductorMessage>) -> Self {
+        Self::create_conductor(backend, config, Some(tx), SurfaceRegistry::new())
+    }
+
+    /// Create a new Conductor with a `SurfaceRegistry` for multi-surface support
+    ///
+    /// This is the preferred constructor for the daemon which manages multiple connections.
+    pub fn new_with_registry(
+        backend: B,
+        config: ConductorConfig,
+        registry: SurfaceRegistry,
+    ) -> Self {
+        Self::create_conductor(backend, config, None, registry)
+    }
+
+    /// Internal constructor used by both public constructors
+    fn create_conductor(
+        backend: B,
+        config: ConductorConfig,
+        legacy_tx: Option<mpsc::Sender<ConductorMessage>>,
+        registry: SurfaceRegistry,
+    ) -> Self {
         let session = Session::new_with_limits(
             config.model.clone(),
             config.limits.max_session_messages,
@@ -205,9 +230,8 @@ impl<B: LlmBackend + 'static> Conductor<B> {
             command_parser: CommandParser::new(),
             tasks,
             state: ConductorState::Initializing,
-            tx,
-            surface_type: None,
-            surface_capabilities: None,
+            registry,
+            legacy_tx,
             warmup_complete: false,
             streaming_rx: None,
             streaming_message_id: None,
@@ -217,6 +241,36 @@ impl<B: LlmBackend + 'static> Conductor<B> {
             command_validator,
             streaming_model: None,
         }
+    }
+
+    /// Get a reference to the surface registry
+    pub fn registry(&self) -> &SurfaceRegistry {
+        &self.registry
+    }
+
+    /// Register a new surface connection
+    ///
+    /// Returns the assigned `ConnectionId`.
+    pub fn register_surface(
+        &self,
+        tx: mpsc::Sender<ConductorMessage>,
+        surface_type: SurfaceType,
+        capabilities: SurfaceCapabilities,
+    ) -> ConnectionId {
+        let id = ConnectionId::new();
+        let handle = SurfaceHandle::new(id, tx, surface_type, capabilities);
+        self.registry.register(handle);
+        id
+    }
+
+    /// Unregister a surface connection
+    pub fn unregister_surface(&self, id: &ConnectionId) -> bool {
+        self.registry.unregister(id).is_some()
+    }
+
+    /// Get the number of connected surfaces
+    pub fn surface_count(&self) -> usize {
+        self.registry.count()
     }
 
     /// Get the session ID
@@ -338,9 +392,8 @@ impl<B: LlmBackend + 'static> Conductor<B> {
         // Quick prompt for a one-liner greeting
         let prompt = format!(
             "Say a quick, cute one-liner greeting to start our chat. \
-             It's {} {}. Be yourself - warm, playful, maybe a Spanish expression. \
-             ONE sentence max. Include avatar commands for wave/mood.",
-            day, time_of_day
+             It's {day} {time_of_day}. Be yourself - warm, playful, maybe a Spanish expression. \
+             ONE sentence max. Include avatar commands for wave/mood."
         );
 
         let mut request = LlmRequest::new(&prompt, &self.config.model).with_stream(true);
@@ -381,11 +434,11 @@ impl<B: LlmBackend + 'static> Conductor<B> {
         match event {
             SurfaceEvent::Connected {
                 event_id,
-                surface_type,
-                capabilities,
+                surface_type: _,
+                capabilities: _,
             } => {
-                self.surface_type = Some(surface_type);
-                self.surface_capabilities = Some(capabilities);
+                // Note: In legacy single-surface mode, surface info is not tracked
+                // Use handle_event_for_connection with SurfaceRegistry for multi-surface support
                 self.ack(event_id).await;
 
                 // Send current state to new surface
@@ -415,8 +468,7 @@ impl<B: LlmBackend + 'static> Conductor<B> {
             }
 
             SurfaceEvent::Disconnected { event_id, .. } => {
-                self.surface_type = None;
-                self.surface_capabilities = None;
+                // Note: In legacy single-surface mode, surface info is not tracked
                 self.ack(event_id).await;
             }
 
@@ -505,9 +557,10 @@ impl<B: LlmBackend + 'static> Conductor<B> {
 
             SurfaceEvent::CapabilitiesReport {
                 event_id,
-                capabilities,
+                capabilities: _,
             } => {
-                self.surface_capabilities = Some(capabilities);
+                // Note: In legacy single-surface mode, surface info is not tracked
+                // Use handle_event_for_connection with SurfaceRegistry for multi-surface support
                 self.ack(event_id).await;
             }
 
@@ -533,13 +586,12 @@ impl<B: LlmBackend + 'static> Conductor<B> {
             SurfaceEvent::Handshake {
                 event_id,
                 protocol_version,
-                surface_type,
-                capabilities,
+                surface_type: _,
+                capabilities: _,
                 auth_token: _,
             } => {
-                // Store surface info
-                self.surface_type = Some(surface_type);
-                self.surface_capabilities = Some(capabilities);
+                // Note: In legacy single-surface mode, surface info is not tracked
+                // Use handle_event_for_connection with SurfaceRegistry for multi-surface support
 
                 // Protocol version 1 is currently supported
                 let accepted = protocol_version == 1;
@@ -628,6 +680,152 @@ impl<B: LlmBackend + 'static> Conductor<B> {
         Ok(())
     }
 
+    /// Handle an event from a specific connected surface
+    ///
+    /// This is the preferred method for the daemon which tracks individual connections.
+    /// It properly handles per-surface state and targeted responses.
+    pub async fn handle_event_from(
+        &mut self,
+        conn_id: ConnectionId,
+        event: SurfaceEvent,
+    ) -> anyhow::Result<()> {
+        match event {
+            SurfaceEvent::Connected {
+                event_id,
+                surface_type,
+                capabilities,
+            } => {
+                // Update capabilities in registry if already registered
+                self.registry
+                    .update_capabilities(&conn_id, capabilities.clone());
+                self.ack_to(&conn_id, event_id).await;
+
+                // Send current state to the new surface
+                self.send_to(&conn_id, ConductorMessage::State { state: self.state })
+                    .await;
+                self.send_to(
+                    &conn_id,
+                    ConductorMessage::SessionInfo {
+                        session_id: self.session.id.clone(),
+                        model: self.config.model.clone(),
+                        ready: self.warmup_complete,
+                    },
+                )
+                .await;
+
+                tracing::info!(
+                    connection_id = %conn_id,
+                    surface_type = %surface_type.name(),
+                    "Surface connected"
+                );
+
+                // Generate dynamic greeting if configured and ready
+                if self.config.greet_on_connect && self.warmup_complete {
+                    // For multi-surface, generate greeting for all (broadcast)
+                    self.generate_greeting().await;
+                } else if self.warmup_complete {
+                    self.send_to(
+                        &conn_id,
+                        ConductorMessage::Message {
+                            id: MessageId::new(),
+                            role: MessageRole::System,
+                            content: "Ready to chat! Type a message below.".to_string(),
+                            content_type: ContentType::System,
+                        },
+                    )
+                    .await;
+                }
+            }
+
+            SurfaceEvent::Disconnected { event_id, reason } => {
+                self.ack_to(&conn_id, event_id).await;
+                self.unregister_surface(&conn_id);
+                tracing::info!(
+                    connection_id = %conn_id,
+                    reason = ?reason,
+                    "Surface disconnected"
+                );
+            }
+
+            SurfaceEvent::CapabilitiesReport {
+                event_id,
+                capabilities,
+            } => {
+                self.registry.update_capabilities(&conn_id, capabilities);
+                self.ack_to(&conn_id, event_id).await;
+            }
+
+            SurfaceEvent::Handshake {
+                event_id,
+                protocol_version,
+                surface_type,
+                capabilities,
+                auth_token: _,
+            } => {
+                // Update capabilities in registry
+                self.registry.update_capabilities(&conn_id, capabilities);
+
+                // Protocol version 1 is currently supported
+                let accepted = protocol_version == 1;
+                let rejection_reason = if accepted {
+                    None
+                } else {
+                    Some(format!(
+                        "Unsupported protocol version: {protocol_version} (expected 1)"
+                    ))
+                };
+
+                // Send handshake acknowledgment to this specific surface
+                self.send_to(
+                    &conn_id,
+                    ConductorMessage::HandshakeAck {
+                        accepted,
+                        connection_id: conn_id.to_string(),
+                        rejection_reason,
+                        protocol_version: 1,
+                    },
+                )
+                .await;
+                self.ack_to(&conn_id, event_id).await;
+
+                if accepted {
+                    // Send current state to this surface
+                    self.send_to(&conn_id, ConductorMessage::State { state: self.state })
+                        .await;
+                    self.send_to(
+                        &conn_id,
+                        ConductorMessage::SessionInfo {
+                            session_id: self.session.id.clone(),
+                            model: self.config.model.clone(),
+                            ready: self.warmup_complete,
+                        },
+                    )
+                    .await;
+
+                    tracing::info!(
+                        connection_id = %conn_id,
+                        surface_type = %surface_type.name(),
+                        "Handshake accepted"
+                    );
+                }
+            }
+
+            // For all other events, delegate to the standard handler
+            // (they don't need connection-specific handling)
+            _ => {
+                self.handle_event(event).await?;
+            }
+        }
+
+        Ok(())
+    }
+
+    /// Send acknowledgment to a specific surface
+    async fn ack_to(&self, conn_id: &ConnectionId, event_id: EventId) {
+        self.send_to(conn_id, ConductorMessage::Ack { event_id })
+            .await;
+    }
+
     /// Handle a user message
     async fn handle_user_message(&mut self, content: String) -> anyhow::Result<()> {
         // Add to session
@@ -662,7 +860,7 @@ impl<B: LlmBackend + 'static> Conductor<B> {
         self.send_via_backend(&content).await
     }
 
-    /// Route a message through the QueryRouter
+    /// Route a message through the `QueryRouter`
     async fn route_message(&mut self, content: &str) -> Result<(), RouterError> {
         let router = self.router.as_ref().ok_or(RouterError::NotRunning)?;
 
@@ -692,11 +890,12 @@ impl<B: LlmBackend + 'static> Conductor<B> {
                 self.session.append_streaming(&response.content);
                 self.session.complete_streaming();
 
-                // Build response metadata
-                let metadata = ResponseMetadata::with_timing(
+                // Build response metadata with model info
+                let mut metadata = ResponseMetadata::with_timing(
                     response.duration_ms.unwrap_or(0),
                     response.tokens_used.unwrap_or(0),
                 );
+                metadata.model_id = Some(model_id.clone());
 
                 // Send complete message to UI
                 self.send(ConductorMessage::StreamEnd {
@@ -836,13 +1035,13 @@ impl<B: LlmBackend + 'static> Conductor<B> {
                     // Build response metadata
                     let elapsed_ms = self
                         .streaming_start
-                        .map(|s| s.elapsed().as_millis() as u64)
-                        .unwrap_or(0);
+                        .map_or(0, |s| s.elapsed().as_millis() as u64);
                     let token_count = self.streaming_token_count;
                     let active_tasks = self.tasks.active_count() as u32;
 
                     let mut metadata = ResponseMetadata::with_timing(elapsed_ms, token_count);
                     metadata.agent_tasks_spawned = active_tasks;
+                    metadata.model_id = self.streaming_model.take();
 
                     // Reset streaming metrics
                     self.streaming_start = None;
@@ -1115,10 +1314,57 @@ impl<B: LlmBackend + 'static> Conductor<B> {
         .await;
     }
 
-    /// Send a message to the UI surface
+    /// Send a message to all connected UI surfaces
+    ///
+    /// This method broadcasts to all surfaces in the registry.
+    /// For backward compatibility, it also sends to the `legacy_tx` if present.
     async fn send(&self, msg: ConductorMessage) {
-        if let Err(e) = self.tx.send(msg).await {
-            tracing::warn!("Failed to send message to surface: {}", e);
+        // If we have a legacy single-surface channel, use it
+        if let Some(ref tx) = self.legacy_tx {
+            if let Err(e) = tx.send(msg.clone()).await {
+                tracing::warn!("Failed to send message to legacy surface: {}", e);
+            }
+        }
+
+        // Broadcast to all registered surfaces
+        if self.registry.count() > 0 {
+            let result = self.registry.broadcast(msg);
+            if result.failed > 0 {
+                tracing::warn!(
+                    failed = result.failed,
+                    successful = result.successful,
+                    "Some surfaces failed to receive message"
+                );
+            }
+        }
+    }
+
+    /// Send a message to a specific surface by `ConnectionId`
+    pub async fn send_to(&self, id: &ConnectionId, msg: ConductorMessage) -> bool {
+        self.registry.send_to_async(id, msg).await
+    }
+
+    /// Send a message only to surfaces with specific capabilities
+    ///
+    /// Useful for sending avatar animations only to surfaces that support them.
+    pub fn send_to_capable(
+        &self,
+        msg: ConductorMessage,
+        required_caps: impl Fn(&SurfaceCapabilities) -> bool,
+    ) {
+        let result = self.registry.send_to_capable(msg.clone(), required_caps);
+
+        // Also send to legacy_tx if present (assume it supports the capability)
+        if let Some(ref tx) = self.legacy_tx {
+            let _ = tx.try_send(msg);
+        }
+
+        if result.failed > 0 {
+            tracing::debug!(
+                failed = result.failed,
+                successful = result.successful,
+                "Some capable surfaces failed to receive message"
+            );
         }
     }
 

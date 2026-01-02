@@ -21,6 +21,7 @@ pub struct FrameTiming {
 
 impl FrameTiming {
     /// Create uniform timing (equal duration frames)
+    #[must_use]
     pub const fn uniform() -> Self {
         Self {
             relative_duration: None,
@@ -30,6 +31,7 @@ impl FrameTiming {
     }
 
     /// Create timing with specific relative duration
+    #[must_use]
     pub const fn with_duration(relative: f32) -> Self {
         Self {
             relative_duration: Some(relative),
@@ -207,6 +209,7 @@ pub struct AnimationController {
 
 impl AnimationController {
     /// Create a new controller for an animation
+    #[must_use]
     pub fn new(frame_count: usize, base_fps: f32, looping: bool) -> Self {
         Self {
             current_frame: 0,

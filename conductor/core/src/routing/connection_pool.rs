@@ -65,7 +65,7 @@ pub struct ConnectionSlot {
 /// Backend-specific connection data
 #[derive(Debug)]
 pub enum ConnectionData {
-    /// HTTP client (for Ollama, OpenAI, etc.)
+    /// HTTP client (for Ollama, `OpenAI`, etc.)
     Http { client: reqwest::Client },
     /// gRPC channel
     Grpc {
@@ -78,6 +78,7 @@ pub enum ConnectionData {
 
 impl ConnectionSlot {
     /// Create a new HTTP connection slot
+    #[must_use]
     pub fn new_http(backend_id: String, client: reqwest::Client) -> Self {
         let now = Instant::now();
         Self {
@@ -97,6 +98,7 @@ impl ConnectionSlot {
     }
 
     /// Check if connection is stale
+    #[must_use]
     pub fn is_stale(&self, max_idle: Duration, max_lifetime: Duration) -> bool {
         let now = Instant::now();
         let idle_time = now.duration_since(self.last_used);
@@ -106,6 +108,7 @@ impl ConnectionSlot {
     }
 
     /// Get the HTTP client (if this is an HTTP connection)
+    #[must_use]
     pub fn http_client(&self) -> Option<&reqwest::Client> {
         match &self.data {
             ConnectionData::Http { client } => Some(client),
@@ -189,6 +192,7 @@ struct PoolState {
 
 impl ConnectionPool {
     /// Create a new connection pool
+    #[must_use]
     pub fn new(backend_id: String, config: ConnectionConfig) -> Self {
         let max_connections = config.max_connections;
         Self {
@@ -225,7 +229,7 @@ impl ConnectionPool {
     /// 1. Try to reuse an idle connection
     /// 2. Create a new connection if under limit
     /// 3. Wait for a connection to become available
-    pub async fn acquire(&self, timeout: Duration) -> Result<PooledConnection, PoolError> {
+    pub async fn acquire(&self, timeout: Duration) -> Result<PooledConnection<'_>, PoolError> {
         self.stats.waiting_requests.fetch_add(1, Ordering::Relaxed);
         let wait_start = Instant::now();
 
@@ -344,26 +348,23 @@ impl ConnectionPool {
     /// Run health check on the pool
     pub async fn health_check(&self) -> bool {
         // For now, just check if we can create a connection
-        match self.create_connection().await {
-            Ok(conn) => {
-                // Return it to the pool
-                let mut connections = self.connections.write().await;
-                connections.push(conn);
+        if let Ok(conn) = self.create_connection().await {
+            // Return it to the pool
+            let mut connections = self.connections.write().await;
+            connections.push(conn);
 
-                let mut state = self.state.write().await;
-                state.healthy = true;
-                state.last_health_check = Some(Instant::now());
-                true
-            }
-            Err(_) => {
-                self.stats
-                    .health_check_failures
-                    .fetch_add(1, Ordering::Relaxed);
-                let mut state = self.state.write().await;
-                state.healthy = false;
-                state.last_health_check = Some(Instant::now());
-                false
-            }
+            let mut state = self.state.write().await;
+            state.healthy = true;
+            state.last_health_check = Some(Instant::now());
+            true
+        } else {
+            self.stats
+                .health_check_failures
+                .fetch_add(1, Ordering::Relaxed);
+            let mut state = self.state.write().await;
+            state.healthy = false;
+            state.last_health_check = Some(Instant::now());
+            false
         }
     }
 }
@@ -374,8 +375,9 @@ pub struct PooledConnection<'a> {
     pool: &'a ConnectionPool,
 }
 
-impl<'a> PooledConnection<'a> {
+impl PooledConnection<'_> {
     /// Get the underlying connection
+    #[must_use]
     pub fn connection(&self) -> &ConnectionSlot {
         self.connection.as_ref().expect("connection taken")
     }
@@ -393,12 +395,13 @@ impl<'a> PooledConnection<'a> {
     }
 
     /// Get the HTTP client (if this is an HTTP connection)
+    #[must_use]
     pub fn http_client(&self) -> Option<&reqwest::Client> {
         self.connection.as_ref()?.http_client()
     }
 }
 
-impl<'a> Drop for PooledConnection<'a> {
+impl Drop for PooledConnection<'_> {
     fn drop(&mut self) {
         if let Some(_connection) = self.connection.take() {
             // In a full implementation, we'd use a channel to send the connection
@@ -434,7 +437,7 @@ impl std::fmt::Display for PoolError {
         match self {
             Self::PoolClosed => write!(f, "Connection pool is closed"),
             Self::Timeout => write!(f, "Timeout waiting for connection"),
-            Self::ConnectionFailed(e) => write!(f, "Failed to create connection: {}", e),
+            Self::ConnectionFailed(e) => write!(f, "Failed to create connection: {e}"),
             Self::Unhealthy => write!(f, "Connection is unhealthy"),
         }
     }
@@ -456,6 +459,7 @@ pub struct PoolManager {
 
 impl PoolManager {
     /// Create a new pool manager
+    #[must_use]
     pub fn new(default_config: ConnectionConfig) -> Self {
         Self {
             pools: RwLock::new(HashMap::new()),

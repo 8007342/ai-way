@@ -1,28 +1,27 @@
 //! Frame Protocol
 //!
 //! Wire format for Conductor-Surface messages using length-prefixed JSON with
-//! XXH3 checksum for integrity verification.
+//! CRC32 checksum for integrity verification.
 //!
 //! # Frame Format
 //!
 //! ```text
 //! +----------------+----------------+------------------------------------------+
 //! | Length (4)     | Checksum (4)   | JSON Payload (variable)                  |
-//! | big-endian u32 | XXH3 (low 32)  | ConductorMessage or SurfaceEvent         |
+//! | big-endian u32 | CRC32          | ConductorMessage or SurfaceEvent         |
 //! +----------------+----------------+------------------------------------------+
 //! ```
 //!
 //! The Length field contains the size of the JSON payload only (not including the checksum).
-//! The Checksum is the lower 32 bits of the XXH3 hash of the JSON payload.
+//! The Checksum is the CRC32 hash of the JSON payload.
 //!
 //! # Security
 //!
 //! - Maximum frame size is enforced to prevent memory exhaustion
 //! - Length field is validated before allocating buffer
-//! - XXH3 checksum detects data corruption in transit
+//! - CRC32 checksum detects data corruption in transit
 
 use serde::{de::DeserializeOwned, Serialize};
-use xxhash_rust::xxh3::xxh3_64;
 
 use super::TransportError;
 
@@ -37,14 +36,13 @@ const MIN_BUFFER_CAPACITY: usize = 4096;
 /// Frame header size: 4 bytes length + 4 bytes checksum
 const HEADER_SIZE: usize = 8;
 
-/// Compute XXH3 checksum (lower 32 bits) for payload
+/// Compute CRC32 checksum for payload
 #[inline]
 fn compute_checksum(payload: &[u8]) -> u32 {
-    // Use lower 32 bits of XXH3-64 hash
-    (xxh3_64(payload) & 0xFFFF_FFFF) as u32
+    crc32fast::hash(payload)
 }
 
-/// Encode a message to a length-prefixed frame with XXH3 checksum
+/// Encode a message to a length-prefixed frame with CRC32 checksum
 ///
 /// # Frame Format
 ///
@@ -344,7 +342,33 @@ mod tests {
     }
 
     #[test]
-    fn test_decode_checksum_mismatch() {
+    fn test_checksum_valid() {
+        // Test that a valid frame with correct CRC32 checksum decodes successfully
+        let msg = TestMessage {
+            content: "checksum test".to_string(),
+            number: 99,
+        };
+
+        let encoded = encode(&msg).unwrap();
+
+        // Verify frame structure: [length: 4][checksum: 4][payload]
+        assert!(encoded.len() >= HEADER_SIZE);
+
+        // Extract and verify checksum is present
+        let payload_len =
+            u32::from_be_bytes([encoded[0], encoded[1], encoded[2], encoded[3]]) as usize;
+        assert_eq!(payload_len, encoded.len() - HEADER_SIZE);
+
+        // Decode and verify message integrity
+        let mut decoder = FrameDecoder::new();
+        decoder.push(&encoded);
+        let decoded: TestMessage = decoder.decode().unwrap().unwrap();
+        assert_eq!(decoded, msg);
+    }
+
+    #[test]
+    fn test_checksum_mismatch() {
+        // Test that corrupted payload is detected via checksum mismatch
         let mut decoder = FrameDecoder::new();
 
         // Valid JSON payload

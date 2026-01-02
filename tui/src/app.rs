@@ -42,6 +42,9 @@ use crate::theme::{
 /// Input box height (lines) for text wrapping
 const INPUT_HEIGHT: u16 = 5;
 
+/// Maximum number of input history entries to keep
+const MAX_INPUT_HISTORY: usize = 50;
+
 /// Quick goodbye messages (no LLM needed, instant)
 const QUICK_GOODBYES: &[&str] = &[
     "Bye bye!",
@@ -83,6 +86,14 @@ pub struct App {
     // === Input State ===
     /// User input buffer
     input_buffer: String,
+    /// Cursor position within input buffer (char index)
+    cursor_pos: usize,
+    /// Input history (most recent at end)
+    input_history: Vec<String>,
+    /// Current position in history (None = current input, Some(i) = history[i])
+    history_index: Option<usize>,
+    /// Temporary storage for current input when browsing history
+    history_draft: String,
     /// Scroll offset (lines from bottom, 0 = latest)
     scroll_offset: usize,
     /// Total rendered lines (for scroll bounds)
@@ -199,6 +210,10 @@ impl App {
             avatar,
             layers,
             input_buffer: String::new(),
+            cursor_pos: 0,
+            input_history: Vec::new(),
+            history_index: None,
+            history_draft: String::new(),
             scroll_offset: 0,
             total_lines: 0,
             avatar_pos: (avatar_x, avatar_y),
@@ -360,19 +375,183 @@ impl App {
             KeyCode::Enter => {
                 if !self.input_buffer.is_empty() {
                     let message = std::mem::take(&mut self.input_buffer);
+                    self.cursor_pos = 0;
+
+                    // Save to history (avoid duplicates of the last entry)
+                    if self.input_history.last() != Some(&message) {
+                        self.input_history.push(message.clone());
+                        // Limit history size
+                        if self.input_history.len() > MAX_INPUT_HISTORY {
+                            self.input_history.remove(0);
+                        }
+                    }
+                    // Reset history navigation state
+                    self.history_index = None;
+                    self.history_draft.clear();
+
                     let _ = self.conductor.send_message(message).await;
                     self.scroll_offset = 0;
                 }
             }
 
-            // Typing
+            // Ctrl+key shortcuts (must come before plain Char)
+            KeyCode::Char('u') if key.modifiers.contains(KeyModifiers::CONTROL) => {
+                // Clear line
+                self.input_buffer.clear();
+                self.cursor_pos = 0;
+            }
+            KeyCode::Char('w') if key.modifiers.contains(KeyModifiers::CONTROL) => {
+                // Delete word backwards
+                if self.cursor_pos > 0 {
+                    let chars: Vec<char> = self.input_buffer.chars().collect();
+                    let mut pos = self.cursor_pos;
+                    // Skip whitespace
+                    while pos > 0 && chars.get(pos - 1).map_or(false, |c| c.is_whitespace()) {
+                        pos -= 1;
+                    }
+                    // Delete word
+                    while pos > 0 && chars.get(pos - 1).map_or(false, |c| !c.is_whitespace()) {
+                        pos -= 1;
+                    }
+                    // Remove characters from pos to cursor_pos
+                    let start_byte = chars[..pos].iter().collect::<String>().len();
+                    let end_byte = chars[..self.cursor_pos].iter().collect::<String>().len();
+                    self.input_buffer.replace_range(start_byte..end_byte, "");
+                    self.cursor_pos = pos;
+                }
+            }
+
+            // Typing - insert at cursor position
             KeyCode::Char(c) => {
-                self.input_buffer.push(c);
+                // Insert character at cursor position
+                let byte_pos = self
+                    .input_buffer
+                    .char_indices()
+                    .nth(self.cursor_pos)
+                    .map(|(i, _)| i)
+                    .unwrap_or(self.input_buffer.len());
+                self.input_buffer.insert(byte_pos, c);
+                self.cursor_pos += 1;
                 let _ = self.conductor.user_typing(true).await;
             }
 
+            // Backspace - delete before cursor
             KeyCode::Backspace => {
-                self.input_buffer.pop();
+                if self.cursor_pos > 0 {
+                    let byte_pos = self
+                        .input_buffer
+                        .char_indices()
+                        .nth(self.cursor_pos - 1)
+                        .map(|(i, _)| i)
+                        .unwrap_or(0);
+                    self.input_buffer.remove(byte_pos);
+                    self.cursor_pos -= 1;
+                }
+            }
+
+            // Delete - delete at cursor
+            KeyCode::Delete => {
+                let char_count = self.input_buffer.chars().count();
+                if self.cursor_pos < char_count {
+                    let byte_pos = self
+                        .input_buffer
+                        .char_indices()
+                        .nth(self.cursor_pos)
+                        .map(|(i, _)| i)
+                        .unwrap_or(0);
+                    self.input_buffer.remove(byte_pos);
+                }
+            }
+
+            // Word navigation with Ctrl (must come before plain arrow keys)
+            KeyCode::Left if key.modifiers.contains(KeyModifiers::CONTROL) => {
+                // Move to start of previous word
+                let chars: Vec<char> = self.input_buffer.chars().collect();
+                let mut pos = self.cursor_pos;
+                // Skip whitespace
+                while pos > 0 && chars.get(pos - 1).map_or(false, |c| c.is_whitespace()) {
+                    pos -= 1;
+                }
+                // Skip word
+                while pos > 0 && chars.get(pos - 1).map_or(false, |c| !c.is_whitespace()) {
+                    pos -= 1;
+                }
+                self.cursor_pos = pos;
+            }
+            KeyCode::Right if key.modifiers.contains(KeyModifiers::CONTROL) => {
+                // Move to start of next word
+                let chars: Vec<char> = self.input_buffer.chars().collect();
+                let len = chars.len();
+                let mut pos = self.cursor_pos;
+                // Skip current word
+                while pos < len && !chars[pos].is_whitespace() {
+                    pos += 1;
+                }
+                // Skip whitespace
+                while pos < len && chars[pos].is_whitespace() {
+                    pos += 1;
+                }
+                self.cursor_pos = pos;
+            }
+
+            // Cursor movement (plain arrows)
+            KeyCode::Left => {
+                self.cursor_pos = self.cursor_pos.saturating_sub(1);
+            }
+            KeyCode::Right => {
+                let char_count = self.input_buffer.chars().count();
+                if self.cursor_pos < char_count {
+                    self.cursor_pos += 1;
+                }
+            }
+
+            // Input history navigation
+            KeyCode::Up => {
+                if !self.input_history.is_empty() {
+                    match self.history_index {
+                        None => {
+                            // Save current input as draft and go to most recent history
+                            self.history_draft = self.input_buffer.clone();
+                            let idx = self.input_history.len() - 1;
+                            self.history_index = Some(idx);
+                            self.input_buffer = self.input_history[idx].clone();
+                            self.cursor_pos = self.input_buffer.chars().count();
+                        }
+                        Some(idx) if idx > 0 => {
+                            // Go to older history entry
+                            let new_idx = idx - 1;
+                            self.history_index = Some(new_idx);
+                            self.input_buffer = self.input_history[new_idx].clone();
+                            self.cursor_pos = self.input_buffer.chars().count();
+                        }
+                        _ => {
+                            // Already at oldest entry, do nothing
+                        }
+                    }
+                }
+            }
+            KeyCode::Down => {
+                if let Some(idx) = self.history_index {
+                    if idx + 1 < self.input_history.len() {
+                        // Go to newer history entry
+                        let new_idx = idx + 1;
+                        self.history_index = Some(new_idx);
+                        self.input_buffer = self.input_history[new_idx].clone();
+                        self.cursor_pos = self.input_buffer.chars().count();
+                    } else {
+                        // Return to current draft
+                        self.history_index = None;
+                        self.input_buffer = std::mem::take(&mut self.history_draft);
+                        self.cursor_pos = self.input_buffer.chars().count();
+                    }
+                }
+            }
+
+            KeyCode::Home if !key.modifiers.contains(KeyModifiers::CONTROL) => {
+                self.cursor_pos = 0;
+            }
+            KeyCode::End if !key.modifiers.contains(KeyModifiers::CONTROL) => {
+                self.cursor_pos = self.input_buffer.chars().count();
             }
 
             // Conversation scrolling
@@ -782,7 +961,18 @@ impl App {
                 return;
             }
 
-            let full_input = format!("You: {}_", self.input_buffer);
+            // Build input string with cursor at correct position
+            let prefix = "You: ";
+            let chars: Vec<char> = self.input_buffer.chars().collect();
+            let cursor_pos = self.cursor_pos.min(chars.len());
+
+            // Insert cursor indicator at position
+            let (before, after) = chars.split_at(cursor_pos);
+            let before_str: String = before.iter().collect();
+            let after_str: String = after.iter().collect();
+
+            // Use block cursor (▏) for insert mode feel
+            let full_input = format!("{}{}▏{}", prefix, before_str, after_str);
             let wrapped_lines: Vec<String> = textwrap::wrap(&full_input, text_width)
                 .iter()
                 .map(|s| s.to_string())

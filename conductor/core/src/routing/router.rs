@@ -20,6 +20,8 @@ use tokio::sync::{mpsc, RwLock, Semaphore};
 
 use super::config::{BackendConfig, RetryConfig, RouterConfig};
 use super::connection_pool::{ConnectionPool, PoolError, PoolManager};
+use super::fallback::{FallbackChainManager, FallbackContext};
+use super::health::HealthTracker;
 use super::metrics::RouterMetrics;
 use super::policy::{RoutingDecision, RoutingError, RoutingPolicy, RoutingRequest};
 use super::semaphore::GpuMemoryManager;
@@ -81,6 +83,10 @@ pub struct QueryRouter {
     gpu_memory: Option<Arc<GpuMemoryManager>>,
     /// Metrics
     metrics: Arc<RouterMetrics>,
+    /// Health tracker for models
+    health_tracker: Arc<HealthTracker>,
+    /// Fallback chain manager
+    fallback_manager: Arc<FallbackChainManager>,
     /// Global concurrency limiter
     global_semaphore: Semaphore,
     /// Request queue (for priority scheduling)
@@ -152,6 +158,7 @@ impl RequestQueue {
 
 impl QueryRouter {
     /// Create a new query router
+    #[must_use]
     pub fn new(config: RouterConfig) -> Self {
         let global_limit = config.global_rate_limits.max_concurrent;
 
@@ -164,15 +171,21 @@ impl QueryRouter {
             .map(|max_mem| {
                 Arc::new(GpuMemoryManager::new(
                     max_mem,
-                    config.backends[0].resources.memory_pressure_threshold as f64,
+                    f64::from(config.backends[0].resources.memory_pressure_threshold),
                 ))
             });
+
+        // Initialize health tracker and fallback manager
+        let health_tracker = Arc::new(HealthTracker::new());
+        let fallback_manager = Arc::new(FallbackChainManager::new());
 
         Self {
             policy: Arc::new(RoutingPolicy::new()),
             pools: Arc::new(PoolManager::new(Default::default())),
             gpu_memory,
             metrics: Arc::new(RouterMetrics::new()),
+            health_tracker,
+            fallback_manager,
             global_semaphore: Semaphore::new(global_limit),
             queue: RwLock::new(RequestQueue::new(config.max_queue_depth)),
             running: RwLock::new(false),
@@ -191,6 +204,16 @@ impl QueryRouter {
         self.policy.clone()
     }
 
+    /// Get health tracker reference
+    pub fn health_tracker(&self) -> Arc<HealthTracker> {
+        self.health_tracker.clone()
+    }
+
+    /// Get fallback manager reference
+    pub fn fallback_manager(&self) -> Arc<FallbackChainManager> {
+        self.fallback_manager.clone()
+    }
+
     /// Start the router (register backends, preload models, etc.)
     pub async fn start(&self) -> Result<(), RouterError> {
         {
@@ -206,9 +229,13 @@ impl QueryRouter {
             self.register_backend(backend_config.clone()).await?;
         }
 
-        // Register models
+        // Register models with policy, health tracker, and fallback manager
         for model in &self.config.models {
             self.policy.register_model(model.clone()).await;
+            // Register with health tracker
+            self.health_tracker.register(&model.model_id);
+            // Register profile with fallback manager for auto-generation
+            self.fallback_manager.register_profile(model.clone());
         }
 
         // Set defaults
@@ -216,11 +243,14 @@ impl QueryRouter {
             self.policy.set_default(*task_class, model_id.clone()).await;
         }
 
-        // Set fallbacks
+        // Set fallbacks in both policy and fallback manager
         for (model_id, fallbacks) in &self.config.fallback_chains {
             self.policy
                 .set_fallbacks(model_id.clone(), fallbacks.clone())
                 .await;
+            // Also register with fallback chain manager
+            self.fallback_manager
+                .set_chain(model_id.clone(), fallbacks.clone());
         }
 
         // Preload models
@@ -326,6 +356,28 @@ impl QueryRouter {
             }
         };
 
+        // Check model health before proceeding
+        if !self.health_tracker.is_available(&decision.model_id) {
+            tracing::warn!(
+                model = %decision.model_id,
+                "Primary model unavailable, attempting fallback"
+            );
+            // Try to get a healthy fallback using the fallback manager
+            let is_healthy = |m: &str| self.health_tracker.is_available(m);
+            if let Some(fallback) = self.fallback_manager.get_next_healthy_fallback(
+                &decision.model_id,
+                Some(task_class),
+                is_healthy,
+            ) {
+                tracing::info!(
+                    from = %decision.model_id,
+                    to = %fallback,
+                    "Using healthy fallback model"
+                );
+                // Continue with modified decision - fallback will be used in execute_with_retry
+            }
+        }
+
         let routing_time = start.elapsed();
         self.metrics
             .routing_decision_time
@@ -339,17 +391,28 @@ impl QueryRouter {
         // Execute request with retry/fallback
         let result = self.execute_with_retry(&request, &decision).await;
 
-        // Record result
+        // Record result to metrics, policy, and health tracker
         match &result {
-            Ok(_) => {
-                // Success metrics are recorded when the stream completes
-                // For now, just track that we successfully started
+            Ok(response) => {
+                // Record success to health tracker
+                let response_time_ms = start.elapsed().as_millis() as u64;
+                let model_id = match response {
+                    RouterResponse::Streaming { model_id, .. } => model_id,
+                    RouterResponse::Complete { model_id, .. } => model_id,
+                };
+                self.health_tracker
+                    .record_success(model_id, response_time_ms);
+                self.policy
+                    .record_request_result(model_id, true, Some(response_time_ms), None)
+                    .await;
             }
             Err(e) => {
                 let is_timeout = matches!(e, RouterError::Timeout);
                 self.metrics
                     .record_request_failure(&decision.model_id, is_timeout)
                     .await;
+                // Record failure to health tracker
+                self.health_tracker.record_failure(&decision.model_id);
                 self.policy
                     .record_request_result(&decision.model_id, false, None, None)
                     .await;
@@ -374,16 +437,48 @@ impl QueryRouter {
         decision: &RoutingDecision,
     ) -> Result<RouterResponse, RouterError> {
         let retry_config = self.get_retry_config(&decision.backend_id).await;
+        let task_class = request.classify();
+
+        // Create fallback context to track what we've tried
+        let mut fallback_ctx = FallbackContext::new(&decision.model_id);
+        if let Some(tc) = request.task_class {
+            fallback_ctx.task_class = Some(tc);
+        }
+
         let mut current_model = decision.model_id.clone();
-        let mut fallback_idx = 0;
 
         for attempt in 0..=retry_config.max_retries {
+            // Check if current model is healthy before attempting
+            if attempt > 0 && !self.health_tracker.is_available(&current_model) {
+                // Skip unhealthy model, find next fallback
+                let is_healthy =
+                    |m: &str| self.health_tracker.is_available(m) && !fallback_ctx.has_tried(m);
+                if let Some(healthy_fallback) = self.fallback_manager.get_next_healthy_fallback(
+                    &current_model,
+                    Some(task_class),
+                    is_healthy,
+                ) {
+                    self.metrics
+                        .record_fallback(&current_model, &healthy_fallback)
+                        .await;
+                    fallback_ctx.fallback_to(&healthy_fallback);
+                    current_model = healthy_fallback;
+                }
+            }
+
             match self
                 .execute_request(request, &current_model, &decision.backend_id)
                 .await
             {
-                Ok(response) => return Ok(response),
+                Ok(response) => {
+                    // Record success to health tracker
+                    self.health_tracker.record_success(&current_model, 100); // Placeholder timing
+                    return Ok(response);
+                }
                 Err(e) => {
+                    // Record failure to health tracker
+                    self.health_tracker.record_failure(&current_model);
+
                     let should_retry = match &e {
                         RouterError::Timeout => retry_config.retry_on_timeout,
                         RouterError::ConnectionError(_) => retry_config.retry_on_connection_error,
@@ -394,17 +489,25 @@ impl QueryRouter {
                     };
 
                     if !should_retry || attempt >= retry_config.max_retries {
-                        // Try fallback
-                        if retry_config.fallback_on_failure
-                            && fallback_idx < decision.fallbacks.len()
-                        {
-                            let fallback_model = &decision.fallbacks[fallback_idx];
-                            self.metrics
-                                .record_fallback(&current_model, fallback_model)
-                                .await;
-                            current_model = fallback_model.clone();
-                            fallback_idx += 1;
-                            continue;
+                        // Try to get a healthy fallback using the fallback manager
+                        if retry_config.fallback_on_failure {
+                            let is_healthy = |m: &str| {
+                                self.health_tracker.is_available(m) && !fallback_ctx.has_tried(m)
+                            };
+                            if let Some(fallback_model) =
+                                self.fallback_manager.get_next_healthy_fallback(
+                                    &current_model,
+                                    Some(task_class),
+                                    is_healthy,
+                                )
+                            {
+                                self.metrics
+                                    .record_fallback(&current_model, &fallback_model)
+                                    .await;
+                                fallback_ctx.fallback_to(&fallback_model);
+                                current_model = fallback_model;
+                                continue;
+                            }
                         }
                         return Err(e);
                     }
@@ -472,7 +575,7 @@ impl QueryRouter {
                 let _ = tx.send(StreamingToken::Token(model_for_task.clone())).await;
                 let _ = tx
                     .send(StreamingToken::Complete {
-                        message: format!("Response from {}", model_for_task),
+                        message: format!("Response from {model_for_task}"),
                     })
                     .await;
             });
@@ -485,7 +588,7 @@ impl QueryRouter {
         } else {
             Ok(RouterResponse::Complete {
                 response: LlmResponse {
-                    content: format!("Response from {}", model_id_owned),
+                    content: format!("Response from {model_id_owned}"),
                     model: model_id_owned.clone(),
                     tokens_used: Some(10),
                     duration_ms: Some(100),
@@ -586,14 +689,14 @@ impl std::fmt::Display for RouterError {
             Self::ShuttingDown => write!(f, "Router is shutting down"),
             Self::RateLimited => write!(f, "Request rate limited"),
             Self::QueueFull => write!(f, "Request queue full"),
-            Self::RoutingFailed(e) => write!(f, "Routing failed: {}", e),
-            Self::BackendNotFound(id) => write!(f, "Backend not found: {}", id),
-            Self::BackendUnhealthy(id) => write!(f, "Backend unhealthy: {}", id),
-            Self::ConnectionError(e) => write!(f, "Connection error: {}", e),
+            Self::RoutingFailed(e) => write!(f, "Routing failed: {e}"),
+            Self::BackendNotFound(id) => write!(f, "Backend not found: {id}"),
+            Self::BackendUnhealthy(id) => write!(f, "Backend unhealthy: {id}"),
+            Self::ConnectionError(e) => write!(f, "Connection error: {e}"),
             Self::Timeout => write!(f, "Request timed out"),
-            Self::BackendError(status, msg) => write!(f, "Backend error {}: {}", status, msg),
+            Self::BackendError(status, msg) => write!(f, "Backend error {status}: {msg}"),
             Self::MaxRetriesExceeded => write!(f, "Max retries exceeded"),
-            Self::ModelNotLoaded(id) => write!(f, "Model not loaded: {}", id),
+            Self::ModelNotLoaded(id) => write!(f, "Model not loaded: {id}"),
         }
     }
 }

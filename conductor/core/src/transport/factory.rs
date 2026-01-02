@@ -1,7 +1,7 @@
 //! Transport Factory
 //!
 //! Factory functions for creating transport instances based on configuration.
-//! This abstracts transport creation from the ConductorClient.
+//! This abstracts transport creation from the `ConductorClient`.
 
 use super::{
     config::{TransportConfig, TransportType},

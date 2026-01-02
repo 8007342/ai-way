@@ -27,6 +27,7 @@ pub mod compositor;
 pub mod conductor_client;
 pub mod display;
 pub mod events;
+pub mod icons;
 pub mod tasks;
 pub mod theme;
 pub mod widgets;

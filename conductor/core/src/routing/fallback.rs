@@ -82,6 +82,7 @@ impl FallbackChain {
 
     /// Get the next fallback after the given model
     /// Returns None if there are no more fallbacks
+    #[must_use]
     pub fn next_fallback(&self, current: &str) -> Option<&String> {
         if current == self.primary {
             return self.fallbacks.first();
@@ -92,6 +93,7 @@ impl FallbackChain {
     }
 
     /// Get all remaining fallbacks after the given model
+    #[must_use]
     pub fn remaining_fallbacks(&self, current: &str) -> Vec<&String> {
         if current == self.primary {
             return self.fallbacks.iter().collect();
@@ -105,11 +107,13 @@ impl FallbackChain {
     }
 
     /// Check if a model is in this chain (either primary or fallback)
+    #[must_use]
     pub fn contains(&self, model_id: &str) -> bool {
         self.primary == model_id || self.fallbacks.iter().any(|m| m == model_id)
     }
 
     /// Get the total depth of this chain (including primary)
+    #[must_use]
     pub fn depth(&self) -> usize {
         1 + self.fallbacks.len()
     }
@@ -124,10 +128,10 @@ impl FallbackChain {
 /// Thread-safe manager that maintains fallback sequences and provides
 /// health-aware fallback selection.
 pub struct FallbackChainManager {
-    /// Explicit fallback chains (model_id -> chain)
+    /// Explicit fallback chains (`model_id` -> chain)
     chains: RwLock<HashMap<String, FallbackChain>>,
 
-    /// Task-specific fallback chains (task_class -> chain)
+    /// Task-specific fallback chains (`task_class` -> chain)
     task_chains: RwLock<HashMap<TaskClass, FallbackChain>>,
 
     /// Model profiles for auto-generation
@@ -139,6 +143,7 @@ pub struct FallbackChainManager {
 
 impl FallbackChainManager {
     /// Create a new fallback chain manager
+    #[must_use]
     pub fn new() -> Self {
         Self {
             chains: RwLock::new(HashMap::new()),
@@ -149,6 +154,7 @@ impl FallbackChainManager {
     }
 
     /// Create with custom max chain depth
+    #[must_use]
     pub fn with_max_depth(max_depth: usize) -> Self {
         Self {
             chains: RwLock::new(HashMap::new()),
@@ -268,7 +274,7 @@ impl FallbackChainManager {
     pub fn get_next_healthy_fallback<F>(
         &self,
         current_model: &str,
-        task_class: Option<TaskClass>,
+        _task_class: Option<TaskClass>,
         is_healthy: F,
     ) -> Option<String>
     where
@@ -325,7 +331,7 @@ impl FallbackChainManager {
                 }
 
                 // Lower cost tier is better for fallbacks
-                score -= (profile.cost_tier as u8 as f32) * 2.0;
+                score -= f32::from(profile.cost_tier as u8) * 2.0;
 
                 // Faster models are better for fallbacks
                 score -= (profile.avg_ttft_ms as f32) / 1000.0;
@@ -405,11 +411,11 @@ impl FallbackChainManager {
         let total_chains = chains.len();
         let total_task_chains = task_chains.len();
         let avg_depth = if total_chains > 0 {
-            chains.values().map(|c| c.depth()).sum::<usize>() as f64 / total_chains as f64
+            chains.values().map(FallbackChain::depth).sum::<usize>() as f64 / total_chains as f64
         } else {
             0.0
         };
-        let max_depth = chains.values().map(|c| c.depth()).max().unwrap_or(0);
+        let max_depth = chains.values().map(FallbackChain::depth).max().unwrap_or(0);
 
         FallbackStats {
             total_chains,
@@ -451,16 +457,16 @@ impl std::fmt::Display for FallbackChainError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             Self::CycleDetected { model } => {
-                write!(f, "Cycle detected in fallback chain at model: {}", model)
+                write!(f, "Cycle detected in fallback chain at model: {model}")
             }
             Self::ChainTooDeep { depth, max } => {
-                write!(f, "Chain depth {} exceeds maximum {}", depth, max)
+                write!(f, "Chain depth {depth} exceeds maximum {max}")
             }
             Self::ModelNotFound { model } => {
-                write!(f, "Model not found: {}", model)
+                write!(f, "Model not found: {model}")
             }
             Self::InvalidChain { reason } => {
-                write!(f, "Invalid fallback chain: {}", reason)
+                write!(f, "Invalid fallback chain: {reason}")
             }
         }
     }
@@ -539,16 +545,19 @@ impl FallbackContext {
     }
 
     /// Check if a model has already been tried
+    #[must_use]
     pub fn has_tried(&self, model: &str) -> bool {
         self.tried_models.iter().any(|m| m == model)
     }
 
     /// Get the number of fallback attempts
+    #[must_use]
     pub fn fallback_count(&self) -> usize {
         self.tried_models.len().saturating_sub(1)
     }
 
     /// Check if we're still on the original model
+    #[must_use]
     pub fn is_original(&self) -> bool {
         self.current_model == self.original_model
     }

@@ -150,6 +150,7 @@ pub struct ConversationStream {
 
 impl ConversationStream {
     /// Create a new conversation stream
+    #[must_use]
     pub fn new(
         conversation_id: ConversationId,
         message_id: MessageId,
@@ -552,7 +553,9 @@ impl StreamManager {
     /// Get statistics for a specific stream
     #[must_use]
     pub fn stream_stats(&self, conversation_id: ConversationId) -> Option<&StreamStats> {
-        self.streams.get(&conversation_id).map(|s| s.stats())
+        self.streams
+            .get(&conversation_id)
+            .map(ConversationStream::stats)
     }
 
     /// Get total number of streams created (lifetime)

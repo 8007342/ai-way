@@ -463,6 +463,8 @@ pub enum NotifyLevel {
 /// how to present this information in their own style.
 #[derive(Clone, Debug, Default, Serialize, Deserialize)]
 pub struct ResponseMetadata {
+    /// Model that generated this response
+    pub model_id: Option<String>,
     /// Response generation time in milliseconds
     pub elapsed_ms: u64,
     /// Total tokens generated
@@ -478,12 +480,13 @@ pub struct ResponseMetadata {
     /// Whether response involved network calls (API, web)
     pub network_involved: bool,
     /// Optional context hint for surface commentary
-    /// e.g., "large_file", "slow_network", "complex_reasoning"
+    /// e.g., "`large_file`", "`slow_network`", "`complex_reasoning`"
     pub context_hint: Option<String>,
 }
 
 impl ResponseMetadata {
     /// Create metadata with timing info
+    #[must_use]
     pub fn with_timing(elapsed_ms: u64, token_count: u32) -> Self {
         let tokens_per_second = if elapsed_ms > 0 {
             Some((token_count as f32 / elapsed_ms as f32) * 1000.0)
@@ -499,11 +502,13 @@ impl ResponseMetadata {
     }
 
     /// Check if this was a "slow" response (> 10 seconds)
+    #[must_use]
     pub fn is_slow(&self) -> bool {
         self.elapsed_ms > 10_000
     }
 
     /// Check if this involved significant processing
+    #[must_use]
     pub fn is_heavy(&self) -> bool {
         self.agent_tasks_spawned > 0 || self.files_processed > 3 || self.bytes_processed > 100_000
     }

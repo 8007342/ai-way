@@ -124,6 +124,7 @@ impl AnimationSpec {
     }
 
     /// Get duration at a given mood speed multiplier
+    #[must_use]
     pub fn duration_at_speed(&self, speed_multiplier: f32) -> f32 {
         let base_duration = self.frame_count as f32 / self.base_fps;
         base_duration / speed_multiplier

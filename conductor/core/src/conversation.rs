@@ -206,7 +206,7 @@ impl Conversation {
             .unwrap_or_else(|| "Yollayah".to_string())
     }
 
-    /// Mark activity (updates last_activity timestamp)
+    /// Mark activity (updates `last_activity` timestamp)
     pub fn touch(&mut self) {
         self.last_activity = Instant::now();
     }
@@ -261,7 +261,7 @@ impl Conversation {
         }
 
         // Priority boost
-        score += self.priority as f32 * 0.02;
+        score += f32::from(self.priority) * 0.02;
 
         // Error penalty (demote errored conversations)
         if self.state.is_error() {

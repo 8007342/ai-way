@@ -30,6 +30,7 @@ Located in `tui/tests/integration_test.rs`:
 | `test_multiple_exit_requests` | Multiple rapid quit requests | Passing |
 | `test_exit_with_pending_input` | Exit while user is typing | Passing |
 | `test_input_after_slow_response` | Verify input works after slow LLM | Passing |
+| `test_channel_backpressure` | Verify channel buffer exhaustion handling | Passing |
 
 ## Architecture
 
@@ -73,10 +74,10 @@ Integration tests are run automatically on every commit via `.git/hooks/pre-comm
 
 ### Priority 1: Critical Path Coverage
 
-- [ ] **Warmup flow test**: Test that `warmup_on_start = true` correctly pre-loads model
-- [ ] **Error recovery test**: Test conductor behavior when backend returns errors
-- [ ] **Timeout handling test**: Verify streaming timeout behavior
-- [ ] **Channel buffer full test**: Test behavior when message channel fills up
+- [x] **Warmup flow test**: Test that `warmup_on_start = true` correctly pre-loads model
+- [x] **Error recovery test**: Test conductor behavior when backend returns errors
+- [x] **Timeout handling test**: Verify streaming timeout behavior
+- [x] **Channel buffer full test**: Test behavior when message channel fills up (`test_channel_backpressure`)
 
 ### Priority 2: Edge Cases
 

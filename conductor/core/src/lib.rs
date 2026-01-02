@@ -124,6 +124,7 @@ pub mod routing;
 pub mod security;
 pub mod session;
 pub mod streaming;
+pub mod surface_registry;
 pub mod tasks;
 pub mod transport;
 
@@ -132,6 +133,8 @@ pub use avatar::{
     AvatarCommand, AvatarGesture, AvatarMood, AvatarPosition, AvatarReaction, AvatarSize,
     AvatarState, CommandParser, PeekDirection, TaskCommand,
 };
+// Block-based rendering primitives (P1.1 Avatar Animation System)
+pub use avatar::block::{AnchorPoint, Block, Color, RelativeSize, SizeHint};
 pub use backend::{
     BackendConfig, LlmBackend, LlmRequest, LlmResponse, OllamaBackend, StreamingToken,
 };
@@ -171,4 +174,9 @@ pub use routing::{
 pub use streaming::{
     BufferOverflowPolicy, ConversationStream, StreamEvent, StreamEventKind, StreamManager,
     StreamManagerConfig, StreamStats,
+};
+
+// Surface registry exports
+pub use surface_registry::{
+    BroadcastResult, ConnectionId, RegistrySummary, SurfaceHandle, SurfaceMetadata, SurfaceRegistry,
 };

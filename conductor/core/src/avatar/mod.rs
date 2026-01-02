@@ -1,6 +1,9 @@
-//! Avatar State and Command Parsing
+//! Avatar State, Commands, and Rendering Primitives
 //!
-//! This module contains the avatar STATE and command parsing logic.
+//! This module contains:
+//! - Avatar STATE and command parsing logic (what the avatar is doing)
+//! - Block-based rendering primitives (how to render it)
+//!
 //! RENDERING is handled by the UI surface (TUI, `WebUI`, etc.).
 //!
 //! # Design Philosophy
@@ -15,6 +18,17 @@
 //! - A `WebUI` can render SVG or Canvas animations
 //! - A mobile app can render 3D animated meshes
 //! - All from the same avatar state!
+//!
+//! # Module Structure
+//!
+//! - [`block`]: Block-based rendering primitives (Color, Block, `SizeHint`, `AnchorPoint`)
+//! - Avatar state types (position, mood, gestures, reactions)
+//! - Command parsing for embedded avatar commands in LLM responses
+
+pub mod block;
+
+// Re-export block types at the avatar module level for convenience
+pub use block::{AnchorPoint, Block, Color, RelativeSize, SizeHint};
 
 use std::collections::VecDeque;
 

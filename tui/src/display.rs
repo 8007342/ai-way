@@ -76,12 +76,18 @@ impl DisplayMessage {
         // Build a friendly summary based on metrics
         let mut parts = Vec::new();
 
-        // Tokens per second
+        // Model name (shortened for display)
+        if let Some(ref model) = meta.model_id {
+            parts.push(format!("via {}", shorten_model_name(model)));
+        }
+
+        // Tokens per second with block text indicator
         if let Some(tps) = meta.tokens_per_second {
             if tps > 50.0 {
-                parts.push(format!("⚡ {:.0} tok/s", tps));
+                // Fast: use block arrow indicator
+                parts.push(format!("▸▸ {:.0} tok/s", tps));
             } else if tps > 20.0 {
-                parts.push(format!("{:.0} tok/s", tps));
+                parts.push(format!("▸ {:.0} tok/s", tps));
             } else if tps > 0.0 {
                 parts.push(format!("{:.1} tok/s", tps));
             }
@@ -413,6 +419,24 @@ impl From<TaskStatus> for DisplayTaskStatus {
             TaskStatus::Failed | TaskStatus::Cancelled => DisplayTaskStatus::Failed,
         }
     }
+}
+
+/// Shorten model name for display (e.g., "llama3.2:3b" -> "llama3.2:3b", long names truncated)
+fn shorten_model_name(model: &str) -> String {
+    // Remove common prefixes
+    let short = model
+        .trim_start_matches("models/")
+        .trim_start_matches("ollama/");
+
+    // If still long, take last component after '/' or truncate
+    if short.len() > 20 {
+        if let Some(pos) = short.rfind('/') {
+            return short[pos + 1..].to_string();
+        }
+        return format!("{}…", &short[..17]);
+    }
+
+    short.to_string()
 }
 
 /// Map agent ID to family name

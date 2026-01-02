@@ -41,7 +41,7 @@ use parking_lot::RwLock;
 // ============================================================================
 
 /// Health status of a model
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Default)]
 pub enum HealthStatus {
     /// Model is healthy and accepting requests
     Healthy,
@@ -56,24 +56,21 @@ pub enum HealthStatus {
     Recovering,
 
     /// Model status is unknown (no recent data)
+    #[default]
     Unknown,
 }
 
 impl HealthStatus {
     /// Check if requests should be allowed
+    #[must_use]
     pub fn allows_requests(&self) -> bool {
         matches!(self, Self::Healthy | Self::Degraded | Self::Recovering)
     }
 
     /// Check if the model is considered operational
+    #[must_use]
     pub fn is_operational(&self) -> bool {
         matches!(self, Self::Healthy | Self::Degraded)
-    }
-}
-
-impl Default for HealthStatus {
-    fn default() -> Self {
-        Self::Unknown
     }
 }
 
@@ -82,9 +79,10 @@ impl Default for HealthStatus {
 // ============================================================================
 
 /// Circuit breaker state
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Default)]
 pub enum CircuitState {
     /// Circuit is closed (normal operation)
+    #[default]
     Closed,
 
     /// Circuit is open (rejecting requests)
@@ -92,12 +90,6 @@ pub enum CircuitState {
 
     /// Circuit is half-open (testing recovery)
     HalfOpen,
-}
-
-impl Default for CircuitState {
-    fn default() -> Self {
-        Self::Closed
-    }
 }
 
 // ============================================================================
@@ -163,7 +155,7 @@ pub struct ModelHealth {
     config: HealthConfig,
 
     /// Current circuit breaker state (stored as u8 for atomic access)
-    /// 0 = Closed, 1 = Open, 2 = HalfOpen
+    /// 0 = Closed, 1 = Open, 2 = `HalfOpen`
     circuit_state: AtomicU32,
 
     /// Consecutive failure count
@@ -172,7 +164,7 @@ pub struct ModelHealth {
     /// Consecutive success count (for recovery)
     consecutive_successes: AtomicU32,
 
-    /// Total request count (wraps at u64::MAX)
+    /// Total request count (wraps at `u64::MAX`)
     total_requests: AtomicU64,
 
     /// Total success count
@@ -426,7 +418,7 @@ impl ModelHealth {
 
         loop {
             let current_fp = self.error_rate_fp.load(Ordering::Acquire);
-            let current = current_fp as f64 / 10000.0;
+            let current = f64::from(current_fp) / 10000.0;
             let new_rate = alpha * sample + (1.0 - alpha) * current;
             let new_fp = (new_rate * 10000.0) as u32;
 
@@ -460,7 +452,7 @@ impl ModelHealth {
 
     /// Get current error rate (0.0 - 1.0)
     pub fn error_rate(&self) -> f64 {
-        self.error_rate_fp.load(Ordering::Acquire) as f64 / 10000.0
+        f64::from(self.error_rate_fp.load(Ordering::Acquire)) / 10000.0
     }
 
     /// Get average response time in milliseconds
@@ -556,8 +548,9 @@ impl ModelHealth {
     }
 
     /// Get current timestamp in milliseconds since startup
+    /// Returns at least 1 to ensure 0 can be used as a sentinel for "never set"
     fn now_millis(&self) -> u64 {
-        self.startup_time.elapsed().as_millis() as u64
+        self.startup_time.elapsed().as_millis() as u64 + 1
     }
 
     /// Get a snapshot of the current health state
@@ -641,6 +634,7 @@ pub struct HealthSnapshot {
 
 impl HealthSnapshot {
     /// Calculate success rate (0.0 - 1.0)
+    #[must_use]
     pub fn success_rate(&self) -> f64 {
         if self.total_requests == 0 {
             1.0
@@ -671,6 +665,7 @@ pub struct HealthTracker {
 
 impl HealthTracker {
     /// Create a new health tracker
+    #[must_use]
     pub fn new() -> Self {
         Self {
             models: DashMap::new(),
@@ -680,6 +675,7 @@ impl HealthTracker {
     }
 
     /// Create with custom default configuration
+    #[must_use]
     pub fn with_config(config: HealthConfig) -> Self {
         Self {
             models: DashMap::new(),
@@ -750,23 +746,19 @@ impl HealthTracker {
 
     /// Check if a model is available
     pub fn is_available(&self, model_id: &str) -> bool {
-        self.get(model_id)
-            .map(|h| h.is_available())
-            .unwrap_or(false)
+        self.get(model_id).is_some_and(|h| h.is_available())
     }
 
     /// Check if a model is healthy
     pub fn is_healthy(&self, model_id: &str) -> bool {
         self.get(model_id)
-            .map(|h| h.status().is_operational())
-            .unwrap_or(false)
+            .is_some_and(|h| h.status().is_operational())
     }
 
     /// Get status for a model
     pub fn status(&self, model_id: &str) -> HealthStatus {
         self.get(model_id)
-            .map(|h| h.status())
-            .unwrap_or(HealthStatus::Unknown)
+            .map_or(HealthStatus::Unknown, |h| h.status())
     }
 
     /// Get all healthy models
@@ -928,6 +920,7 @@ pub struct AggregateHealthStats {
 
 impl AggregateHealthStats {
     /// Calculate overall health percentage
+    #[must_use]
     pub fn health_percentage(&self) -> f64 {
         if self.total_models == 0 {
             100.0
@@ -937,6 +930,7 @@ impl AggregateHealthStats {
     }
 
     /// Calculate overall availability percentage
+    #[must_use]
     pub fn availability_percentage(&self) -> f64 {
         if self.total_models == 0 {
             100.0

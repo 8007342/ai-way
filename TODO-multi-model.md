@@ -189,17 +189,19 @@ pub struct GpuMemoryManager {
 
 ### Phase 2: Fallback & Recovery
 
-- [ ] **B1. Implement fallback chains**
+- [x] **B1. Implement fallback chains**
   - File: `conductor/core/src/routing/fallback.rs`
   - Define fallback sequences per model
   - Automatic failover on model error
   - User notification on fallback
+  - **DONE**: FallbackChainManager wired into QueryRouter
 
-- [ ] **B2. Health tracking**
+- [x] **B2. Health tracking**
   - File: `conductor/core/src/routing/health.rs`
   - Track success/failure rates per model
   - Exponential backoff on repeated failures
   - Recovery detection after model becomes available
+  - **DONE**: HealthTracker wired into QueryRouter with time_since_last_success fix
 
 - [ ] **B3. Model availability manager**
   - Real-time model availability checking

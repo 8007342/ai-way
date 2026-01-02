@@ -102,12 +102,14 @@ impl RoutingRequest {
     }
 
     /// Set task classification
+    #[must_use]
     pub fn with_task_class(mut self, class: TaskClass) -> Self {
         self.task_class = Some(class);
         self
     }
 
     /// Set urgency
+    #[must_use]
     pub fn with_urgency(mut self, urgency: u8) -> Self {
         self.urgency = urgency.clamp(1, 10);
         self
@@ -126,6 +128,7 @@ impl RoutingRequest {
     }
 
     /// Classify the request if not already classified
+    #[must_use]
     pub fn classify(&self) -> TaskClass {
         self.task_class.unwrap_or_else(|| self.auto_classify())
     }
@@ -198,6 +201,7 @@ impl RoutingRequest {
     }
 
     /// Get effective priority (considers urgency and task class)
+    #[must_use]
     pub fn effective_priority(&self) -> u8 {
         if let Some(p) = self.priority {
             return p;
@@ -207,12 +211,13 @@ impl RoutingRequest {
         let base_priority = class.priority();
 
         // Adjust by urgency (1-10 maps to -9 to +0)
-        let urgency_adjust = (self.urgency as i16 - 10) as i8;
+        let urgency_adjust = (i16::from(self.urgency) - 10) as i8;
 
-        (base_priority as i16 + urgency_adjust as i16).clamp(0, 100) as u8
+        (i16::from(base_priority) + i16::from(urgency_adjust)).clamp(0, 100) as u8
     }
 
     /// Get effective timeout
+    #[must_use]
     pub fn effective_timeout(&self) -> Duration {
         self.timeout
             .unwrap_or_else(|| self.classify().default_timeout())
@@ -301,6 +306,7 @@ pub struct ModelState {
 
 impl ModelState {
     /// Create new state for a model
+    #[must_use]
     pub fn new(model_id: String) -> Self {
         Self {
             model_id,
@@ -323,7 +329,7 @@ impl ModelState {
         const ALPHA: f64 = 0.3;
         self.avg_ttft_ms = ALPHA * ttft_ms as f64 + (1.0 - ALPHA) * self.avg_ttft_ms;
         self.avg_tokens_per_sec = ALPHA * tokens_per_sec + (1.0 - ALPHA) * self.avg_tokens_per_sec;
-        self.error_rate = (1.0 - ALPHA) * self.error_rate; // Decay error rate
+        self.error_rate *= (1.0 - ALPHA); // Decay error rate
 
         self.last_success = Some(Instant::now());
         self.consecutive_failures = 0;
@@ -345,11 +351,13 @@ impl ModelState {
     }
 
     /// Check if model can be used
+    #[must_use]
     pub fn is_available(&self) -> bool {
         self.healthy && self.error_rate < 0.5
     }
 
     /// Get estimated wait time based on queue depth
+    #[must_use]
     pub fn estimated_wait_ms(&self) -> u64 {
         // Rough estimate: each queued request adds ~avg_ttft_ms
         (self.queue_depth as f64 * self.avg_ttft_ms) as u64
@@ -370,7 +378,7 @@ pub struct RoutingPolicy {
     defaults: RwLock<HashMap<TaskClass, String>>,
     /// Fallback chains
     fallbacks: RwLock<HashMap<String, Vec<String>>>,
-    /// Session affinity: conversation_id -> last_model
+    /// Session affinity: `conversation_id` -> `last_model`
     session_affinity: RwLock<HashMap<String, SessionAffinity>>,
     /// Metrics reference
     metrics: Option<Arc<RouterMetrics>>,
@@ -386,6 +394,7 @@ struct SessionAffinity {
 
 impl RoutingPolicy {
     /// Create a new routing policy
+    #[must_use]
     pub fn new() -> Self {
         Self {
             profiles: RwLock::new(HashMap::new()),
@@ -638,7 +647,7 @@ impl RoutingPolicy {
                 score -= (state.queue_depth as f32) * 2.0;
 
                 // Cost tier penalty (for budget-conscious routing)
-                score -= (profile.cost_tier as u8 as f32) * 5.0;
+                score -= f32::from(profile.cost_tier as u8) * 5.0;
 
                 // Bonus for default model
                 if defaults.get(&task_class) == Some(model_id) {
@@ -767,9 +776,9 @@ impl std::fmt::Display for RoutingError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             Self::NoModelsAvailable => write!(f, "No models available"),
-            Self::ModelNotFound(id) => write!(f, "Model not found: {}", id),
+            Self::ModelNotFound(id) => write!(f, "Model not found: {id}"),
             Self::AllModelsUnhealthy => write!(f, "All models are unhealthy"),
-            Self::CannotSatisfy(reason) => write!(f, "Cannot satisfy request: {}", reason),
+            Self::CannotSatisfy(reason) => write!(f, "Cannot satisfy request: {reason}"),
         }
     }
 }

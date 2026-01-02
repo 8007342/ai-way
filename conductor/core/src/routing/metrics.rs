@@ -40,6 +40,7 @@ pub struct Histogram {
 
 impl Histogram {
     /// Create a new histogram with the given bucket boundaries
+    #[must_use]
     pub fn new(buckets: Vec<f64>) -> Self {
         let counts = buckets.iter().map(|_| AtomicU64::new(0)).collect();
         Self {
@@ -53,6 +54,7 @@ impl Histogram {
     }
 
     /// Create with default latency buckets (in milliseconds)
+    #[must_use]
     pub fn latency_default() -> Self {
         Self::new(vec![
             10.0, 25.0, 50.0, 100.0, 250.0, 500.0, 1000.0, 2500.0, 5000.0, 10000.0, 30000.0,
@@ -144,6 +146,7 @@ pub struct HistogramSnapshot {
 
 impl HistogramSnapshot {
     /// Get percentile value
+    #[must_use]
     pub fn percentile(&self, p: f64) -> f64 {
         if self.total == 0 {
             return 0.0;
@@ -163,16 +166,19 @@ impl HistogramSnapshot {
     }
 
     /// Get p50
+    #[must_use]
     pub fn p50(&self) -> f64 {
         self.percentile(0.5)
     }
 
     /// Get p90
+    #[must_use]
     pub fn p90(&self) -> f64 {
         self.percentile(0.9)
     }
 
     /// Get p99
+    #[must_use]
     pub fn p99(&self) -> f64 {
         self.percentile(0.99)
     }
@@ -189,6 +195,7 @@ pub struct Counter {
 }
 
 impl Counter {
+    #[must_use]
     pub fn new() -> Self {
         Self::default()
     }
@@ -217,6 +224,7 @@ pub struct Gauge {
 }
 
 impl Gauge {
+    #[must_use]
     pub fn new() -> Self {
         Self::default()
     }
@@ -267,6 +275,7 @@ pub struct ModelMetrics {
 }
 
 impl ModelMetrics {
+    #[must_use]
     pub fn new(model_id: String) -> Self {
         Self {
             model_id,
@@ -390,6 +399,7 @@ pub struct RouterMetrics {
 
 impl RouterMetrics {
     /// Create new metrics collector
+    #[must_use]
     pub fn new() -> Self {
         Self {
             models: RwLock::new(HashMap::new()),

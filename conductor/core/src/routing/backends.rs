@@ -93,20 +93,20 @@ pub enum BackendAdapterError {
 impl std::fmt::Display for BackendAdapterError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            Self::ConnectionFailed(e) => write!(f, "Connection failed: {}", e),
-            Self::RequestFailed(e) => write!(f, "Request failed: {}", e),
-            Self::ModelNotFound(m) => write!(f, "Model not found: {}", m),
-            Self::ResourceExhausted(e) => write!(f, "Resource exhausted: {}", e),
+            Self::ConnectionFailed(e) => write!(f, "Connection failed: {e}"),
+            Self::RequestFailed(e) => write!(f, "Request failed: {e}"),
+            Self::ModelNotFound(m) => write!(f, "Model not found: {m}"),
+            Self::ResourceExhausted(e) => write!(f, "Resource exhausted: {e}"),
             Self::Timeout => write!(f, "Request timed out"),
             Self::RateLimited { retry_after_ms } => {
                 if let Some(ms) = retry_after_ms {
-                    write!(f, "Rate limited, retry after {}ms", ms)
+                    write!(f, "Rate limited, retry after {ms}ms")
                 } else {
                     write!(f, "Rate limited")
                 }
             }
             Self::AuthenticationFailed => write!(f, "Authentication failed"),
-            Self::Internal(e) => write!(f, "Internal error: {}", e),
+            Self::Internal(e) => write!(f, "Internal error: {e}"),
         }
     }
 }
@@ -125,6 +125,7 @@ pub struct OllamaAdapter {
 }
 
 impl OllamaAdapter {
+    #[must_use]
     pub fn new(host: String, port: u16) -> Self {
         Self {
             host,
@@ -143,7 +144,7 @@ impl OllamaAdapter {
 
 #[async_trait]
 impl BackendAdapter for OllamaAdapter {
-    fn name(&self) -> &str {
+    fn name(&self) -> &'static str {
         "Ollama"
     }
 
@@ -171,7 +172,7 @@ impl BackendAdapter for OllamaAdapter {
             let _ = tx.send(StreamingToken::Token(model.clone())).await;
             let _ = tx
                 .send(StreamingToken::Complete {
-                    message: format!("Hello from {}", model),
+                    message: format!("Hello from {model}"),
                 })
                 .await;
         });
@@ -228,6 +229,7 @@ pub struct OpenAIAdapter {
 }
 
 impl OpenAIAdapter {
+    #[must_use]
     pub fn new(base_url: String, api_key: String) -> Self {
         Self {
             base_url,
@@ -242,7 +244,7 @@ impl OpenAIAdapter {
 
 #[async_trait]
 impl BackendAdapter for OpenAIAdapter {
-    fn name(&self) -> &str {
+    fn name(&self) -> &'static str {
         "OpenAI"
     }
 
@@ -272,7 +274,7 @@ impl BackendAdapter for OpenAIAdapter {
             let _ = tx.send(StreamingToken::Token(model.clone())).await;
             let _ = tx
                 .send(StreamingToken::Complete {
-                    message: format!("Response from {}", model),
+                    message: format!("Response from {model}"),
                 })
                 .await;
         });
@@ -327,6 +329,7 @@ impl BackendAdapter for OpenAIAdapter {
 // ============================================================================
 
 /// Create a backend adapter from configuration
+#[must_use]
 pub fn create_adapter(config: &BackendType) -> Box<dyn BackendAdapter> {
     match config {
         BackendType::Ollama { host, port } => Box::new(OllamaAdapter::new(host.clone(), *port)),

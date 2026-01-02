@@ -1,0 +1,43 @@
+[package]
+name = "conductor-daemon"
+version = "0.1.0"
+edition = "2021"
+description = "Conductor daemon binary for ai-way multi-surface orchestration"
+authors = ["ai-way contributors"]
+license = "AGPL-3.0"
+
+[[bin]]
+name = "conductor-daemon"
+path = "src/main.rs"
+
+[dependencies]
+# Core conductor library
+conductor-core = { path = "../core" }
+
+# CLI argument parsing
+clap = { version = "4.5", features = ["derive", "env"] }
+
+# Async runtime
+tokio = { version = "1.41", features = ["full", "rt-multi-thread", "macros", "sync", "net", "signal"] }
+
+# Serialization
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+
+# Error handling
+anyhow = "1.0"
+thiserror = "2.0"
+
+# Logging
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+
+# Unix-specific: signals, file permissions, daemonization
+libc = "0.2"
+nix = { version = "0.29", features = ["signal", "fs"] }
+
+# Concurrent data structures
+dashmap = "6.0"
+
+[dev-dependencies]
+tempfile = "3.10"

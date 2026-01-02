@@ -57,7 +57,7 @@ Deep usability review by UX Specialist, Architect, and Ethical Hacker:
 | Feature | Status | Impact |
 |---------|--------|--------|
 | Scroll gradient indicators | PENDING | High - discoverability |
-| Input history (Up/Down) | PENDING | High - efficiency |
+| Input history (Up/Down) | DONE | High - efficiency |
 | Breathing color effect | PENDING | High - perceived aliveness |
 | Micro-interactions | PENDING | Medium - tactile feedback |
 

@@ -62,6 +62,7 @@ impl Default for SemaphoreStats {
 
 impl WeightedSemaphore {
     /// Create a new weighted semaphore with the given capacity
+    #[must_use]
     pub fn new(capacity: u64) -> Self {
         Self {
             capacity,
@@ -191,22 +192,20 @@ impl WeightedSemaphore {
         weight: u64,
         timeout: Duration,
     ) -> Result<WeightedPermit, SemaphoreError> {
-        match tokio::time::timeout(timeout, self.acquire(weight)).await {
-            Ok(result) => result,
-            Err(_) => {
-                self.stats.current_waiters.fetch_sub(1, Ordering::Relaxed);
-                Err(SemaphoreError::Timeout)
-            }
+        if let Ok(result) = tokio::time::timeout(timeout, self.acquire(weight)).await {
+            result
+        } else {
+            self.stats.current_waiters.fetch_sub(1, Ordering::Relaxed);
+            Err(SemaphoreError::Timeout)
         }
     }
 
     /// Release a permit back to the semaphore
+    #[allow(clippy::needless_pass_by_value)]
     pub fn release(&self, permit: WeightedPermit) {
         self.available.fetch_add(permit.weight, Ordering::Release);
         self.stats.total_releases.fetch_add(1, Ordering::Relaxed);
-        // Don't drop the permit, we're consuming it
-        std::mem::forget(permit);
-        // Notify waiters
+        let _ = permit; // Consume the permit (no Drop impl)
         self.notify.notify_waiters();
     }
 
@@ -242,6 +241,7 @@ pub struct WeightedPermit {
 
 impl WeightedPermit {
     /// Get the weight of this permit
+    #[must_use]
     pub fn weight(&self) -> u64 {
         self.weight
     }
@@ -276,7 +276,7 @@ impl std::fmt::Display for SemaphoreError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             Self::WeightExceedsCapacity { weight, capacity } => {
-                write!(f, "Weight {} exceeds capacity {}", weight, capacity)
+                write!(f, "Weight {weight} exceeds capacity {capacity}")
             }
             Self::Timeout => write!(f, "Timeout waiting for permit"),
             Self::Closed => write!(f, "Semaphore closed"),
@@ -297,7 +297,7 @@ impl std::error::Error for SemaphoreError {}
 pub struct GpuMemoryManager {
     /// Memory semaphore (capacity = total GPU memory)
     semaphore: WeightedSemaphore,
-    /// Currently loaded models: model_id -> memory_bytes
+    /// Currently loaded models: `model_id` -> `memory_bytes`
     loaded_models: Mutex<std::collections::HashMap<String, ModelAllocation>>,
     /// Memory pressure threshold (0.0 - 1.0)
     pressure_threshold: f64,
@@ -315,6 +315,7 @@ pub struct ModelAllocation {
 
 impl GpuMemoryManager {
     /// Create a new GPU memory manager
+    #[must_use]
     pub fn new(total_memory_bytes: u64, pressure_threshold: f64) -> Self {
         Self {
             semaphore: WeightedSemaphore::new(total_memory_bytes),
@@ -448,15 +449,14 @@ pub enum MemoryError {
 impl std::fmt::Display for MemoryError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            Self::AlreadyLoaded(id) => write!(f, "Model {} is already loaded", id),
+            Self::AlreadyLoaded(id) => write!(f, "Model {id} is already loaded"),
             Self::InsufficientMemory {
                 requested,
                 available,
             } => {
                 write!(
                     f,
-                    "Insufficient memory: requested {} bytes, {} available",
-                    requested, available
+                    "Insufficient memory: requested {requested} bytes, {available} available"
                 )
             }
             Self::ModelTooLarge {
@@ -466,11 +466,10 @@ impl std::fmt::Display for MemoryError {
             } => {
                 write!(
                     f,
-                    "Model {} ({} bytes) exceeds total capacity ({} bytes)",
-                    model_id, size, capacity
+                    "Model {model_id} ({size} bytes) exceeds total capacity ({capacity} bytes)"
                 )
             }
-            Self::Other(e) => write!(f, "Memory error: {}", e),
+            Self::Other(e) => write!(f, "Memory error: {e}"),
         }
     }
 }

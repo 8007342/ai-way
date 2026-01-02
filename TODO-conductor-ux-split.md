@@ -59,24 +59,31 @@ yollayah.sh
 - [x] Reconnection handling (try_reconnect with exponential backoff)
 - [x] ConductorClient refactor to use transport abstraction (ClientMode enum)
 - [ ] macOS getpeereid() peer validation
-- [ ] Frame integrity verification (checksum)
+- [x] Frame integrity verification (CRC32 checksum) ✓ Sprint 2
 - [ ] WebSocket transport implementation (optional feature)
 - [ ] yollayah.sh updates to launch Conductor as separate process
 
 ### Phase 4: Process Separation (PENDING - Detailed Plan Below)
 
-#### 4.1 Conductor Daemon Binary [Priority: Critical]
-- [ ] Create `conductor/daemon/` crate structure
-- [ ] Entry point with CLI args (clap)
-- [ ] Daemon loop with signal handling (SIGTERM, SIGHUP)
-- [ ] PID file management
-- [ ] Multi-connection accept loop
+#### 4.1 Conductor Daemon Binary [Priority: Critical] ✓ DONE Sprint 2
+- [x] Create `conductor/daemon/` crate structure
+- [x] Entry point with CLI args (clap)
+- [x] Daemon loop with signal handling (SIGTERM, SIGHUP)
+- [x] PID file management
+- [x] Multi-connection accept loop
 
-#### 4.2 Multi-Surface Conductor Refactor [Priority: Critical]
-- [ ] Replace single `tx` channel with `HashMap<ConnectionId, SurfaceHandle>`
-- [ ] Implement `SurfaceHandle` struct (tx, type, capabilities)
-- [ ] Add `Arc<RwLock<>>` for concurrent surface access
-- [ ] Implement surface-specific message routing
+#### 4.2 Multi-Surface Conductor Refactor [Priority: Critical] ✓ DONE Sprint 3
+- [x] Replace single `tx` channel with `HashMap<ConnectionId, SurfaceHandle>`
+- [x] Implement `SurfaceHandle` struct (tx, type, capabilities)
+- [x] Add `Arc<RwLock<>>` for concurrent surface access
+- [x] Implement surface-specific message routing
+  - **Completed**: Created `conductor/core/src/surface_registry.rs` with:
+    - `ConnectionId` (unique, atomic counter)
+    - `SurfaceHandle` (tx, type, capabilities, connected_at, metadata)
+    - `SurfaceRegistry` (thread-safe HashMap with RwLock)
+    - Methods: broadcast(), send_to(), send_to_capable(), cleanup_disconnected()
+    - Updated Conductor with new_with_registry() and handle_event_from()
+    - Updated daemon server.rs for per-connection channels
 
 #### 4.3 Surface Registration Protocol [Priority: High]
 - [ ] Extend handshake with capability declaration
@@ -106,11 +113,17 @@ yollayah.sh
 - [ ] Priority: CLI > env > file > defaults
 - [ ] Document all configuration options
 
-#### 5.2 Launcher Script Update [Priority: High]
-- [ ] Check for running daemon, connect if exists
-- [ ] Start daemon if not running (--daemonize)
-- [ ] Pass socket path to TUI
-- [ ] Add restart/stop commands
+#### 5.2 Launcher Script Update [Priority: High] ✓ DONE Sprint 3
+- [x] Check for running daemon, connect if exists
+- [x] Start daemon if not running (--daemonize)
+- [x] Pass socket path to TUI
+- [x] Add restart/stop commands
+  - **Completed**: Updated `yollayah.sh` with:
+    - Commands: start, daemon, connect, stop, restart, status
+    - Functions: check_daemon(), start_daemon(), stop_daemon(), show_status(), connect_tui()
+    - Environment variables: CONDUCTOR_SOCKET, CONDUCTOR_PID, AI_WAY_LOG
+    - Graceful shutdown (SIGTERM with fallback to SIGKILL)
+    - Socket/PID file management
 
 #### 5.3 Heartbeat Enforcement [Priority: Medium]
 - [ ] Watchdog task per connection
@@ -300,4 +313,4 @@ _Items discovered during refactor that should NOT block this work:_
 
 ---
 
-**Last Updated**: 2026-01-01 (Specialist review integration)
+**Last Updated**: 2026-01-02 (Sprint 3 completion - Multi-surface refactor, Launcher updates)

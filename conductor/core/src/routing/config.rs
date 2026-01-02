@@ -11,7 +11,7 @@ use std::time::Duration;
 // ============================================================================
 
 /// Classification of task types for routing decisions
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, Serialize, Deserialize, Default)]
 pub enum TaskClass {
     /// Quick response needed (<100ms first token)
     /// Examples: autocomplete, quick answers, greetings
@@ -42,13 +42,8 @@ pub enum TaskClass {
     Embedding,
 
     /// Default/unclassified tasks
+    #[default]
     General,
-}
-
-impl Default for TaskClass {
-    fn default() -> Self {
-        Self::General
-    }
 }
 
 impl TaskClass {
@@ -319,11 +314,13 @@ impl Default for ConnectionConfig {
 
 impl ConnectionConfig {
     /// Convert to Duration for connect timeout
+    #[must_use]
     pub fn connect_timeout(&self) -> Duration {
         Duration::from_millis(self.connect_timeout_ms)
     }
 
     /// Convert to Duration for read timeout
+    #[must_use]
     pub fn read_timeout(&self) -> Duration {
         Duration::from_millis(self.read_timeout_ms)
     }
@@ -456,9 +453,10 @@ impl Default for RetryConfig {
 
 impl RetryConfig {
     /// Calculate backoff duration for attempt N (0-indexed)
+    #[must_use]
     pub fn backoff_for_attempt(&self, attempt: u32) -> Duration {
-        let base =
-            self.initial_backoff_ms as f64 * self.backoff_multiplier.powi(attempt as i32) as f64;
+        let base = self.initial_backoff_ms as f64
+            * f64::from(self.backoff_multiplier.powi(attempt as i32));
         let capped = base.min(self.max_backoff_ms as f64);
 
         let duration_ms = if self.use_jitter {
@@ -473,6 +471,7 @@ impl RetryConfig {
     }
 
     /// Check if a status code should trigger a retry
+    #[must_use]
     pub fn should_retry_status(&self, status: u16) -> bool {
         self.retry_status_codes.contains(&status)
     }
@@ -538,22 +537,17 @@ impl Default for RouterConfig {
 }
 
 /// Queue ordering strategy
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize, Default)]
 pub enum QueueStrategy {
     /// First-in, first-out
     Fifo,
     /// Priority queue (higher priority first, FIFO within priority)
+    #[default]
     PriorityFifo,
     /// Shortest job first (based on estimated token count)
     ShortestJobFirst,
     /// Fair scheduling across conversations
     FairShare,
-}
-
-impl Default for QueueStrategy {
-    fn default() -> Self {
-        Self::PriorityFifo
-    }
 }
 
 /// Metrics collection configuration

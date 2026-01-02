@@ -20,6 +20,7 @@ pub struct ConnectionId(pub String);
 
 impl ConnectionId {
     /// Generate a new unique connection ID using cryptographically random 128-bit value
+    #[must_use]
     pub fn new() -> Self {
         use rand::Rng;
         let bytes: [u8; 16] = rand::thread_rng().gen();
