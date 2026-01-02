@@ -23,7 +23,7 @@ use ratatui::style::Style;
 pub use activity::{Activity, ActivityManager, OverlaySize};
 pub use animation::AnimationEngine;
 pub use sizes::AvatarSize;
-pub use sprites::{Animation, ColoredCell, Frame};
+pub use sprites::{Animation, CellBlendMode, ColoredCell, Frame};
 pub use states::{AvatarState, AvatarStateMachine, AvatarTrigger};
 
 /// The animated axolotl avatar

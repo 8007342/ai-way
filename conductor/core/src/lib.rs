@@ -89,6 +89,7 @@
 //!
 //! # Module Overview
 //!
+//! - [`animation`]: Surface-agnostic animation abstractions (timing, easing, layers)
 //! - [`avatar`]: Avatar state, moods, gestures, and command parsing
 //! - [`backend`]: LLM backend abstraction (Ollama, etc.)
 //! - [`events`]: Events from UI surfaces to Conductor
@@ -110,6 +111,7 @@
 #![allow(clippy::module_name_repetitions)]
 
 pub mod accessibility;
+pub mod animation;
 pub mod avatar;
 pub mod backend;
 pub mod conductor;
@@ -142,3 +144,9 @@ pub use tasks::{Task, TaskCreationError, TaskId, TaskManager, TaskStatus};
 
 // Accessibility exports
 pub use accessibility::{Accessible, Urgency};
+
+// Animation exports
+pub use animation::{
+    AnimationController, AnimationLayer, AnimationPriority, AnimationSpec, AnimationTransition,
+    BlendMode, EasingFunction, EmotionalCategory, FrameTiming, TransitionType,
+};
