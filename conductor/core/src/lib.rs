@@ -117,6 +117,7 @@ pub mod animation;
 pub mod avatar;
 pub mod backend;
 pub mod conductor;
+pub mod config;
 pub mod conversation;
 pub mod events;
 pub mod messages;
@@ -180,4 +181,10 @@ pub use streaming::{
 // Surface registry exports
 pub use surface_registry::{
     BroadcastResult, ConnectionId, RegistrySummary, SurfaceHandle, SurfaceMetadata, SurfaceRegistry,
+};
+
+// Config exports
+pub use config::{
+    default_config_path, load_config, load_config_from_path, ConductorConfigFile, ConductorToml,
+    ConfigError, ConfigOverrides, ConfigSource,
 };

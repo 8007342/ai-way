@@ -28,6 +28,7 @@
 pub mod block;
 pub mod cache;
 pub mod evolution;
+pub mod generation;
 pub mod security;
 pub mod variants;
 
@@ -63,6 +64,12 @@ pub use evolution::{
 // Re-export variants types
 pub use variants::{
     available_variants_count, select_variant, AnimationType, AnimationVariant, VariantRegistry,
+};
+
+// Re-export generation types
+pub use generation::{
+    available_accessories, compose_with_accessory, Accessory, AccessorySlot, EyePattern,
+    MoodOverlay, MouthPattern, RuleBasedGenerator, SpriteGenerator,
 };
 
 use std::collections::VecDeque;

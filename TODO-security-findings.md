@@ -1,7 +1,7 @@
 # TODO-security-findings: Security Audit Tracking
 
 **Created**: 2026-01-02
-**Last Audit**: 2026-01-02 (Sprint 6 - H-001, H-002 resolved)
+**Last Audit**: 2026-01-02 (Sprint 8 - M-001 resolved)
 **Auditors**: Architect, Hacker, QA, Lawyer
 
 ---
@@ -35,15 +35,6 @@ _None currently identified._
 _None currently identified._
 
 ### MEDIUM
-
-#### M-001: auth_token Field Unused
-**Location**: `conductor/core/src/events.rs` (SurfaceCapabilities)
-**Status**: Open
-**Found**: Sprint 5
-**Target**: Sprint 8
-**Epic**: E-2026Q1-multi-surface
-**Description**: The `auth_token` field exists but is never validated. False sense of security.
-**Recommendation**: Either implement token validation or remove the field.
 
 #### M-002: No Rate Limiting on Sprite Requests
 **Location**: `conductor/core/src/avatar/security.rs`
@@ -98,6 +89,20 @@ _None currently identified._
 ---
 
 ## Resolved Findings
+
+### R-004: auth_token Field Unused (was MEDIUM - M-001)
+**Location**: `conductor/core/src/events.rs` (SurfaceEvent::Handshake)
+**Resolved**: Sprint 8
+**Epic**: E-2026Q1-multi-surface
+**Description**: The `auth_token` field in the Handshake event was never validated, creating a false sense of security.
+**Resolution**: Implemented session token authentication in `conductor/core/src/transport/auth.rs`:
+- `SessionToken` struct wrapping 32 bytes of cryptographically random data
+- Token generated on daemon startup and written to `$XDG_RUNTIME_DIR/ai-way/session.token`
+- Token file created with 0o600 permissions (owner read/write only)
+- Surfaces read token before connecting and include in handshake
+- Constant-time comparison prevents timing attacks
+- Token regenerated on each daemon restart
+- Full test coverage for generation, file I/O, and validation
 
 ### R-003: Connection Pool Reuse Not Implemented (was HIGH - H-002)
 **Location**: `conductor/core/src/routing/connection_pool.rs`

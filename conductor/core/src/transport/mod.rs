@@ -17,8 +17,10 @@
 //!
 //! - Unix sockets use `SO_PEERCRED` to validate peer UID
 //! - Socket files are created with 0600 permissions
+//! - Session token authentication prevents unauthorized connections
 //! - No network exposure by default
 
+pub mod auth;
 pub mod config;
 pub mod factory;
 pub mod frame;
@@ -30,6 +32,7 @@ pub mod traits;
 pub mod unix_socket;
 
 // Re-exports for convenience
+pub use auth::{get_runtime_dir, get_token_path, remove_token_file, SessionToken, TokenError};
 pub use config::{TransportConfig, TransportType};
 pub use factory::create_surface_transport;
 pub use frame::{FrameDecoder, FrameEncoder};

@@ -11,7 +11,7 @@ This document tracks all `#[ignore]` tests across the codebase. Update this file
 
 | Total Ignored | High Priority | Medium Priority | Low Priority | Intentional |
 |---------------|---------------|-----------------|--------------|-------------|
-| 1             | 0             | 0               | 0            | 1           |
+| 5             | 0             | 0               | 0            | 5           |
 
 ---
 
@@ -22,6 +22,10 @@ This document tracks all `#[ignore]` tests across the codebase. Update this file
 | Test Name | File:Line | Reason | Epic/Feature | Target Sprint | Status | Priority |
 |-----------|-----------|--------|--------------|---------------|--------|----------|
 | `scenario_10_stress_test` | `conductor/core/tests/routing_performance_tests.rs:726` | Long-running test (10+ min), run manually | N/A | N/A | Intentional | LOW |
+| `chaos_socket_close_mid_frame` | `conductor/core/tests/chaos_tests.rs` | Chaos test - connection dies mid-frame | Transport Resilience | N/A | Intentional (chaos) | LOW |
+| `chaos_backend_hang` | `conductor/core/tests/chaos_tests.rs` | Chaos test - backend stops responding | Transport Resilience | N/A | Intentional (chaos) | LOW |
+| `chaos_session_memory_pressure` | `conductor/core/tests/chaos_tests.rs` | Chaos test - many sessions, memory pressure | Transport Resilience | N/A | Intentional (chaos) | LOW |
+| `chaos_concurrent_pruning` | `conductor/core/tests/chaos_tests.rs` | Chaos test - concurrent operations during cleanup | Transport Resilience | N/A | Intentional (chaos) | LOW |
 
 ### yollayah-tui
 
@@ -59,6 +63,67 @@ cargo test --package conductor-core scenario_10_stress_test -- --ignored --nocap
 
 **Owner**: QA Team
 **Target**: N/A (Intentional)
+
+---
+
+### Chaos Tests (Sprint 8)
+
+**Location**: `/var/home/calmecacpilli/src/ai-way/conductor/core/tests/chaos_tests.rs`
+
+These tests verify system resilience under adverse conditions. All are marked `#[ignore]` with "Intentional (chaos)" reason.
+
+#### chaos_socket_close_mid_frame
+
+**Description**: Simulates connection dying during message transmission:
+- Partial frame detection
+- Graceful error handling without panic
+- No resource leaks from interrupted transmissions
+- Proper cleanup of decoder state
+
+**Pass Criteria**: < 1% unexpected errors, no resource leaks
+
+#### chaos_backend_hang
+
+**Description**: Simulates a backend that stops responding:
+- Timeout triggers correctly
+- Connection marked as unhealthy
+- System continues to function after timeout
+- Graceful degradation under timeout conditions
+
+**Pass Criteria**: < 5% unexpected errors, no resource leaks, timeouts detected
+
+#### chaos_session_memory_pressure
+
+**Description**: Creates many concurrent sessions to verify memory stays bounded:
+- Memory stays bounded under high session count
+- Old sessions can be evicted properly
+- No unbounded growth in data structures
+- Registry handles high connection counts
+
+**Pass Criteria**: No resource leaks, bounded memory usage
+
+#### chaos_concurrent_pruning
+
+**Description**: Tests concurrent operations during cleanup/pruning:
+- No deadlocks during concurrent register/unregister/prune
+- Data integrity maintained during concurrent access
+- No races leading to corrupted state
+- Proper lock ordering and contention handling
+
+**Pass Criteria**: No deadlocks, > 50% success rate, no unexpected errors
+
+**How to Run All Chaos Tests**:
+```bash
+cargo test --package conductor-core chaos -- --ignored --nocapture
+```
+
+**How to Run Individual Chaos Test**:
+```bash
+cargo test --package conductor-core chaos_socket_close_mid_frame -- --ignored --nocapture
+```
+
+**Owner**: QA Team
+**Target**: N/A (Intentional - chaos tests for resilience verification)
 
 ---
 
@@ -147,11 +212,17 @@ cargo test --package conductor-core <test_name> -- --ignored --nocapture
 
 ## Test Statistics
 
-**As of Sprint 6**:
-- **conductor-core**: 417+ tests passing (39 new evolution tests), 1 ignored
+**As of Sprint 8**:
+- **conductor-core**: 419+ tests passing (includes 2 chaos infrastructure sanity tests), 5 ignored
 - **yollayah-tui**: 26+ tests passing, 0 ignored
-- **Total**: 545+ tests passing, 1 ignored (stress test - intentional)
+- **Total**: 547+ tests passing, 5 ignored (1 stress test + 4 chaos tests - all intentional)
+
+**Chaos Tests Added in Sprint 8**:
+- `chaos_socket_close_mid_frame` - connection dies mid-frame
+- `chaos_backend_hang` - backend stops responding
+- `chaos_session_memory_pressure` - many sessions, high memory
+- `chaos_concurrent_pruning` - concurrent operations during cleanup
 
 ---
 
-**Next Review**: Sprint 8 (chaos tests)
+**Next Review**: Sprint 9
