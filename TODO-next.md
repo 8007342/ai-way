@@ -116,6 +116,7 @@
 
 | Item | File | Effort | Impact |
 |------|------|--------|--------|
+| **⚠️ Fix QuickResponse routing bug** | routing/policy.rs | 1h | **Critical** - "Hello" fails |
 | Scroll gradient indicators | TODO-main.md | 1-2h | High - discoverability |
 | Breathing color effect | TODO-main.md | 1-2h | High - perceived aliveness |
 | Empty response test | TODO-integration-testing.md | 30m | Medium - edge case coverage |
@@ -192,23 +193,31 @@ Tests currently marked `#[ignore]` that need attention:
 
 ---
 
-### 2. scenario_9_session_affinity [MEDIUM - Architect]
+### 2. scenario_9_session_affinity [HIGH - Architect] ⚠️ REAL BUG
 **File**: `conductor/core/tests/routing_performance_tests.rs:587`
-**Reason**: Model registration for routing policy not working
+**Reason**: QuickResponse classification breaks routing for common messages
 
 **Root Cause Analysis**:
-- Test sends "Hello" which auto-classifies as `TaskClass::QuickResponse`
-- `QuickResponse` requires `target_ttft < 100ms`
+- Any short greeting ("Hello", "Hi", "Hey", "Thanks") auto-classifies as `TaskClass::QuickResponse`
+- `QuickResponse` requires `target_ttft < 100ms` (see `routing/config.rs:69`)
 - Default `ModelProfile::new()` sets `avg_ttft_ms: 1000` (1 second)
-- Both models filtered out by `can_meet_latency()` check
-- Result: `NoModelsAvailable` error
+- ALL models get filtered out by `can_meet_latency()` check in `get_candidates()`
+- Result: `NoModelsAvailable` error for common user messages
 
-**Fix Options**:
-1. **Test fix**: Set `avg_ttft_ms: 50` on test profiles, OR
-2. **Test fix**: Explicitly set `task_class: General` on request, OR
-3. **Design fix**: Relax QuickResponse filtering to allow fallback
+**User Impact**:
+- When routing is enabled (`CONDUCTOR_ENABLE_ROUTING=1`), saying "Hello" fails
+- Startup greeting may also fail if it goes through routing
+- Users see silent failures or errors for simple greetings
 
-**Security Note** (Hacker): No security implications - test logic issue only.
+**Fix Required** (not just test fix):
+1. **Option A**: Relax QuickResponse TTFT requirement (e.g., 500ms instead of 100ms)
+2. **Option B**: Add fallback when no models meet latency - use best available
+3. **Option C**: Don't filter by latency, just use it for scoring/prioritization
+4. **Option D**: Remove QuickResponse auto-classification for greetings
+
+**Recommendation**: Option B or C - never return NoModelsAvailable when models exist
+
+**Security Note** (Hacker): No security implications - routing logic issue.
 
 ---
 
@@ -229,8 +238,8 @@ Tests currently marked `#[ignore]` that need attention:
 
 | Test | Priority | Owner | Sprint Target | Blocker? |
 |------|----------|-------|---------------|----------|
+| scenario_9_session_affinity | **HIGH** | Architect | **Sprint 4** | **Yes (real bug)** |
 | scenario_7_connection_pool | HIGH | Backend | Sprint 5 | No (perf) |
-| scenario_9_session_affinity | MEDIUM | Architect | Sprint 4 | No (test bug) |
 | scenario_10_stress_test | LOW | QA | N/A | Intentional |
 
 ---
