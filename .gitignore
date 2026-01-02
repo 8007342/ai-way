@@ -18,7 +18,9 @@ agents/
 !lib/agents/
 
 # Rust build artifacts
+target/
 tui/target/
+conductor/core/target/
 
 # Docker volumes (persistent data)
 models/
