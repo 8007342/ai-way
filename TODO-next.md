@@ -180,7 +180,7 @@
 | ~~Q3: Uncached sprite request~~ | Protocol flow | Architect | ✓ SpriteRequest message |
 | ~~Q4: Evolution level triggers?~~ | UX feel | UX + Backend | ✓ Dual thresholds (interactions + time) |
 | ~~Q5: Evolution visual markers?~~ | Art requirements | UX + Art | ✓ Glow, particles, color, complexity |
-| Q6: LLM involvement in sprite gen? | Architecture | Architect | Before P4.1 |
+| ~~Q6: LLM involvement in sprite gen?~~ | Architecture | Architect | ✓ NO - Rule-based only for v1.0 |
 
 ---
 
@@ -230,8 +230,7 @@
 ## Sprint 8+ Preview
 
 ### Sprint 8 (E-2026Q1-avatar-animation)
-- P4.1-P4.3: Sprite generation pipeline
-- Answer Q6: LLM involvement decision
+- P4.1-P4.3: Sprite generation pipeline (rule-based, Q6 answered)
 
 ### Sprint 8 (E-2026Q1-multi-surface)
 - 5.1: TOML configuration file

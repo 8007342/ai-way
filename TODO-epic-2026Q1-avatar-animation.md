@@ -257,7 +257,6 @@ const MAX_ANIMATION_DURATION_MS: u64 = 60_000;
 
 | ID | Question | Owner | Target Sprint |
 |----|----------|-------|---------------|
-| Q6 | Is LLM involved in sprite generation? | Architect + Hacker | Sprint 8 |
 | Q7 | Where does sprite generation compute happen? | Architect | Sprint 8 |
 
 ### Resolved
@@ -269,6 +268,114 @@ const MAX_ANIMATION_DURATION_MS: u64 = 60_000;
 | Q3 | Uncached sprite request? | SpriteRequest message | Sprint 5 |
 | Q4 | What triggers evolution level increases? | Dual threshold: interactions + session time (both required) | Sprint 6 |
 | Q5 | How many evolution levels and visual markers? | 5 levels (Nascent→Transcendent), markers: glow, particles, color, complexity | Sprint 6 |
+| Q6 | Is LLM involved in sprite generation? | **NO** - Rule-based only for v1.0. See Q6 Decision Rationale below. | Sprint 9 |
+
+---
+
+## Q6 Decision Rationale: LLM NOT Recommended for Sprite Generation
+
+### Executive Summary
+
+After thorough analysis, we recommend **NOT using LLM for sprite generation in v1.0**. The existing `RuleBasedGenerator` provides sufficient capability for the avatar system's needs, while LLM involvement introduces significant security risks, latency concerns, and operational costs that outweigh the marginal benefits.
+
+### Analysis
+
+#### Current RuleBasedGenerator Capabilities (Sufficient for v1.0)
+
+The `RuleBasedGenerator` in `conductor/core/src/avatar/generation.rs` already provides:
+
+1. **Mood-based sprite variations**: 10 moods (Happy, Thinking, Confused, Playful, Shy, Excited, Calm, Curious, Sad, Focused) with distinct tints and expressions
+2. **Expression system**: 10 eye patterns + 7 mouth patterns = 70 expression combinations
+3. **Accessory system**: 10 accessories across 5 slots, evolution-gated unlocking
+4. **Evolution integration**: Detail level scales with evolution (Nascent->Transcendent)
+5. **Multiple variants per mood**: 2-3 variants per mood for visual freshness
+6. **Customizable colors**: Primary/secondary color customization
+7. **Deterministic output**: Cache-friendly, reproducible sprites
+
+#### What LLM Could Theoretically Add
+
+1. **Natural language sprite descriptions**: "Make Yollayah look sleepy with coffee"
+2. **Creative accessory combinations**: Novel accessory ideas beyond predefined set
+3. **Personality-driven adaptations**: Sprites tailored to conversation context
+4. **User preference learning**: Adaptive styling based on interaction patterns
+
+#### Security Concerns (Critical)
+
+Per the Hacker Analysis in `TODO-avatar-animation-system.md`:
+
+1. **Prompt Injection Risk** (CRITICAL): LLM-generated sprite descriptions could embed malicious commands
+2. **Content Policy Violation**: LLM could generate inappropriate/offensive sprite content
+3. **Output Validation Complexity**: LLM output (block data or descriptions) requires robust sanitization
+4. **Non-determinism**: Same prompt could yield different sprites, breaking cache efficiency
+
+The security module (`conductor/core/src/avatar/security.rs`) enforces:
+- `MAX_SPRITE_WIDTH/HEIGHT`: 100 blocks
+- `MAX_BLOCKS_PER_SPRITE`: 10,000
+- Unicode whitelist validation
+- Rate limiting (100 req/min)
+
+These mitigations assume trusted sprite generation. LLM involvement would require additional:
+- Output content filtering
+- Semantic validation of block patterns
+- Adversarial input detection
+
+#### Performance/Cost Tradeoffs
+
+| Factor | Rule-Based | LLM-Assisted |
+|--------|------------|--------------|
+| Latency | < 1ms | 200-2000ms (API call) |
+| Cost | $0 | $0.001-0.01 per generation |
+| Offline capability | Full | None |
+| Determinism | Yes | No |
+| Cache efficiency | High | Low (non-deterministic) |
+
+#### Offline Capability (Critical for TUI)
+
+The TUI is designed to work offline. LLM sprite generation would:
+- Break offline functionality entirely
+- Require fallback to rule-based anyway
+- Add complexity without proportional benefit
+
+### Decision: Rule-Based Only for v1.0
+
+**Recommendation**: Do NOT implement LLM-based sprite generation for v1.0.
+
+**Justification**:
+1. `RuleBasedGenerator` already provides sufficient variety (70+ expression combos, 10 accessories)
+2. Security risks of LLM output validation are significant
+3. Latency impact (200-2000ms vs <1ms) degrades user experience
+4. Offline capability is a core requirement
+5. Cost of LLM calls adds operational burden without proportional value
+
+### What Would Change This Decision
+
+LLM sprite generation should be reconsidered if:
+
+1. **User research shows demand**: Users explicitly request more variety than rule-based provides
+2. **Secure LLM output validation**: Industry-standard patterns emerge for safe LLM->visual pipelines
+3. **Local LLM becomes viable**: Small, fast, offline-capable models could generate sprite descriptions
+4. **Premium tier justification**: Users willing to pay for enhanced personalization
+
+### Alternative Personalization Approaches (Rule-Based)
+
+To increase variety without LLM:
+
+1. **Expand accessory catalog**: Add 10-20 more accessories via art assets
+2. **Color theme system**: User-selectable color palettes (pastel, neon, earth tones)
+3. **Seasonal variations**: Holiday-themed sprites (rule-gated by date)
+4. **Achievement unlocks**: Special sprites earned through interaction milestones
+5. **Context-aware selection**: Use conversation keywords to select pre-made variants
+
+### Implementation Impact
+
+Since LLM is NOT recommended:
+
+1. **No new files needed** - `llm_generator.rs` not created
+2. **P4.1-P4.3 proceed as planned** - Rule-based pipeline confirmed
+3. **Security scope reduced** - No LLM output validation needed
+4. **P4.4 simplified** - Content policy focuses on rule compliance, not LLM output
+
+---
 
 ## Dependencies
 
@@ -299,4 +406,4 @@ const MAX_ANIMATION_DURATION_MS: u64 = 60_000;
 ---
 
 **Epic Owner**: Architect + TUI Developer
-**Last Updated**: 2026-01-02 (Sprint 6 complete)
+**Last Updated**: 2026-01-02 (Sprint 9 - Q6 resolved)

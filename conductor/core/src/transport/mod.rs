@@ -3,7 +3,7 @@
 //! Provides abstraction over different transport mechanisms:
 //! - `InProcess`: Direct channel communication (embedded mode)
 //! - `UnixSocket`: Local IPC via Unix domain sockets
-//! - WebSocket: Remote IPC for web/mobile surfaces (future)
+//! - `WebSocket`: Remote IPC for web/mobile surfaces
 //!
 //! # Design Philosophy
 //!
@@ -11,7 +11,7 @@
 //! Conductor and Surface logic. This enables:
 //! - Process separation (Conductor as daemon, TUI as client)
 //! - Multiple simultaneous surfaces
-//! - Future WebSocket support for remote surfaces
+//! - WebSocket support for remote surfaces (web, mobile, TV)
 //!
 //! # Security
 //!
@@ -19,6 +19,7 @@
 //! - Socket files are created with 0600 permissions
 //! - Session token authentication prevents unauthorized connections
 //! - No network exposure by default
+//! - WebSocket requires TLS and origin validation for production
 
 pub mod auth;
 pub mod config;
@@ -30,6 +31,7 @@ pub mod rate_limit;
 pub mod traits;
 #[cfg(unix)]
 pub mod unix_socket;
+pub mod websocket;
 
 // Re-exports for convenience
 pub use auth::{get_runtime_dir, get_token_path, remove_token_file, SessionToken, TokenError};
@@ -48,3 +50,27 @@ pub use traits::{ConductorTransport, ConnectionId, SurfaceTransport, TransportEr
 
 #[cfg(unix)]
 pub use unix_socket::{UnixSocketClient, UnixSocketServer};
+
+// WebSocket transport types (infrastructure only - implementation pending security review)
+pub use websocket::{
+    // Security
+    AuthenticationMethod,
+    // Frame handling
+    FrameConversionError,
+    OriginPolicy,
+    OriginValidationResult,
+    SecurityConfig,
+    SecurityError,
+    // Configuration
+    TlsConfig,
+    WebSocketConfig,
+    WebSocketConfigBuilder,
+    // Traits (interface definitions)
+    WebSocketConnection,
+    WebSocketConnectionState,
+    WebSocketError,
+    WebSocketFrame,
+    WebSocketFrameAdapter,
+    WebSocketFrameType,
+    WebSocketListener,
+};

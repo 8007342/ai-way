@@ -25,6 +25,7 @@
 //! - Avatar state types (position, mood, gestures, reactions)
 //! - Command parsing for embedded avatar commands in LLM responses
 
+pub mod api;
 pub mod block;
 pub mod cache;
 pub mod evolution;
@@ -70,6 +71,12 @@ pub use variants::{
 pub use generation::{
     available_accessories, compose_with_accessory, Accessory, AccessorySlot, EyePattern,
     MoodOverlay, MouthPattern, RuleBasedGenerator, SpriteGenerator,
+};
+
+// Re-export API types (P4.4)
+pub use api::{
+    GenerationOptions, GenerationProgress, GenerationStage, GenerationStatus, ProgressCallback,
+    RequestId, SpriteService,
 };
 
 use std::collections::VecDeque;
