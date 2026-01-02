@@ -17,6 +17,7 @@
 use serde::{Deserialize, Serialize};
 
 use crate::avatar::{AvatarGesture, AvatarMood, AvatarPosition, AvatarReaction, AvatarSize};
+use crate::conversation::{ConversationId, ConversationState};
 use crate::tasks::TaskId;
 
 /// Messages from Conductor to UI Surface
@@ -66,6 +67,69 @@ pub enum ConductorMessage {
         message_id: MessageId,
         /// Error description
         error: String,
+    },
+
+    // ============================================
+    // Multi-Conversation Messages
+    // ============================================
+    /// A new conversation was created
+    ConversationCreated {
+        /// Unique conversation identifier
+        conversation_id: ConversationId,
+        /// Name of the agent (None for direct user conversation)
+        agent_name: Option<String>,
+    },
+
+    /// Conversation focus changed
+    ConversationFocused {
+        /// Conversation that is now focused
+        conversation_id: ConversationId,
+    },
+
+    /// Conversation state changed
+    ConversationStateChanged {
+        /// Conversation that changed
+        conversation_id: ConversationId,
+        /// New state
+        state: ConversationState,
+    },
+
+    /// Streaming token for a specific conversation
+    ConversationStreamToken {
+        /// Conversation receiving the token
+        conversation_id: ConversationId,
+        /// Message ID this token belongs to
+        message_id: MessageId,
+        /// The token text
+        token: String,
+    },
+
+    /// Stream completed for a specific conversation
+    ConversationStreamEnd {
+        /// Conversation that completed streaming
+        conversation_id: ConversationId,
+        /// Message ID that completed
+        message_id: MessageId,
+        /// Final complete content
+        final_content: String,
+        /// Response metadata
+        metadata: ResponseMetadata,
+    },
+
+    /// Summary of completed conversations is ready
+    SummaryReady {
+        /// Main conversation ID
+        conversation_id: ConversationId,
+        /// Compiled summary text
+        summary: String,
+        /// IDs of sub-conversations included
+        sub_conversations: Vec<ConversationId>,
+    },
+
+    /// Conversation was removed
+    ConversationRemoved {
+        /// Conversation that was removed
+        conversation_id: ConversationId,
     },
 
     // ============================================

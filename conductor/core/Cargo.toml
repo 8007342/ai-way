@@ -55,6 +55,7 @@ libc = "0.2"
 # Random ID generation
 rand = "0.8"
 hex = "0.4"
+uuid = { version = "1.11", features = ["v4", "serde"] }
 
 # Optional: WebSocket transport
 tokio-tungstenite = { version = "0.24", optional = true }

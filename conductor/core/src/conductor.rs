@@ -525,6 +525,51 @@ impl<B: LlmBackend + 'static> Conductor<B> {
                 // Heartbeat response received
                 tracing::trace!(seq = seq, "Received pong");
             }
+
+            // Multi-conversation events
+            SurfaceEvent::FocusConversation {
+                event_id,
+                conversation_id,
+            } => {
+                self.ack(event_id).await;
+                // TODO: Implement conversation focus switching
+                tracing::debug!(conversation_id = %conversation_id, "Focus conversation request");
+            }
+
+            SurfaceEvent::ScrollConversation {
+                event_id,
+                conversation_id,
+                direction: _,
+                amount: _,
+            } => {
+                self.ack(event_id).await;
+                // TODO: Track per-conversation scroll state
+                tracing::debug!(conversation_id = %conversation_id, "Scroll conversation request");
+            }
+
+            SurfaceEvent::RequestSummary { event_id } => {
+                self.ack(event_id).await;
+                // TODO: Generate summary view
+                tracing::debug!("Summary view requested");
+            }
+
+            SurfaceEvent::ExitSummary { event_id } => {
+                self.ack(event_id).await;
+                // TODO: Return to conversation view
+                tracing::debug!("Exit summary requested");
+            }
+
+            SurfaceEvent::FocusNextConversation { event_id } => {
+                self.ack(event_id).await;
+                // TODO: Cycle to next conversation
+                tracing::debug!("Focus next conversation requested");
+            }
+
+            SurfaceEvent::FocusPrevConversation { event_id } => {
+                self.ack(event_id).await;
+                // TODO: Cycle to previous conversation
+                tracing::debug!("Focus previous conversation requested");
+            }
         }
 
         Ok(())

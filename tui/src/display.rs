@@ -612,6 +612,50 @@ impl DisplayState {
             ConductorMessage::LayoutHint { .. } => {
                 // TODO: implement layout hint handling
             }
+
+            // Multi-conversation messages - future: implement stacked conversation views
+            ConductorMessage::ConversationCreated { .. } => {
+                // TODO: track multiple conversations
+            }
+            ConductorMessage::ConversationFocused { .. } => {
+                // TODO: switch focus between conversations
+            }
+            ConductorMessage::ConversationStateChanged { .. } => {
+                // TODO: update conversation state indicators
+            }
+            ConductorMessage::ConversationStreamToken {
+                message_id, token, ..
+            } => {
+                // For now, treat like regular tokens in main conversation
+                if self.streaming_id.as_ref() != Some(&message_id) {
+                    self.messages
+                        .push(DisplayMessage::streaming(message_id.clone()));
+                    self.streaming_id = Some(message_id.clone());
+                }
+                if let Some(msg) = self.messages.last_mut() {
+                    if msg.id == message_id {
+                        msg.append(&token);
+                    }
+                }
+            }
+            ConductorMessage::ConversationStreamEnd {
+                message_id,
+                final_content,
+                metadata,
+                ..
+            } => {
+                // For now, treat like regular stream end
+                if let Some(msg) = self.messages.iter_mut().find(|m| m.id == message_id) {
+                    msg.complete(final_content, metadata);
+                }
+                self.streaming_id = None;
+            }
+            ConductorMessage::SummaryReady { .. } => {
+                // TODO: show summary view
+            }
+            ConductorMessage::ConversationRemoved { .. } => {
+                // TODO: remove conversation from view
+            }
         }
     }
 

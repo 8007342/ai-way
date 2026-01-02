@@ -214,8 +214,31 @@ impl Accessible for ConductorMessage {
                 }
             }
 
+            // Multi-conversation messages
+            ConductorMessage::ConversationCreated { agent_name, .. } => {
+                let name = agent_name.as_ref().map_or("Yollayah", |n| n.as_str());
+                Some(format!("New conversation started with {name}"))
+            }
+
+            ConductorMessage::ConversationFocused { .. } => {
+                Some("Conversation focused".to_string())
+            }
+
+            ConductorMessage::ConversationStateChanged { .. } => None, // Too noisy
+
+            ConductorMessage::ConversationStreamEnd { final_content, .. } => {
+                Some(format!("Agent says: {final_content}"))
+            }
+
+            ConductorMessage::SummaryReady { summary, .. } => {
+                Some(format!("Summary ready: {summary}"))
+            }
+
+            ConductorMessage::ConversationRemoved { .. } => Some("Conversation closed".to_string()),
+
             // Internal/transport messages - no announcement needed
             ConductorMessage::Token { .. }
+            | ConductorMessage::ConversationStreamToken { .. }
             | ConductorMessage::QueryCapabilities
             | ConductorMessage::Ack { .. }
             | ConductorMessage::SessionInfo { .. }

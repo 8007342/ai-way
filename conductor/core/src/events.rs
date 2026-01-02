@@ -11,6 +11,7 @@
 
 use serde::{Deserialize, Serialize};
 
+use crate::conversation::ConversationId;
 use crate::messages::{EventId, MessageId};
 use crate::tasks::TaskId;
 
@@ -178,6 +179,53 @@ pub enum SurfaceEvent {
         /// Whether the surface can continue
         recoverable: bool,
     },
+
+    // ============================================
+    // Multi-Conversation Events
+    // ============================================
+    /// User focused on a specific conversation
+    FocusConversation {
+        /// Event ID for acknowledgment
+        event_id: EventId,
+        /// Conversation to focus
+        conversation_id: ConversationId,
+    },
+
+    /// User scrolled within a specific conversation
+    ScrollConversation {
+        /// Event ID for acknowledgment
+        event_id: EventId,
+        /// Conversation being scrolled
+        conversation_id: ConversationId,
+        /// Direction of scroll
+        direction: ScrollDirection,
+        /// Amount scrolled (surface-specific units)
+        amount: u32,
+    },
+
+    /// User requested summary view
+    RequestSummary {
+        /// Event ID for acknowledgment
+        event_id: EventId,
+    },
+
+    /// User switched from summary back to conversations
+    ExitSummary {
+        /// Event ID for acknowledgment
+        event_id: EventId,
+    },
+
+    /// User requested focus on next conversation
+    FocusNextConversation {
+        /// Event ID for acknowledgment
+        event_id: EventId,
+    },
+
+    /// User requested focus on previous conversation
+    FocusPrevConversation {
+        /// Event ID for acknowledgment
+        event_id: EventId,
+    },
 }
 
 impl SurfaceEvent {
@@ -204,7 +252,13 @@ impl SurfaceEvent {
             | Self::MessageClicked { event_id, .. }
             | Self::CapabilitiesReport { event_id, .. }
             | Self::QuitRequested { event_id }
-            | Self::SurfaceError { event_id, .. } => Some(event_id),
+            | Self::SurfaceError { event_id, .. }
+            | Self::FocusConversation { event_id, .. }
+            | Self::ScrollConversation { event_id, .. }
+            | Self::RequestSummary { event_id }
+            | Self::ExitSummary { event_id }
+            | Self::FocusNextConversation { event_id }
+            | Self::FocusPrevConversation { event_id } => Some(event_id),
             Self::Pong { .. }
             | Self::UserTyping { .. }
             | Self::UserScrolled { .. }

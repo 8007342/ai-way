@@ -99,6 +99,7 @@
 //! - [`conductor`]: Main Conductor struct
 //! - [`transport`]: IPC transport layer (Unix sockets, WebSocket)
 //! - [`accessibility`]: Accessibility support for screen readers and assistive tech
+//! - [`conversation`]: Multi-conversation management for parallel agent work
 //!
 //! # No TUI Dependencies
 //!
@@ -115,6 +116,7 @@ pub mod animation;
 pub mod avatar;
 pub mod backend;
 pub mod conductor;
+pub mod conversation;
 pub mod events;
 pub mod messages;
 pub mod security;
@@ -133,8 +135,8 @@ pub use backend::{
 pub use conductor::{Conductor, ConductorConfig};
 pub use events::{ScrollDirection, SurfaceCapabilities, SurfaceEvent, SurfaceType};
 pub use messages::{
-    ConductorMessage, ConductorState, EventId, MessageId, MessageRole, NotifyLevel,
-    ResponseMetadata, SessionId,
+    ConductorMessage, ConductorState, ContentType, EventId, LayoutDirective, MessageId,
+    MessageRole, NotifyLevel, PanelId, ResponseMetadata, SessionId,
 };
 pub use security::{
     CommandRejectionReason, CommandValidator, ConductorLimits, InputValidator, SecurityConfig,
@@ -151,3 +153,6 @@ pub use animation::{
     AnimationController, AnimationLayer, AnimationPriority, AnimationSpec, AnimationTransition,
     BlendMode, EasingFunction, EmotionalCategory, FrameTiming, TransitionType,
 };
+
+// Conversation exports
+pub use conversation::{Conversation, ConversationId, ConversationManager, ConversationState};
