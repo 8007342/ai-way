@@ -3,6 +3,18 @@
 //! Blocky pixel art using Unicode block elements and colors.
 //! Each cell has its own foreground color for rich, expressive sprites.
 //!
+//! # Protocol Alignment
+//!
+//! The `ColoredCell` type aligns with the protocol `Block` type from
+//! `conductor_core::avatar::block`. Conversion traits (`From`/`Into`) are
+//! provided for seamless interoperability between the protocol layer and
+//! the TUI-specific rendering.
+//!
+//! Key differences handled by conversions:
+//! - Protocol `Color` (RGBA) <-> `ratatui::style::Color`
+//! - Protocol `transparency` (0=opaque, 1=transparent) <-> TUI `alpha` (1=opaque, 0=transparent)
+//! - Protocol `z_index` <-> TUI `blend_mode` (semantic mapping)
+//!
 //! # Future Enhancements
 //!
 //! The `ColoredCell` struct includes optional fields for:
@@ -16,6 +28,7 @@
 
 use std::collections::HashMap;
 
+use conductor_core::avatar::block::{Block, Color as ProtocolColor};
 use ratatui::style::Color;
 
 /// Blend mode for cell compositing (future use)
@@ -125,6 +138,144 @@ impl ColoredCell {
     pub const fn opacity(mut self, alpha: f32) -> Self {
         self.alpha = alpha;
         self
+    }
+}
+
+// ============================================================================
+// Protocol Color Conversions
+// ============================================================================
+
+/// Convert protocol `Color` (RGBA) to `ratatui::style::Color`
+///
+/// This handles the mapping from the surface-agnostic protocol color
+/// to the terminal-specific ratatui color type.
+///
+/// # Color Mapping
+///
+/// - Fully transparent colors (alpha=0) map to `Color::Reset`
+/// - Opaque colors map to `Color::Rgb(r, g, b)`
+/// - Semi-transparent colors also map to RGB (terminal doesn't support alpha)
+#[must_use]
+pub fn protocol_color_to_ratatui(c: ProtocolColor) -> Color {
+    if c.is_transparent() {
+        Color::Reset
+    } else {
+        Color::Rgb(c.r, c.g, c.b)
+    }
+}
+
+/// Convert `ratatui::style::Color` to protocol `Color` (RGBA)
+///
+/// # Color Mapping
+///
+/// - `Color::Reset` -> transparent (0, 0, 0, 0)
+/// - `Color::Rgb(r, g, b)` -> opaque (r, g, b, 255)
+/// - Named colors (Red, Blue, etc.) -> opaque with standard RGB values
+/// - Indexed colors -> approximated RGB values
+#[must_use]
+pub fn ratatui_color_to_protocol(c: Color) -> ProtocolColor {
+    match c {
+        Color::Reset => ProtocolColor::transparent(),
+        Color::Rgb(r, g, b) => ProtocolColor::rgb(r, g, b),
+        // Named colors with standard terminal RGB values
+        Color::Black => ProtocolColor::rgb(0, 0, 0),
+        Color::Red => ProtocolColor::rgb(205, 49, 49),
+        Color::Green => ProtocolColor::rgb(13, 188, 121),
+        Color::Yellow => ProtocolColor::rgb(229, 229, 16),
+        Color::Blue => ProtocolColor::rgb(36, 114, 200),
+        Color::Magenta => ProtocolColor::rgb(188, 63, 188),
+        Color::Cyan => ProtocolColor::rgb(17, 168, 205),
+        Color::Gray => ProtocolColor::rgb(128, 128, 128),
+        Color::DarkGray => ProtocolColor::rgb(102, 102, 102),
+        Color::LightRed => ProtocolColor::rgb(241, 76, 76),
+        Color::LightGreen => ProtocolColor::rgb(35, 209, 139),
+        Color::LightYellow => ProtocolColor::rgb(245, 245, 67),
+        Color::LightBlue => ProtocolColor::rgb(59, 142, 234),
+        Color::LightMagenta => ProtocolColor::rgb(214, 112, 214),
+        Color::LightCyan => ProtocolColor::rgb(41, 184, 219),
+        Color::White => ProtocolColor::rgb(229, 229, 229),
+        Color::Indexed(idx) => {
+            // Standard 256-color palette approximation
+            // 0-15: Standard colors (handled above for named)
+            // 16-231: 6x6x6 color cube
+            // 232-255: Grayscale ramp
+            if idx < 16 {
+                // Standard colors - fallback to gray
+                ProtocolColor::rgb(128, 128, 128)
+            } else if idx < 232 {
+                // 6x6x6 color cube
+                let idx = idx - 16;
+                let r = (idx / 36) % 6;
+                let g = (idx / 6) % 6;
+                let b = idx % 6;
+                let to_rgb = |v: u8| if v == 0 { 0 } else { 55 + v * 40 };
+                ProtocolColor::rgb(to_rgb(r), to_rgb(g), to_rgb(b))
+            } else {
+                // Grayscale ramp (232-255)
+                let gray = 8 + (idx - 232) * 10;
+                ProtocolColor::rgb(gray, gray, gray)
+            }
+        }
+    }
+}
+
+// ============================================================================
+// ColoredCell <-> Block Conversions
+// ============================================================================
+
+/// Convert protocol `Block` to TUI `ColoredCell`
+///
+/// This conversion handles the semantic differences:
+/// - Protocol `transparency` (0=opaque, 1=transparent) -> TUI `alpha` (1=opaque, 0=transparent)
+/// - Protocol `z_index` -> TUI `blend_mode` (positive z_index implies layering)
+impl From<Block> for ColoredCell {
+    fn from(block: Block) -> Self {
+        // Convert transparency to alpha (inverted semantics)
+        let alpha = 1.0 - block.transparency;
+
+        // Determine blend mode based on transparency and z_index
+        let blend_mode = if block.transparency > 0.0 {
+            CellBlendMode::Alpha
+        } else {
+            CellBlendMode::Opaque
+        };
+
+        Self {
+            ch: block.character,
+            fg: protocol_color_to_ratatui(block.fg),
+            bg: if block.bg.is_transparent() {
+                None
+            } else {
+                Some(protocol_color_to_ratatui(block.bg))
+            },
+            alpha,
+            blend_mode,
+        }
+    }
+}
+
+/// Convert TUI `ColoredCell` to protocol `Block`
+#[must_use]
+pub fn colored_cell_to_block(cell: ColoredCell) -> Block {
+    // Convert alpha to transparency (inverted semantics)
+    let transparency = 1.0 - cell.alpha;
+
+    // Determine z_index based on blend mode
+    let z_index = match cell.blend_mode {
+        CellBlendMode::Opaque => 0,
+        CellBlendMode::Alpha => 1,
+        CellBlendMode::Add => 2,
+        CellBlendMode::Multiply => -1,
+    };
+
+    Block {
+        fg: ratatui_color_to_protocol(cell.fg),
+        bg: cell
+            .bg
+            .map_or(ProtocolColor::transparent(), ratatui_color_to_protocol),
+        character: cell.ch,
+        transparency,
+        z_index,
     }
 }
 

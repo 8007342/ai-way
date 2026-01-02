@@ -178,6 +178,16 @@ pub struct SurfaceMetadata {
     pub client_version: Option<String>,
     /// User agent or device info
     pub user_agent: Option<String>,
+    /// Authentication token (for future use with remote surfaces)
+    ///
+    /// This field is optional and reserved for future authentication mechanisms.
+    /// For Unix socket connections, peer credential validation is sufficient.
+    /// For WebSocket/remote connections, this token will be validated.
+    pub auth_token: Option<String>,
+    /// Whether the handshake has been completed
+    pub handshake_complete: bool,
+    /// Protocol version negotiated during handshake
+    pub protocol_version: Option<u32>,
 }
 
 /// Result of a broadcast operation
@@ -298,6 +308,77 @@ impl SurfaceRegistry {
                 "Surface capabilities updated"
             );
         }
+    }
+
+    /// Update surface type for a specific connection
+    ///
+    /// Called during handshake when the actual surface type is declared.
+    pub fn update_surface_type(&self, id: &ConnectionId, surface_type: SurfaceType) {
+        if let Some(handle) = self.inner.write().get_mut(id) {
+            handle.surface_type = surface_type;
+            tracing::debug!(
+                connection_id = %id,
+                "Surface type updated"
+            );
+        }
+    }
+
+    /// Update metadata for a specific connection
+    pub fn update_metadata(&self, id: &ConnectionId, metadata: SurfaceMetadata) {
+        if let Some(handle) = self.inner.write().get_mut(id) {
+            handle.metadata = Some(metadata);
+            tracing::debug!(
+                connection_id = %id,
+                "Surface metadata updated"
+            );
+        }
+    }
+
+    /// Complete handshake for a specific connection
+    ///
+    /// This updates the surface type, capabilities, and marks handshake as complete.
+    /// Returns true if the connection exists and was updated.
+    pub fn complete_handshake(
+        &self,
+        id: &ConnectionId,
+        surface_type: SurfaceType,
+        capabilities: SurfaceCapabilities,
+        auth_token: Option<String>,
+        protocol_version: u32,
+    ) -> bool {
+        if let Some(handle) = self.inner.write().get_mut(id) {
+            handle.surface_type = surface_type;
+            handle.capabilities = capabilities;
+
+            // Update or create metadata with handshake info
+            let metadata = handle.metadata.get_or_insert_with(SurfaceMetadata::default);
+            metadata.auth_token = auth_token;
+            metadata.handshake_complete = true;
+            metadata.protocol_version = Some(protocol_version);
+
+            tracing::info!(
+                connection_id = %id,
+                protocol_version = protocol_version,
+                "Handshake completed for surface"
+            );
+            true
+        } else {
+            tracing::warn!(
+                connection_id = %id,
+                "Attempted to complete handshake for unknown connection"
+            );
+            false
+        }
+    }
+
+    /// Check if a connection has completed handshake
+    #[must_use]
+    pub fn is_handshake_complete(&self, id: &ConnectionId) -> bool {
+        self.inner
+            .read()
+            .get(id)
+            .and_then(|h| h.metadata.as_ref())
+            .is_some_and(|m| m.handshake_complete)
     }
 
     /// Broadcast a message to all connected surfaces

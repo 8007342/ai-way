@@ -14,6 +14,8 @@
 //!
 //! All types serialize to JSON for protocol transmission between Conductor and surfaces.
 
+use std::time::Duration;
+
 use serde::{Deserialize, Serialize};
 
 /// Surface-agnostic RGBA color
@@ -620,6 +622,465 @@ impl AnchorPoint {
     }
 }
 
+// ============================================
+// Sprite Protocol Types (P1.2-P1.3)
+// ============================================
+
+/// Mood for sprite requests
+///
+/// Represents the emotional state to apply to a sprite.
+/// Maps to avatar moods but is protocol-specific for sprite requests.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize, Default)]
+pub enum Mood {
+    /// Default happy state
+    #[default]
+    Happy,
+    /// Deep in thought
+    Thinking,
+    /// Playful and silly
+    Playful,
+    /// Bashful/embarrassed
+    Shy,
+    /// Very excited
+    Excited,
+    /// Puzzled/uncertain
+    Confused,
+    /// Peaceful and relaxed
+    Calm,
+    /// Interested and engaged
+    Curious,
+    /// Sad or disappointed
+    Sad,
+    /// Focused and determined
+    Focused,
+}
+
+/// Loop behavior for animations
+///
+/// Defines how an animation should repeat after completing.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize, Default)]
+pub enum LoopBehavior {
+    /// Play once and stop
+    #[default]
+    Once,
+    /// Loop indefinitely
+    Loop,
+    /// Play forward then backward, repeat
+    PingPong,
+}
+
+/// Request for a sprite from the Conductor
+///
+/// Surfaces send this to request sprite data for rendering.
+/// The Conductor responds with a `SpriteResponse`.
+///
+/// # Examples
+///
+/// ```
+/// use conductor_core::avatar::block::{SpriteRequest, Mood, SizeHint};
+///
+/// // Request an idle sprite in happy mood
+/// let request = SpriteRequest {
+///     base: "idle".to_string(),
+///     mood: Some(Mood::Happy),
+///     size: Some(SizeHint::Relative(conductor_core::avatar::block::RelativeSize::Medium)),
+///     context: Some("greeting user".to_string()),
+///     evolution: Some(25),
+/// };
+/// ```
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct SpriteRequest {
+    /// Base sprite name (e.g., "idle", "wave", "thinking")
+    pub base: String,
+    /// Optional mood to apply to the sprite
+    pub mood: Option<Mood>,
+    /// Optional size hint for the sprite
+    pub size: Option<SizeHint>,
+    /// Optional context describing what the avatar is doing
+    pub context: Option<String>,
+    /// Evolution level (0-100) for progressive sprite variations
+    ///
+    /// Higher values indicate more evolved/personalized sprites.
+    /// 0 = base sprite, 100 = fully evolved with all accessories
+    pub evolution: Option<u8>,
+}
+
+impl SpriteRequest {
+    /// Create a new sprite request with just a base sprite name
+    #[must_use]
+    pub fn new(base: impl Into<String>) -> Self {
+        Self {
+            base: base.into(),
+            mood: None,
+            size: None,
+            context: None,
+            evolution: None,
+        }
+    }
+
+    /// Set the mood for this request
+    #[must_use]
+    pub fn with_mood(mut self, mood: Mood) -> Self {
+        self.mood = Some(mood);
+        self
+    }
+
+    /// Set the size hint for this request
+    #[must_use]
+    pub fn with_size(mut self, size: SizeHint) -> Self {
+        self.size = Some(size);
+        self
+    }
+
+    /// Set the context for this request
+    #[must_use]
+    pub fn with_context(mut self, context: impl Into<String>) -> Self {
+        self.context = Some(context.into());
+        self
+    }
+
+    /// Set the evolution level for this request
+    #[must_use]
+    pub fn with_evolution(mut self, evolution: u8) -> Self {
+        self.evolution = Some(evolution.min(100));
+        self
+    }
+}
+
+impl Default for SpriteRequest {
+    fn default() -> Self {
+        Self::new("idle")
+    }
+}
+
+/// Response containing sprite data
+///
+/// Returned by the Conductor in response to a `SpriteRequest`.
+/// Contains all the blocks needed to render the sprite.
+///
+/// # Examples
+///
+/// ```
+/// use conductor_core::avatar::block::{SpriteResponse, Block, Color, AnchorPoint};
+/// use std::time::Duration;
+///
+/// let response = SpriteResponse {
+///     blocks: vec![
+///         Block::solid(Color::rgb(255, 182, 193)),
+///         Block::solid(Color::rgb(255, 182, 193)),
+///     ],
+///     dimensions: (2, 1),
+///     anchor: AnchorPoint::Center,
+///     cache_key: Some("idle_happy_medium_v1".to_string()),
+///     ttl: Some(Duration::from_secs(300)),
+/// };
+/// ```
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct SpriteResponse {
+    /// The blocks that make up the sprite (row-major order)
+    ///
+    /// Blocks are stored in row-major order: blocks[y * width + x]
+    pub blocks: Vec<Block>,
+    /// Dimensions of the sprite (width, height) in blocks
+    pub dimensions: (u16, u16),
+    /// Anchor point for positioning the sprite
+    pub anchor: AnchorPoint,
+    /// Optional cache key for client-side caching
+    ///
+    /// If provided, clients should cache this sprite and use the key
+    /// to avoid re-requesting the same sprite.
+    pub cache_key: Option<String>,
+    /// Optional time-to-live for cached sprites
+    ///
+    /// After this duration, the cached sprite should be considered stale.
+    #[serde(default, with = "optional_duration_millis")]
+    pub ttl: Option<Duration>,
+}
+
+impl SpriteResponse {
+    /// Create a new sprite response
+    #[must_use]
+    pub fn new(blocks: Vec<Block>, width: u16, height: u16) -> Self {
+        Self {
+            blocks,
+            dimensions: (width, height),
+            anchor: AnchorPoint::default(),
+            cache_key: None,
+            ttl: None,
+        }
+    }
+
+    /// Get the width of the sprite in blocks
+    #[must_use]
+    pub fn width(&self) -> u16 {
+        self.dimensions.0
+    }
+
+    /// Get the height of the sprite in blocks
+    #[must_use]
+    pub fn height(&self) -> u16 {
+        self.dimensions.1
+    }
+
+    /// Get a block at the given coordinates
+    ///
+    /// Returns `None` if coordinates are out of bounds.
+    #[must_use]
+    pub fn get_block(&self, x: u16, y: u16) -> Option<&Block> {
+        if x >= self.width() || y >= self.height() {
+            return None;
+        }
+        let index = (y as usize) * (self.width() as usize) + (x as usize);
+        self.blocks.get(index)
+    }
+
+    /// Set the anchor point for this response
+    #[must_use]
+    pub fn with_anchor(mut self, anchor: AnchorPoint) -> Self {
+        self.anchor = anchor;
+        self
+    }
+
+    /// Set the cache key for this response
+    #[must_use]
+    pub fn with_cache_key(mut self, key: impl Into<String>) -> Self {
+        self.cache_key = Some(key.into());
+        self
+    }
+
+    /// Set the TTL for this response
+    #[must_use]
+    pub fn with_ttl(mut self, ttl: Duration) -> Self {
+        self.ttl = Some(ttl);
+        self
+    }
+}
+
+/// Request for an animation sequence
+///
+/// Surfaces send this to request a complete animation (multiple frames).
+/// The Conductor responds with an `AnimationResponse`.
+///
+/// # Examples
+///
+/// ```
+/// use conductor_core::avatar::block::{AnimationRequest, LoopBehavior};
+/// use std::time::Duration;
+///
+/// let request = AnimationRequest {
+///     name: "celebrate".to_string(),
+///     duration: Some(Duration::from_secs(2)),
+///     loop_behavior: LoopBehavior::Once,
+///     interruptible: true,
+/// };
+/// ```
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct AnimationRequest {
+    /// Animation name (e.g., "celebrate", "work", "rest")
+    pub name: String,
+    /// Optional total duration for the animation
+    ///
+    /// If specified, frame timing will be adjusted to fit this duration.
+    #[serde(default, with = "optional_duration_millis")]
+    pub duration: Option<Duration>,
+    /// How the animation should loop
+    pub loop_behavior: LoopBehavior,
+    /// Whether this animation can be interrupted by other animations
+    pub interruptible: bool,
+}
+
+impl AnimationRequest {
+    /// Create a new animation request
+    #[must_use]
+    pub fn new(name: impl Into<String>) -> Self {
+        Self {
+            name: name.into(),
+            duration: None,
+            loop_behavior: LoopBehavior::default(),
+            interruptible: true,
+        }
+    }
+
+    /// Set the duration for this animation
+    #[must_use]
+    pub fn with_duration(mut self, duration: Duration) -> Self {
+        self.duration = Some(duration);
+        self
+    }
+
+    /// Set the loop behavior for this animation
+    #[must_use]
+    pub fn with_loop_behavior(mut self, behavior: LoopBehavior) -> Self {
+        self.loop_behavior = behavior;
+        self
+    }
+
+    /// Set whether this animation is interruptible
+    #[must_use]
+    pub fn with_interruptible(mut self, interruptible: bool) -> Self {
+        self.interruptible = interruptible;
+        self
+    }
+
+    /// Create a looping animation request
+    #[must_use]
+    pub fn looping(name: impl Into<String>) -> Self {
+        Self::new(name).with_loop_behavior(LoopBehavior::Loop)
+    }
+
+    /// Create a one-shot animation request
+    #[must_use]
+    pub fn once(name: impl Into<String>) -> Self {
+        Self::new(name).with_loop_behavior(LoopBehavior::Once)
+    }
+}
+
+impl Default for AnimationRequest {
+    fn default() -> Self {
+        Self::new("idle")
+    }
+}
+
+/// Response containing animation data
+///
+/// Returned by the Conductor in response to an `AnimationRequest`.
+/// Contains all frames and timing information for the animation.
+///
+/// # Examples
+///
+/// ```
+/// use conductor_core::avatar::block::{AnimationResponse, SpriteResponse, Block, Color, AnchorPoint};
+/// use std::time::Duration;
+///
+/// let frame1 = SpriteResponse::new(
+///     vec![Block::solid(Color::rgb(255, 0, 0))],
+///     1, 1
+/// );
+/// let frame2 = SpriteResponse::new(
+///     vec![Block::solid(Color::rgb(0, 255, 0))],
+///     1, 1
+/// );
+///
+/// let animation = AnimationResponse {
+///     frames: vec![frame1, frame2],
+///     timing: vec![Duration::from_millis(100), Duration::from_millis(100)],
+///     cache_key: Some("blink_v1".to_string()),
+/// };
+/// ```
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct AnimationResponse {
+    /// The frames of the animation (each is a complete sprite)
+    pub frames: Vec<SpriteResponse>,
+    /// Duration to display each frame
+    ///
+    /// Length should match `frames.len()`. If shorter, the last
+    /// duration is used for remaining frames.
+    #[serde(with = "duration_vec_millis")]
+    pub timing: Vec<Duration>,
+    /// Optional cache key for client-side caching
+    pub cache_key: Option<String>,
+}
+
+impl AnimationResponse {
+    /// Create a new animation response
+    #[must_use]
+    pub fn new(frames: Vec<SpriteResponse>, timing: Vec<Duration>) -> Self {
+        Self {
+            frames,
+            timing,
+            cache_key: None,
+        }
+    }
+
+    /// Create an animation with uniform frame timing
+    #[must_use]
+    pub fn uniform(frames: Vec<SpriteResponse>, frame_duration: Duration) -> Self {
+        let timing = vec![frame_duration; frames.len()];
+        Self::new(frames, timing)
+    }
+
+    /// Get the number of frames in this animation
+    #[must_use]
+    pub fn frame_count(&self) -> usize {
+        self.frames.len()
+    }
+
+    /// Get the total duration of the animation
+    #[must_use]
+    pub fn total_duration(&self) -> Duration {
+        self.timing.iter().sum()
+    }
+
+    /// Get the timing for a specific frame
+    ///
+    /// Returns the last timing value if index is out of bounds.
+    #[must_use]
+    pub fn frame_duration(&self, index: usize) -> Duration {
+        self.timing
+            .get(index)
+            .or_else(|| self.timing.last())
+            .copied()
+            .unwrap_or(Duration::from_millis(100))
+    }
+
+    /// Set the cache key for this response
+    #[must_use]
+    pub fn with_cache_key(mut self, key: impl Into<String>) -> Self {
+        self.cache_key = Some(key.into());
+        self
+    }
+}
+
+// ============================================
+// Serde helpers for Duration
+// ============================================
+
+/// Serialize/deserialize optional Duration as milliseconds
+mod optional_duration_millis {
+    use serde::{Deserialize, Deserializer, Serialize, Serializer};
+    use std::time::Duration;
+
+    pub fn serialize<S>(duration: &Option<Duration>, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: Serializer,
+    {
+        match duration {
+            Some(d) => serializer.serialize_some(&d.as_millis()),
+            None => serializer.serialize_none(),
+        }
+    }
+
+    pub fn deserialize<'de, D>(deserializer: D) -> Result<Option<Duration>, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        let millis: Option<u64> = Option::deserialize(deserializer)?;
+        Ok(millis.map(Duration::from_millis))
+    }
+}
+
+/// Serialize/deserialize Vec<Duration> as milliseconds
+mod duration_vec_millis {
+    use serde::{Deserialize, Deserializer, Serialize, Serializer};
+    use std::time::Duration;
+
+    pub fn serialize<S>(durations: &[Duration], serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: Serializer,
+    {
+        let millis: Vec<u64> = durations.iter().map(|d| d.as_millis() as u64).collect();
+        millis.serialize(serializer)
+    }
+
+    pub fn deserialize<'de, D>(deserializer: D) -> Result<Vec<Duration>, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        let millis: Vec<u64> = Vec::deserialize(deserializer)?;
+        Ok(millis.into_iter().map(Duration::from_millis).collect())
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -893,5 +1354,262 @@ mod tests {
         let json = serde_json::to_string_pretty(&block).unwrap();
         let parsed: Block = serde_json::from_str(&json).unwrap();
         assert_eq!(parsed.character, '\u{2588}');
+    }
+
+    // ============================================
+    // Sprite Protocol Type Tests (P1.2-P1.3)
+    // ============================================
+
+    #[test]
+    fn test_mood_default() {
+        assert_eq!(Mood::default(), Mood::Happy);
+    }
+
+    #[test]
+    fn test_loop_behavior_default() {
+        assert_eq!(LoopBehavior::default(), LoopBehavior::Once);
+    }
+
+    #[test]
+    fn test_sprite_request_builder() {
+        let request = SpriteRequest::new("wave")
+            .with_mood(Mood::Excited)
+            .with_size(SizeHint::Relative(RelativeSize::Large))
+            .with_context("greeting")
+            .with_evolution(50);
+
+        assert_eq!(request.base, "wave");
+        assert_eq!(request.mood, Some(Mood::Excited));
+        assert_eq!(request.size, Some(SizeHint::Relative(RelativeSize::Large)));
+        assert_eq!(request.context, Some("greeting".to_string()));
+        assert_eq!(request.evolution, Some(50));
+    }
+
+    #[test]
+    fn test_sprite_request_evolution_clamped() {
+        let request = SpriteRequest::new("idle").with_evolution(150);
+        assert_eq!(request.evolution, Some(100));
+    }
+
+    #[test]
+    fn test_sprite_request_json_serialization() {
+        let request = SpriteRequest {
+            base: "thinking".to_string(),
+            mood: Some(Mood::Thinking),
+            size: Some(SizeHint::Relative(RelativeSize::Medium)),
+            context: Some("solving problem".to_string()),
+            evolution: Some(25),
+        };
+
+        let json = serde_json::to_string(&request).unwrap();
+        let parsed: SpriteRequest = serde_json::from_str(&json).unwrap();
+        assert_eq!(parsed, request);
+    }
+
+    #[test]
+    fn test_sprite_response_new() {
+        let blocks = vec![
+            Block::solid(Color::rgb(255, 0, 0)),
+            Block::solid(Color::rgb(0, 255, 0)),
+            Block::solid(Color::rgb(0, 0, 255)),
+            Block::solid(Color::rgb(255, 255, 0)),
+        ];
+        let response = SpriteResponse::new(blocks.clone(), 2, 2);
+
+        assert_eq!(response.width(), 2);
+        assert_eq!(response.height(), 2);
+        assert_eq!(response.dimensions, (2, 2));
+        assert_eq!(response.blocks.len(), 4);
+    }
+
+    #[test]
+    fn test_sprite_response_get_block() {
+        let blocks = vec![
+            Block::solid(Color::rgb(255, 0, 0)),   // (0, 0)
+            Block::solid(Color::rgb(0, 255, 0)),   // (1, 0)
+            Block::solid(Color::rgb(0, 0, 255)),   // (0, 1)
+            Block::solid(Color::rgb(255, 255, 0)), // (1, 1)
+        ];
+        let response = SpriteResponse::new(blocks, 2, 2);
+
+        // Check valid coordinates
+        assert_eq!(response.get_block(0, 0).unwrap().fg, Color::rgb(255, 0, 0));
+        assert_eq!(response.get_block(1, 0).unwrap().fg, Color::rgb(0, 255, 0));
+        assert_eq!(response.get_block(0, 1).unwrap().fg, Color::rgb(0, 0, 255));
+        assert_eq!(
+            response.get_block(1, 1).unwrap().fg,
+            Color::rgb(255, 255, 0)
+        );
+
+        // Check out of bounds
+        assert!(response.get_block(2, 0).is_none());
+        assert!(response.get_block(0, 2).is_none());
+    }
+
+    #[test]
+    fn test_sprite_response_builder() {
+        let response = SpriteResponse::new(vec![Block::solid(Color::rgb(255, 0, 0))], 1, 1)
+            .with_anchor(AnchorPoint::BottomCenter)
+            .with_cache_key("test_key")
+            .with_ttl(Duration::from_secs(60));
+
+        assert_eq!(response.anchor, AnchorPoint::BottomCenter);
+        assert_eq!(response.cache_key, Some("test_key".to_string()));
+        assert_eq!(response.ttl, Some(Duration::from_secs(60)));
+    }
+
+    #[test]
+    fn test_sprite_response_json_with_ttl() {
+        let response = SpriteResponse {
+            blocks: vec![Block::solid(Color::rgb(255, 0, 0))],
+            dimensions: (1, 1),
+            anchor: AnchorPoint::Center,
+            cache_key: Some("cache_v1".to_string()),
+            ttl: Some(Duration::from_millis(5000)),
+        };
+
+        let json = serde_json::to_string(&response).unwrap();
+        assert!(json.contains("5000")); // TTL serialized as millis
+
+        let parsed: SpriteResponse = serde_json::from_str(&json).unwrap();
+        assert_eq!(parsed.ttl, Some(Duration::from_millis(5000)));
+    }
+
+    #[test]
+    fn test_animation_request_builder() {
+        let request = AnimationRequest::new("celebrate")
+            .with_duration(Duration::from_secs(2))
+            .with_loop_behavior(LoopBehavior::PingPong)
+            .with_interruptible(false);
+
+        assert_eq!(request.name, "celebrate");
+        assert_eq!(request.duration, Some(Duration::from_secs(2)));
+        assert_eq!(request.loop_behavior, LoopBehavior::PingPong);
+        assert!(!request.interruptible);
+    }
+
+    #[test]
+    fn test_animation_request_shortcuts() {
+        let looping = AnimationRequest::looping("idle");
+        assert_eq!(looping.loop_behavior, LoopBehavior::Loop);
+
+        let once = AnimationRequest::once("wave");
+        assert_eq!(once.loop_behavior, LoopBehavior::Once);
+    }
+
+    #[test]
+    fn test_animation_request_json_serialization() {
+        let request = AnimationRequest {
+            name: "thinking".to_string(),
+            duration: Some(Duration::from_millis(1500)),
+            loop_behavior: LoopBehavior::Loop,
+            interruptible: true,
+        };
+
+        let json = serde_json::to_string(&request).unwrap();
+        let parsed: AnimationRequest = serde_json::from_str(&json).unwrap();
+        assert_eq!(parsed, request);
+    }
+
+    #[test]
+    fn test_animation_response_new() {
+        let frame1 = SpriteResponse::new(vec![Block::solid(Color::rgb(255, 0, 0))], 1, 1);
+        let frame2 = SpriteResponse::new(vec![Block::solid(Color::rgb(0, 255, 0))], 1, 1);
+
+        let response = AnimationResponse::new(
+            vec![frame1, frame2],
+            vec![Duration::from_millis(100), Duration::from_millis(200)],
+        );
+
+        assert_eq!(response.frame_count(), 2);
+        assert_eq!(response.total_duration(), Duration::from_millis(300));
+    }
+
+    #[test]
+    fn test_animation_response_uniform() {
+        let frame1 = SpriteResponse::new(vec![Block::solid(Color::rgb(255, 0, 0))], 1, 1);
+        let frame2 = SpriteResponse::new(vec![Block::solid(Color::rgb(0, 255, 0))], 1, 1);
+        let frame3 = SpriteResponse::new(vec![Block::solid(Color::rgb(0, 0, 255))], 1, 1);
+
+        let response =
+            AnimationResponse::uniform(vec![frame1, frame2, frame3], Duration::from_millis(100));
+
+        assert_eq!(response.frame_count(), 3);
+        assert_eq!(response.timing.len(), 3);
+        assert_eq!(response.total_duration(), Duration::from_millis(300));
+    }
+
+    #[test]
+    fn test_animation_response_frame_duration() {
+        let frame = SpriteResponse::new(vec![Block::solid(Color::rgb(255, 0, 0))], 1, 1);
+
+        let response = AnimationResponse::new(
+            vec![frame.clone(), frame.clone(), frame],
+            vec![Duration::from_millis(100), Duration::from_millis(200)],
+        );
+
+        // Normal indexing
+        assert_eq!(response.frame_duration(0), Duration::from_millis(100));
+        assert_eq!(response.frame_duration(1), Duration::from_millis(200));
+
+        // Out of bounds uses last value
+        assert_eq!(response.frame_duration(2), Duration::from_millis(200));
+        assert_eq!(response.frame_duration(100), Duration::from_millis(200));
+    }
+
+    #[test]
+    fn test_animation_response_json_serialization() {
+        let frame1 = SpriteResponse::new(vec![Block::solid(Color::rgb(255, 0, 0))], 1, 1);
+        let frame2 = SpriteResponse::new(vec![Block::solid(Color::rgb(0, 255, 0))], 1, 1);
+
+        let response = AnimationResponse {
+            frames: vec![frame1, frame2],
+            timing: vec![Duration::from_millis(100), Duration::from_millis(150)],
+            cache_key: Some("anim_v1".to_string()),
+        };
+
+        let json = serde_json::to_string(&response).unwrap();
+        let parsed: AnimationResponse = serde_json::from_str(&json).unwrap();
+
+        assert_eq!(parsed.frames.len(), response.frames.len());
+        assert_eq!(parsed.timing, response.timing);
+        assert_eq!(parsed.cache_key, response.cache_key);
+    }
+
+    #[test]
+    fn test_mood_json_serialization() {
+        let moods = vec![
+            Mood::Happy,
+            Mood::Thinking,
+            Mood::Playful,
+            Mood::Shy,
+            Mood::Excited,
+            Mood::Confused,
+            Mood::Calm,
+            Mood::Curious,
+            Mood::Sad,
+            Mood::Focused,
+        ];
+
+        for mood in moods {
+            let json = serde_json::to_string(&mood).unwrap();
+            let parsed: Mood = serde_json::from_str(&json).unwrap();
+            assert_eq!(parsed, mood);
+        }
+    }
+
+    #[test]
+    fn test_loop_behavior_json_serialization() {
+        let behaviors = vec![
+            LoopBehavior::Once,
+            LoopBehavior::Loop,
+            LoopBehavior::PingPong,
+        ];
+
+        for behavior in behaviors {
+            let json = serde_json::to_string(&behavior).unwrap();
+            let parsed: LoopBehavior = serde_json::from_str(&json).unwrap();
+            assert_eq!(parsed, behavior);
+        }
     }
 }

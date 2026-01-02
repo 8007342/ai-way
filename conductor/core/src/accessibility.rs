@@ -244,6 +244,7 @@ impl Accessible for ConductorMessage {
             | ConductorMessage::SessionInfo { .. }
             | ConductorMessage::HandshakeAck { .. }
             | ConductorMessage::Ping { .. }
+            | ConductorMessage::StateSnapshot { .. }
             | ConductorMessage::AvatarMoveTo { .. }
             | ConductorMessage::AvatarSize { .. }
             | ConductorMessage::AvatarWander { .. }

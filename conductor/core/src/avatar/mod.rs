@@ -26,9 +26,28 @@
 //! - Command parsing for embedded avatar commands in LLM responses
 
 pub mod block;
+pub mod cache;
+pub mod security;
 
 // Re-export block types at the avatar module level for convenience
-pub use block::{AnchorPoint, Block, Color, RelativeSize, SizeHint};
+pub use block::{
+    AnchorPoint, AnimationRequest, AnimationResponse, Block, Color, LoopBehavior, Mood,
+    RelativeSize, SizeHint, SpriteRequest, SpriteResponse,
+};
+
+// Re-export cache types
+pub use cache::{CacheEntry, CacheError, CacheStats, SpriteCache, SpriteData};
+
+// Re-export security types
+pub use security::{
+    is_allowed_block_char, validate_animation_duration, validate_animation_frames,
+    validate_block_count, validate_sprite, validate_sprite_dimensions, validate_sprite_size,
+    validate_unicode_char, PendingRequestGuard, PendingRequestTracker, SecurityError,
+    SecurityResult, Sprite, SpriteRateLimiter, ALLOWED_UNICODE_RANGES, MAX_ANIMATION_DURATION_MS,
+    MAX_ANIMATION_FRAMES, MAX_BLOCKS_PER_SPRITE, MAX_CACHE_SIZE_BYTES,
+    MAX_PENDING_REQUESTS_PER_SESSION, MAX_SPRITE_HEIGHT, MAX_SPRITE_REQUESTS_PER_MINUTE,
+    MAX_SPRITE_WIDTH,
+};
 
 use std::collections::VecDeque;
 

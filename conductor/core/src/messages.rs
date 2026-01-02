@@ -16,7 +16,9 @@
 
 use serde::{Deserialize, Serialize};
 
-use crate::avatar::{AvatarGesture, AvatarMood, AvatarPosition, AvatarReaction, AvatarSize};
+use crate::avatar::{
+    AvatarGesture, AvatarMood, AvatarPosition, AvatarReaction, AvatarSize, AvatarState,
+};
 use crate::conversation::{ConversationId, ConversationState};
 use crate::tasks::TaskId;
 
@@ -312,6 +314,20 @@ pub enum ConductorMessage {
         /// Sequence number (surface echoes this back)
         seq: u64,
     },
+
+    /// State snapshot for newly connected or late-joining surfaces
+    ///
+    /// Sent after successful handshake to synchronize the surface with
+    /// the current conductor state. This allows surfaces to join mid-session
+    /// and immediately see the current conversation and avatar state.
+    StateSnapshot {
+        /// Recent conversation history (limited to avoid overwhelming)
+        conversation_history: Vec<SnapshotMessage>,
+        /// Current avatar state
+        avatar_state: AvatarStateSnapshot,
+        /// Session information
+        session_info: SessionSnapshot,
+    },
 }
 
 /// Message identifier
@@ -548,6 +564,131 @@ impl ConductorState {
             Self::Listening => "Listening",
             Self::Error => "Error",
             Self::ShuttingDown => "Shutting down...",
+        }
+    }
+}
+
+// ============================================
+// State Snapshot Types
+// ============================================
+
+/// A message in the state snapshot
+///
+/// Simplified version of conversation message for initial sync.
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct SnapshotMessage {
+    /// Message ID
+    pub id: MessageId,
+    /// Who sent this message
+    pub role: MessageRole,
+    /// Message content
+    pub content: String,
+    /// Content type hint
+    #[serde(default)]
+    pub content_type: ContentType,
+    /// Timestamp (Unix ms)
+    pub timestamp: u64,
+}
+
+impl SnapshotMessage {
+    /// Create a new snapshot message
+    #[must_use]
+    pub fn new(id: MessageId, role: MessageRole, content: String) -> Self {
+        Self {
+            id,
+            role,
+            content,
+            content_type: ContentType::default(),
+            timestamp: std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap_or_default()
+                .as_millis() as u64,
+        }
+    }
+}
+
+/// Avatar state snapshot for initial sync
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct AvatarStateSnapshot {
+    /// Current position
+    pub position: AvatarPosition,
+    /// Current mood
+    pub mood: AvatarMood,
+    /// Current size
+    pub size: AvatarSize,
+    /// Whether avatar is visible
+    pub visible: bool,
+    /// Whether wandering is enabled
+    pub wandering: bool,
+    /// Current gesture (if any)
+    pub current_gesture: Option<AvatarGesture>,
+    /// Current reaction (if any)
+    pub current_reaction: Option<AvatarReaction>,
+}
+
+impl Default for AvatarStateSnapshot {
+    fn default() -> Self {
+        Self {
+            position: AvatarPosition::default(),
+            mood: AvatarMood::default(),
+            size: AvatarSize::default(),
+            visible: true,
+            wandering: true,
+            current_gesture: None,
+            current_reaction: None,
+        }
+    }
+}
+
+impl From<&AvatarState> for AvatarStateSnapshot {
+    fn from(state: &AvatarState) -> Self {
+        Self {
+            position: state.position,
+            mood: state.mood,
+            size: state.size,
+            visible: state.visible,
+            wandering: state.wandering,
+            current_gesture: state.current_gesture,
+            current_reaction: state.current_reaction,
+        }
+    }
+}
+
+/// Session information snapshot
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct SessionSnapshot {
+    /// Session ID
+    pub session_id: SessionId,
+    /// Model being used
+    pub model: String,
+    /// Whether conductor is ready
+    pub ready: bool,
+    /// Current conductor state
+    pub state: ConductorState,
+    /// When the session was created (Unix timestamp ms)
+    pub created_at: u64,
+    /// Total messages exchanged
+    pub message_count: u32,
+}
+
+impl SessionSnapshot {
+    /// Create a new session snapshot
+    #[must_use]
+    pub fn new(
+        session_id: SessionId,
+        model: String,
+        ready: bool,
+        state: ConductorState,
+        created_at: u64,
+        message_count: u32,
+    ) -> Self {
+        Self {
+            session_id,
+            model,
+            ready,
+            state,
+            created_at,
+            message_count,
         }
     }
 }

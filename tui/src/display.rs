@@ -631,6 +631,9 @@ impl DisplayState {
             ConductorMessage::Ping { .. } => {
                 // Heartbeat handled by transport (would send Pong back)
             }
+            ConductorMessage::StateSnapshot { .. } => {
+                // State snapshot handled by transport layer during reconnection
+            }
 
             // Layout hints - future: could control panel visibility
             ConductorMessage::LayoutHint { .. } => {
