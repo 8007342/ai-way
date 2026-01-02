@@ -32,9 +32,11 @@ use crate::compositor::{Compositor, LayerId};
 use crate::conductor_client::ConductorClient;
 use crate::display::{DisplayRole, DisplayState};
 use crate::theme::{
-    breathing_color, scroll_fade_color, scroll_fade_factor, BREATHING_INPUT_BASE,
-    BREATHING_INPUT_BRIGHT, BREATHING_INPUT_CYCLE_MS, BREATHING_STATUS_BASE,
-    BREATHING_STATUS_BRIGHT, BREATHING_STATUS_CYCLE_MS, YOLLAYAH_MAGENTA,
+    breathing_color, scroll_fade_color, scroll_fade_factor, BREATHING_AGENT_BASE,
+    BREATHING_AGENT_BRIGHT, BREATHING_AGENT_CYCLE_MS, BREATHING_INPUT_BASE, BREATHING_INPUT_BRIGHT,
+    BREATHING_INPUT_CYCLE_MS, BREATHING_PROCESSING_BASE, BREATHING_PROCESSING_BRIGHT,
+    BREATHING_PROCESSING_CYCLE_MS, BREATHING_STATUS_BASE, BREATHING_STATUS_BRIGHT,
+    BREATHING_STATUS_CYCLE_MS, INDICATOR_AGENT_IDLE, YOLLAYAH_MAGENTA,
 };
 
 /// Input box height (lines) for text wrapping
@@ -813,7 +815,7 @@ impl App {
         }
     }
 
-    /// Render status bar
+    /// Render status bar with activity indicators
     fn render_status(&mut self) {
         if let Some(buf) = self.compositor.layer_buffer_mut(self.layers.status) {
             buf.reset();
@@ -822,13 +824,90 @@ impl App {
             let state_str = self.display.conductor_state.description();
             let elapsed = self.start_time.elapsed();
 
-            // Use breathing effect for Ready state to make app feel alive
+            // Count active sub-agent tasks
+            let active_task_count = self
+                .display
+                .tasks
+                .iter()
+                .filter(|t| t.status.is_active())
+                .count();
+
+            // Determine if we're doing complex work (thinking/responding)
+            let is_processing = matches!(
+                self.display.conductor_state,
+                ConductorState::Thinking | ConductorState::Responding
+            );
+
+            // Build activity indicators string and render with colors
+            let mut x_pos = area.x;
+
+            // Leading space
+            buf.set_string(x_pos, area.y, " ", Style::default());
+            x_pos += 1;
+
+            // Processing indicator: ⚡ when thinking/responding
+            if is_processing {
+                let processing_color = breathing_color(
+                    BREATHING_PROCESSING_BASE,
+                    BREATHING_PROCESSING_BRIGHT,
+                    BREATHING_PROCESSING_CYCLE_MS,
+                    elapsed,
+                );
+                buf.set_string(x_pos, area.y, "⚡", Style::default().fg(processing_color));
+                x_pos += 1;
+            }
+
+            // Agent work indicator: show diamonds for active tasks
+            // ◆ = active agent, ◇ = idle slot (max 3 shown)
+            if active_task_count > 0 || is_processing {
+                if is_processing || active_task_count > 0 {
+                    buf.set_string(x_pos, area.y, " ", Style::default());
+                    x_pos += 1;
+                }
+
+                // Agent diamonds with breathing when active
+                let agent_color = if active_task_count > 0 {
+                    breathing_color(
+                        BREATHING_AGENT_BASE,
+                        BREATHING_AGENT_BRIGHT,
+                        BREATHING_AGENT_CYCLE_MS,
+                        elapsed,
+                    )
+                } else {
+                    INDICATOR_AGENT_IDLE
+                };
+
+                // Show up to 3 diamonds based on task count
+                let filled = active_task_count.min(3);
+                let empty = 3 - filled;
+
+                for _ in 0..filled {
+                    buf.set_string(x_pos, area.y, "◆", Style::default().fg(agent_color));
+                    x_pos += 1;
+                }
+                for _ in 0..empty {
+                    buf.set_string(
+                        x_pos,
+                        area.y,
+                        "◇",
+                        Style::default().fg(INDICATOR_AGENT_IDLE),
+                    );
+                    x_pos += 1;
+                }
+            }
+
+            // Separator if we had indicators
+            if is_processing || active_task_count > 0 {
+                buf.set_string(x_pos, area.y, " ", Style::default());
+                x_pos += 1;
+            }
+
+            // State description with breathing effect for Ready state
             let status_style = match self.display.conductor_state {
                 ConductorState::WarmingUp | ConductorState::Initializing => {
                     Style::default().fg(YOLLAYAH_MAGENTA)
                 }
                 ConductorState::Ready => {
-                    // Gentle breathing between dim gray and magenta
                     let color = breathing_color(
                         BREATHING_STATUS_BASE,
                         BREATHING_STATUS_BRIGHT,
@@ -840,20 +919,23 @@ impl App {
                 _ => Style::default().fg(Color::DarkGray),
             };
 
+            buf.set_string(x_pos, area.y, state_str, status_style);
+            x_pos += state_str.len() as u16;
+
+            // Rest of status bar
             let scroll_info = if self.scroll_offset > 0 {
-                format!(" [^{} lines - PgDn to scroll]", self.scroll_offset)
+                format!(" [^{} lines]", self.scroll_offset)
             } else {
                 String::new()
             };
 
-            let status = format!(
-                " {} | Esc to quit | PgUp/PgDn scroll{}{}",
-                state_str,
+            let suffix = format!(
+                " | Esc | PgUp/Dn{}{}",
                 scroll_info,
                 if self.dev_mode { " [DEV]" } else { "" }
             );
 
-            buf.set_string(area.x, area.y, &status, status_style);
+            buf.set_string(x_pos, area.y, &suffix, Style::default().fg(Color::DarkGray));
         }
     }
 

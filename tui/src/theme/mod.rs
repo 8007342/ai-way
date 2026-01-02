@@ -111,6 +111,32 @@ pub const BREATHING_TASK_BRIGHT: Color = Color::Rgb(255, 223, 128);
 pub const BREATHING_TASK_CYCLE_MS: u64 = 1500;
 
 // ============================================================================
+// Status Bar Activity Indicators
+// ============================================================================
+
+/// GPU/Processing indicator - active (lightning bolt style)
+pub const INDICATOR_PROCESSING_ACTIVE: Color = Color::Rgb(255, 223, 128); // Warm yellow
+
+/// GPU/Processing indicator - idle
+pub const INDICATOR_PROCESSING_IDLE: Color = Color::Rgb(80, 80, 80);
+
+/// Agent work indicator - active (delegation happening)
+pub const INDICATOR_AGENT_ACTIVE: Color = Color::Rgb(255, 150, 255); // Bright magenta
+
+/// Agent work indicator - idle
+pub const INDICATOR_AGENT_IDLE: Color = Color::Rgb(80, 80, 80);
+
+/// Breathing effect for processing indicator
+pub const BREATHING_PROCESSING_BASE: Color = Color::Rgb(80, 80, 80);
+pub const BREATHING_PROCESSING_BRIGHT: Color = Color::Rgb(255, 223, 128);
+pub const BREATHING_PROCESSING_CYCLE_MS: u64 = 800; // Fast pulse when working
+
+/// Breathing effect for agent indicator
+pub const BREATHING_AGENT_BASE: Color = Color::Rgb(80, 80, 80);
+pub const BREATHING_AGENT_BRIGHT: Color = Color::Rgb(255, 150, 255);
+pub const BREATHING_AGENT_CYCLE_MS: u64 = 1200;
+
+// ============================================================================
 // Scroll Gradient Colors
 // ============================================================================
 
