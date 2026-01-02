@@ -29,7 +29,8 @@ use crate::avatar::{AvatarCommand, AvatarState, CommandParser};
 use crate::backend::{LlmBackend, LlmRequest, StreamingToken};
 use crate::events::{ScrollDirection, SurfaceCapabilities, SurfaceEvent, SurfaceType};
 use crate::messages::{
-    ConductorMessage, ConductorState, EventId, MessageId, MessageRole, NotifyLevel, SessionId,
+    ConductorMessage, ConductorState, ContentType, EventId, MessageId, MessageRole, NotifyLevel,
+    SessionId,
 };
 use crate::security::{CommandValidator, ConductorLimits, InputValidator, ValidationResult};
 use crate::session::Session;
@@ -306,6 +307,7 @@ impl<B: LlmBackend + 'static> Conductor<B> {
                     id: MessageId::new(),
                     role: MessageRole::Assistant,
                     content: "[yolla:wave][yolla:mood happy]¡Hola! Ready to chat!".to_string(),
+                    content_type: ContentType::Plain,
                 })
                 .await;
                 self.set_state(ConductorState::Ready).await;
@@ -345,6 +347,7 @@ impl<B: LlmBackend + 'static> Conductor<B> {
                         id: MessageId::new(),
                         role: MessageRole::System,
                         content: "Ready to chat! Type a message below.".to_string(),
+                        content_type: ContentType::System,
                     })
                     .await;
                 }
@@ -529,6 +532,7 @@ impl<B: LlmBackend + 'static> Conductor<B> {
             id: user_msg_id,
             role: MessageRole::User,
             content: content.clone(),
+            content_type: ContentType::Plain,
         })
         .await;
 

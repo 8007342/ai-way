@@ -426,7 +426,9 @@ impl DisplayState {
     pub fn apply_message(&mut self, msg: ConductorMessage) {
         match msg {
             // Conversation messages
-            ConductorMessage::Message { id, role, content } => {
+            ConductorMessage::Message {
+                id, role, content, ..
+            } => {
                 self.messages.push(DisplayMessage::new(id, role, content));
             }
             ConductorMessage::Token { message_id, text } => {
@@ -544,6 +546,11 @@ impl DisplayState {
             }
             ConductorMessage::Ping { .. } => {
                 // Heartbeat handled by transport (would send Pong back)
+            }
+
+            // Layout hints - future: could control panel visibility
+            ConductorMessage::LayoutHint { .. } => {
+                // TODO: implement layout hint handling
             }
         }
     }
@@ -1048,12 +1055,14 @@ mod tests {
 
     #[test]
     fn test_display_state_apply_message() {
+        use conductor_core::messages::ContentType;
         let mut state = DisplayState::new();
         let id = MessageId::new();
         state.apply_message(ConductorMessage::Message {
             id: id.clone(),
             role: MessageRole::User,
             content: "Hello".to_string(),
+            content_type: ContentType::Plain,
         });
         assert_eq!(state.messages.len(), 1);
         assert_eq!(state.messages[0].content, "Hello");

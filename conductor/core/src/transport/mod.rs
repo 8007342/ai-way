@@ -20,6 +20,7 @@
 //! - No network exposure by default
 
 pub mod config;
+pub mod factory;
 pub mod frame;
 pub mod in_process;
 pub mod traits;
@@ -28,6 +29,7 @@ pub mod unix_socket;
 
 // Re-exports for convenience
 pub use config::{TransportConfig, TransportType};
+pub use factory::create_surface_transport;
 pub use frame::{FrameDecoder, FrameEncoder};
 pub use in_process::InProcessTransport;
 pub use traits::{ConductorTransport, ConnectionId, SurfaceTransport, TransportError};

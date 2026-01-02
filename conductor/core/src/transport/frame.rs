@@ -1,22 +1,28 @@
 //! Frame Protocol
 //!
-//! Wire format for Conductor-Surface messages using length-prefixed JSON.
+//! Wire format for Conductor-Surface messages using length-prefixed JSON with
+//! XXH3 checksum for integrity verification.
 //!
 //! # Frame Format
 //!
 //! ```text
-//! +----------------+------------------------------------------+
-//! | Length (4)     | JSON Payload (variable)                  |
-//! | big-endian u32 | ConductorMessage or SurfaceEvent         |
-//! +----------------+------------------------------------------+
+//! +----------------+----------------+------------------------------------------+
+//! | Length (4)     | Checksum (4)   | JSON Payload (variable)                  |
+//! | big-endian u32 | XXH3 (low 32)  | ConductorMessage or SurfaceEvent         |
+//! +----------------+----------------+------------------------------------------+
 //! ```
+//!
+//! The Length field contains the size of the JSON payload only (not including the checksum).
+//! The Checksum is the lower 32 bits of the XXH3 hash of the JSON payload.
 //!
 //! # Security
 //!
 //! - Maximum frame size is enforced to prevent memory exhaustion
 //! - Length field is validated before allocating buffer
+//! - XXH3 checksum detects data corruption in transit
 
 use serde::{de::DeserializeOwned, Serialize};
+use xxhash_rust::xxh3::xxh3_64;
 
 use super::TransportError;
 
@@ -28,7 +34,21 @@ pub const MAX_FRAME_SIZE: usize = 10 * 1024 * 1024;
 /// Minimum buffer capacity for decoder
 const MIN_BUFFER_CAPACITY: usize = 4096;
 
-/// Encode a message to a length-prefixed frame
+/// Frame header size: 4 bytes length + 4 bytes checksum
+const HEADER_SIZE: usize = 8;
+
+/// Compute XXH3 checksum (lower 32 bits) for payload
+#[inline]
+fn compute_checksum(payload: &[u8]) -> u32 {
+    // Use lower 32 bits of XXH3-64 hash
+    (xxh3_64(payload) & 0xFFFF_FFFF) as u32
+}
+
+/// Encode a message to a length-prefixed frame with XXH3 checksum
+///
+/// # Frame Format
+///
+/// `[Length(4)][Checksum(4)][JSON Payload]`
 ///
 /// # Errors
 ///
@@ -48,8 +68,11 @@ pub fn encode<T: Serialize>(msg: &T) -> Result<Vec<u8>, TransportError> {
     }
 
     let len = json.len() as u32;
-    let mut buf = Vec::with_capacity(4 + json.len());
+    let checksum = compute_checksum(&json);
+
+    let mut buf = Vec::with_capacity(HEADER_SIZE + json.len());
     buf.extend_from_slice(&len.to_be_bytes());
+    buf.extend_from_slice(&checksum.to_be_bytes());
     buf.extend_from_slice(&json);
     Ok(buf)
 }
@@ -118,12 +141,13 @@ impl FrameDecoder {
     /// Returns:
     /// - `Ok(Some(msg))` if a complete frame was decoded
     /// - `Ok(None)` if more data is needed
+    /// - `Err(TransportError::ChecksumMismatch)` if checksum verification fails
     /// - `Err(...)` if frame is invalid
     pub fn decode<T: DeserializeOwned>(&mut self) -> Result<Option<T>, TransportError> {
         let available = self.available();
 
-        // Need at least 4 bytes for length
-        if available < 4 {
+        // Need at least 8 bytes for header (length + checksum)
+        if available < HEADER_SIZE {
             return Ok(None);
         }
 
@@ -139,15 +163,33 @@ impl FrameDecoder {
             )));
         }
 
-        // Need more data for payload
-        if available < 4 + len {
+        // Need more data for checksum + payload
+        if available < HEADER_SIZE + len {
             return Ok(None);
         }
 
-        // Extract and parse payload
-        let payload_start = self.read_pos + 4;
+        // Read checksum (big-endian u32)
+        let checksum_bytes = &self.buffer[self.read_pos + 4..self.read_pos + 8];
+        let expected_checksum = u32::from_be_bytes([
+            checksum_bytes[0],
+            checksum_bytes[1],
+            checksum_bytes[2],
+            checksum_bytes[3],
+        ]);
+
+        // Extract payload
+        let payload_start = self.read_pos + HEADER_SIZE;
         let payload_end = payload_start + len;
         let payload = &self.buffer[payload_start..payload_end];
+
+        // Verify checksum
+        let actual_checksum = compute_checksum(payload);
+        if actual_checksum != expected_checksum {
+            return Err(TransportError::ChecksumMismatch {
+                expected: expected_checksum,
+                actual: actual_checksum,
+            });
+        }
 
         let msg = serde_json::from_slice(payload)
             .map_err(|e| TransportError::SerializationError(e.to_string()))?;
@@ -184,7 +226,7 @@ mod tests {
         };
 
         let encoded = encode(&msg).unwrap();
-        assert!(encoded.len() > 4); // At least length prefix
+        assert!(encoded.len() > HEADER_SIZE); // At least header (length + checksum)
 
         let mut decoder = FrameDecoder::new();
         decoder.push(&encoded);
@@ -194,12 +236,18 @@ mod tests {
     }
 
     #[test]
-    fn test_decode_partial_length() {
+    fn test_decode_partial_header() {
         let mut decoder = FrameDecoder::new();
-        decoder.push(&[0, 0]); // Only 2 bytes
+        decoder.push(&[0, 0, 0, 5]); // Only length, no checksum
 
         let result: Result<Option<TestMessage>, _> = decoder.decode();
         assert!(matches!(result, Ok(None)));
+
+        // Also test with even less data
+        let mut decoder2 = FrameDecoder::new();
+        decoder2.push(&[0, 0]); // Only 2 bytes
+        let result2: Result<Option<TestMessage>, _> = decoder2.decode();
+        assert!(matches!(result2, Ok(None)));
     }
 
     #[test]
@@ -268,11 +316,13 @@ mod tests {
     fn test_decode_invalid_json() {
         let mut decoder = FrameDecoder::new();
 
-        // Valid length prefix but invalid JSON
+        // Valid length prefix and checksum but invalid JSON
         let invalid_json = b"not valid json";
         let len = (invalid_json.len() as u32).to_be_bytes();
+        let checksum = compute_checksum(invalid_json).to_be_bytes();
 
         decoder.push(&len);
+        decoder.push(&checksum);
         decoder.push(invalid_json);
 
         let result: Result<Option<TestMessage>, _> = decoder.decode();
@@ -283,11 +333,70 @@ mod tests {
     fn test_decode_frame_too_large() {
         let mut decoder = FrameDecoder::new();
 
-        // Claim a frame size larger than max
+        // Claim a frame size larger than max (include dummy checksum)
         let huge_len = ((MAX_FRAME_SIZE + 1) as u32).to_be_bytes();
+        let dummy_checksum = [0u8; 4];
         decoder.push(&huge_len);
+        decoder.push(&dummy_checksum);
 
         let result: Result<Option<TestMessage>, _> = decoder.decode();
         assert!(matches!(result, Err(TransportError::SerializationError(_))));
+    }
+
+    #[test]
+    fn test_decode_checksum_mismatch() {
+        let mut decoder = FrameDecoder::new();
+
+        // Valid JSON payload
+        let valid_json = b"{\"content\":\"test\",\"number\":1}";
+        let len = (valid_json.len() as u32).to_be_bytes();
+        // Intentionally wrong checksum
+        let wrong_checksum = 0xDEADBEEFu32.to_be_bytes();
+
+        decoder.push(&len);
+        decoder.push(&wrong_checksum);
+        decoder.push(valid_json);
+
+        let result: Result<Option<TestMessage>, _> = decoder.decode();
+        assert!(matches!(
+            result,
+            Err(TransportError::ChecksumMismatch { .. })
+        ));
+    }
+
+    #[test]
+    fn test_checksum_deterministic() {
+        let msg = TestMessage {
+            content: "deterministic".to_string(),
+            number: 123,
+        };
+
+        let encoded1 = encode(&msg).unwrap();
+        let encoded2 = encode(&msg).unwrap();
+
+        // Same message should produce identical frames (including checksum)
+        assert_eq!(encoded1, encoded2);
+    }
+
+    #[test]
+    fn test_checksum_changes_with_payload() {
+        let msg1 = TestMessage {
+            content: "hello".to_string(),
+            number: 1,
+        };
+        let msg2 = TestMessage {
+            content: "world".to_string(),
+            number: 1,
+        };
+
+        let encoded1 = encode(&msg1).unwrap();
+        let encoded2 = encode(&msg2).unwrap();
+
+        // Extract checksums (bytes 4-8)
+        let checksum1 = &encoded1[4..8];
+        let checksum2 = &encoded2[4..8];
+
+        // Different payloads should produce different checksums
+        assert_ne!(checksum1, checksum2);
     }
 }

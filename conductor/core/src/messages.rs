@@ -36,6 +36,9 @@ pub enum ConductorMessage {
         role: MessageRole,
         /// The message content
         content: String,
+        /// Content type hint for rendering
+        #[serde(default)]
+        content_type: ContentType,
     },
 
     /// A streaming token (partial response)
@@ -162,6 +165,15 @@ pub enum ConductorMessage {
     TaskFocus {
         /// Task identifier
         task_id: TaskId,
+    },
+
+    // ============================================
+    // Layout Directives
+    // ============================================
+    /// Layout hint for surface UI organization
+    LayoutHint {
+        /// The layout directive to apply
+        directive: LayoutDirective,
     },
 
     // ============================================
@@ -297,6 +309,71 @@ pub enum MessageRole {
     Assistant,
     /// System message
     System,
+}
+
+/// Content type hints for message rendering
+///
+/// Tells UI surfaces how to render the message content appropriately.
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq, Default)]
+pub enum ContentType {
+    /// Plain text content
+    #[default]
+    Plain,
+    /// Markdown-formatted content
+    Markdown,
+    /// Code content with optional language hint
+    Code {
+        /// Programming language for syntax highlighting (e.g., "rust", "python")
+        language: Option<String>,
+    },
+    /// Error message content
+    Error,
+    /// System-level message content
+    System,
+    /// Quoted content (e.g., from another source)
+    Quote,
+}
+
+/// Panel identifiers for layout orchestration
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
+pub enum PanelId {
+    /// Tasks panel showing active/completed tasks
+    Tasks,
+    /// Developer panel for debugging/inspection
+    Developer,
+    /// Settings panel for configuration
+    Settings,
+    /// History panel for conversation history
+    History,
+}
+
+/// Layout directives for controlling UI surface organization
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
+pub enum LayoutDirective {
+    /// Show a specific panel
+    ShowPanel {
+        /// The panel to show
+        panel: PanelId,
+    },
+    /// Hide a specific panel
+    HidePanel {
+        /// The panel to hide
+        panel: PanelId,
+    },
+    /// Focus the input field
+    FocusInput,
+    /// Scroll to a specific message
+    ScrollToMessage {
+        /// The message ID to scroll to
+        message_id: MessageId,
+    },
+    /// Scroll to a specific task
+    ScrollToTask {
+        /// The task ID to scroll to
+        task_id: String,
+    },
+    /// Toggle developer mode on/off
+    ToggleDeveloperMode,
 }
 
 /// Notification levels

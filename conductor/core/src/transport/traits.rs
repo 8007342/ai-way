@@ -19,12 +19,11 @@ use crate::messages::ConductorMessage;
 pub struct ConnectionId(pub String);
 
 impl ConnectionId {
-    /// Generate a new unique connection ID
+    /// Generate a new unique connection ID using cryptographically random 128-bit value
     pub fn new() -> Self {
-        use std::sync::atomic::{AtomicU64, Ordering};
-        static COUNTER: AtomicU64 = AtomicU64::new(0);
-        let id = COUNTER.fetch_add(1, Ordering::SeqCst);
-        Self(format!("conn_{id}"))
+        use rand::Rng;
+        let bytes: [u8; 16] = rand::thread_rng().gen();
+        Self(format!("conn_{}", hex::encode(bytes)))
     }
 }
 
@@ -59,6 +58,13 @@ pub enum TransportError {
     IoError(std::io::Error),
     /// Transport not in expected state
     InvalidState(String),
+    /// Frame checksum mismatch - data corruption detected
+    ChecksumMismatch {
+        /// Expected checksum value
+        expected: u32,
+        /// Actual checksum value received
+        actual: u32,
+    },
 }
 
 impl fmt::Display for TransportError {
@@ -72,6 +78,10 @@ impl fmt::Display for TransportError {
             Self::AuthenticationFailed(msg) => write!(f, "Authentication failed: {msg}"),
             Self::IoError(e) => write!(f, "IO error: {e}"),
             Self::InvalidState(msg) => write!(f, "Invalid state: {msg}"),
+            Self::ChecksumMismatch { expected, actual } => write!(
+                f,
+                "Checksum mismatch: expected {expected:#010x}, got {actual:#010x}"
+            ),
         }
     }
 }

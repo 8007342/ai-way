@@ -182,6 +182,38 @@ impl Accessible for ConductorMessage {
                 Some(msg)
             }
 
+            // Layout hints
+            ConductorMessage::LayoutHint { directive } => {
+                use crate::messages::{LayoutDirective, PanelId};
+                match directive {
+                    LayoutDirective::ShowPanel { panel } => {
+                        let panel_name = match panel {
+                            PanelId::Tasks => "Tasks",
+                            PanelId::Developer => "Developer",
+                            PanelId::Settings => "Settings",
+                            PanelId::History => "History",
+                        };
+                        Some(format!("{panel_name} panel opened"))
+                    }
+                    LayoutDirective::HidePanel { panel } => {
+                        let panel_name = match panel {
+                            PanelId::Tasks => "Tasks",
+                            PanelId::Developer => "Developer",
+                            PanelId::Settings => "Settings",
+                            PanelId::History => "History",
+                        };
+                        Some(format!("{panel_name} panel closed"))
+                    }
+                    LayoutDirective::FocusInput => Some("Input focused".to_string()),
+                    LayoutDirective::ToggleDeveloperMode => {
+                        Some("Developer mode toggled".to_string())
+                    }
+                    // Scroll actions don't need announcements
+                    LayoutDirective::ScrollToMessage { .. }
+                    | LayoutDirective::ScrollToTask { .. } => None,
+                }
+            }
+
             // Internal/transport messages - no announcement needed
             ConductorMessage::Token { .. }
             | ConductorMessage::QueryCapabilities
@@ -322,6 +354,7 @@ mod tests {
             id: crate::messages::MessageId::new(),
             role: MessageRole::Assistant,
             content: "Hello world".to_string(),
+            content_type: crate::messages::ContentType::Plain,
         };
         let announcement = msg.screen_reader_announcement().unwrap();
         assert!(announcement.contains("Yollayah says"));
