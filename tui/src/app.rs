@@ -286,10 +286,15 @@ impl App {
                 }
             }
 
+            // IMPORTANT: Process messages FIRST to drain the channel
+            // This prevents poll_streaming from blocking if channel is full
+            self.process_conductor_messages();
+
             // Poll conductor for streaming tokens
+            // This may send new tokens to the channel we just drained
             self.conductor.poll_streaming().await;
 
-            // Receive and process messages from Conductor
+            // Process any newly arrived messages from streaming
             self.process_conductor_messages();
 
             // Update animations and display state
