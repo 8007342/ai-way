@@ -335,6 +335,7 @@ impl Animation {
 }
 
 /// Collection of animations for a size
+#[derive(Debug)]
 pub struct SpriteSheet {
     /// Animations by name
     pub animations: HashMap<String, Animation>,

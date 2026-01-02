@@ -1,7 +1,7 @@
 # TODO-security-findings: Security Audit Tracking
 
 **Created**: 2026-01-02
-**Last Audit**: 2026-01-02 (Sprint 5 - Initial creation)
+**Last Audit**: 2026-01-02 (Sprint 6 - H-001, H-002 resolved)
 **Auditors**: Architect, Hacker, QA, Lawyer
 
 ---
@@ -32,25 +32,7 @@ _None currently identified._
 
 ### HIGH
 
-#### H-001: Sequential ConnectionId Generation
-**Location**: `conductor/core/src/surface_registry.rs`
-**Status**: Open
-**Found**: Sprint 5
-**Target**: Sprint 6
-**Epic**: E-2026Q1-multi-surface
-**Description**: ConnectionId uses sequential counter (AtomicU64). Predictable IDs could allow connection hijacking if combined with other vulnerabilities.
-**Recommendation**: Use cryptographically random UUIDs for production.
-**Mitigation**: Unix socket peer credential validation provides defense-in-depth.
-
-#### H-002: Connection Pool Reuse Not Implemented
-**Location**: `conductor/core/src/routing/connection_pool.rs`
-**Status**: Open
-**Found**: Sprint 4
-**Target**: Sprint 6
-**Epic**: E-2026Q1-multi-surface
-**Description**: `PooledConnection::Drop` doesn't return connections to pool. Under high load, this could lead to connection exhaustion (DoS vector).
-**Recommendation**: Refactor to use Arc<ConnectionPool> with return channel.
-**Related**: `scenario_7_connection_pool` test is ignored pending fix (see TODO-disabled-tests.md).
+_None currently identified._
 
 ### MEDIUM
 
@@ -116,6 +98,20 @@ _None currently identified._
 ---
 
 ## Resolved Findings
+
+### R-003: Connection Pool Reuse Not Implemented (was HIGH - H-002)
+**Location**: `conductor/core/src/routing/connection_pool.rs`
+**Resolved**: Sprint 6
+**Epic**: E-2026Q1-multi-surface
+**Description**: `PooledConnection::Drop` didn't return connections to pool. Under high load, this could lead to connection exhaustion (DoS vector).
+**Resolution**: Implemented `Arc<Self>` pattern with `new_shared()` constructor, async mpsc unbounded channel for non-blocking connection returns from sync Drop handlers, RAII `PooledConnection` wrapper implementing `Deref` for transparent access, `process_returns()` for processing the return channel, `cleanup_idle()` for stale connection removal, and `start_cleanup_task()` for background maintenance. Test `scenario_7_connection_pool` now passes with >90% connection reuse ratio (achieved 100% reuse - only 1 connection created for 20 requests).
+
+### R-002: Sequential ConnectionId Generation (was HIGH - H-001)
+**Location**: `conductor/core/src/surface_registry.rs`
+**Resolved**: Sprint 6
+**Epic**: E-2026Q1-multi-surface
+**Description**: ConnectionId used sequential counter (AtomicU64). Predictable IDs could allow connection hijacking if combined with other vulnerabilities.
+**Resolution**: Replaced sequential counter with cryptographically random UUID v4. The `ConnectionId` type now wraps `uuid::Uuid` providing 122 bits of randomness, making ID prediction practically impossible. Tests verify uniqueness and unpredictability. Unix socket peer credential validation continues to provide defense-in-depth.
 
 ### R-001: QuickResponse Hard Latency Filter (was HIGH)
 **Location**: `conductor/core/src/routing/policy.rs`

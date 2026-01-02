@@ -530,8 +530,39 @@ mod tests {
     #[test]
     fn test_connection_id_display() {
         let id = ConnectionId::new();
-        // Just verify it formats with the "conn-" prefix
-        assert!(format!("{id}").starts_with("conn-"));
+        // Verify it formats with the "conn-" prefix followed by a UUID
+        let formatted = format!("{id}");
+        assert!(
+            formatted.starts_with("conn-"),
+            "ConnectionId should start with 'conn-'"
+        );
+        // UUID format: xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx (36 chars)
+        // Total format: conn- (5 chars) + UUID (36 chars) = 41 chars
+        assert_eq!(
+            formatted.len(),
+            41,
+            "ConnectionId should be 41 characters (conn- + UUID)"
+        );
+    }
+
+    #[test]
+    fn test_connection_id_randomness() {
+        // Verify that ConnectionIds are cryptographically random
+        let id1 = ConnectionId::new();
+        let id2 = ConnectionId::new();
+        let id3 = ConnectionId::new();
+
+        // All should be different
+        assert_ne!(id1, id2);
+        assert_ne!(id2, id3);
+        assert_ne!(id1, id3);
+
+        // Format should be consistent
+        for id in [&id1, &id2, &id3] {
+            let formatted = format!("{id}");
+            assert!(formatted.starts_with("conn-"));
+            assert_eq!(formatted.len(), 41);
+        }
     }
 
     #[test]

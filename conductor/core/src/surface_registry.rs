@@ -34,40 +34,58 @@
 
 use std::collections::HashMap;
 use std::fmt;
-use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::Arc;
 
 use parking_lot::RwLock;
 use serde::{Deserialize, Serialize};
 use tokio::sync::mpsc;
+use uuid::Uuid;
 
 use crate::events::{SurfaceCapabilities, SurfaceType};
 use crate::messages::ConductorMessage;
 
 /// Unique identifier for a client connection
 ///
-/// Each connection is assigned a unique ID when it connects.
+/// Each connection is assigned a cryptographically random UUID (v4) when it connects.
 /// This ID is stable for the lifetime of the connection.
+///
+/// # Security
+///
+/// UUIDs are used instead of sequential counters to prevent:
+/// - Connection ID prediction/enumeration attacks
+/// - Connection hijacking attempts
+/// - Information leakage about connection counts
+///
+/// The UUID v4 provides 122 bits of cryptographic randomness.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
-pub struct ConnectionId(u64);
+pub struct ConnectionId(Uuid);
 
 impl ConnectionId {
-    /// Create a new unique connection ID
-    pub fn new() -> Self {
-        static COUNTER: AtomicU64 = AtomicU64::new(1);
-        Self(COUNTER.fetch_add(1, Ordering::SeqCst))
-    }
-
-    /// Create a connection ID from a raw value (for testing or deserialization)
-    #[cfg(test)]
-    pub fn from_raw(id: u64) -> Self {
-        Self(id)
-    }
-
-    /// Get the raw numeric value
+    /// Create a new unique connection ID using UUID v4
+    ///
+    /// This generates a cryptographically random identifier that is
+    /// practically impossible to guess or predict.
     #[must_use]
-    pub fn as_u64(&self) -> u64 {
-        self.0
+    pub fn new() -> Self {
+        Self(Uuid::new_v4())
+    }
+
+    /// Create a connection ID from a UUID (for testing or deserialization)
+    #[cfg(test)]
+    pub fn from_uuid(uuid: Uuid) -> Self {
+        Self(uuid)
+    }
+
+    /// Get the underlying UUID
+    #[must_use]
+    pub fn as_uuid(&self) -> &Uuid {
+        &self.0
+    }
+
+    /// Get the UUID as a hyphenated string
+    #[must_use]
+    pub fn to_hyphenated(&self) -> String {
+        self.0.hyphenated().to_string()
     }
 }
 
@@ -79,7 +97,7 @@ impl Default for ConnectionId {
 
 impl fmt::Display for ConnectionId {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "conn-{}", self.0)
+        write!(f, "conn-{}", self.0.hyphenated())
     }
 }
 
@@ -596,6 +614,7 @@ pub struct RegistrySummary {
 mod tests {
     use super::*;
     use tokio::sync::mpsc;
+    use uuid::Uuid;
 
     fn create_test_handle(id: ConnectionId) -> (SurfaceHandle, mpsc::Receiver<ConductorMessage>) {
         let (tx, rx) = mpsc::channel(32);
@@ -610,8 +629,9 @@ mod tests {
 
     #[test]
     fn test_connection_id_display() {
-        let id = ConnectionId::from_raw(42);
-        assert_eq!(format!("{id}"), "conn-42");
+        let uuid = Uuid::parse_str("550e8400-e29b-41d4-a716-446655440000").unwrap();
+        let id = ConnectionId::from_uuid(uuid);
+        assert_eq!(format!("{id}"), "conn-550e8400-e29b-41d4-a716-446655440000");
     }
 
     #[test]
@@ -619,6 +639,65 @@ mod tests {
         let id1 = ConnectionId::new();
         let id2 = ConnectionId::new();
         assert_ne!(id1, id2);
+    }
+
+    #[test]
+    fn test_connection_id_randomness() {
+        // Generate many IDs and verify they are all unique
+        // This tests the cryptographic randomness property
+        use std::collections::HashSet;
+        let mut ids: HashSet<ConnectionId> = HashSet::new();
+
+        // Generate 1000 IDs - should all be unique
+        for _ in 0..1000 {
+            let id = ConnectionId::new();
+            assert!(
+                ids.insert(id),
+                "Generated duplicate ConnectionId - randomness failure"
+            );
+        }
+
+        assert_eq!(ids.len(), 1000);
+    }
+
+    #[test]
+    fn test_connection_id_unpredictable() {
+        // Verify that consecutive IDs have no sequential relationship
+        // by checking they don't share common patterns
+        let id1 = ConnectionId::new();
+        let id2 = ConnectionId::new();
+        let id3 = ConnectionId::new();
+
+        // Get the raw bytes of each UUID
+        let bytes1 = id1.as_uuid().as_bytes();
+        let bytes2 = id2.as_uuid().as_bytes();
+        let bytes3 = id3.as_uuid().as_bytes();
+
+        // Count how many bytes differ between consecutive IDs
+        // With random UUIDs, most bytes should differ
+        let diff_1_2: usize = bytes1
+            .iter()
+            .zip(bytes2.iter())
+            .filter(|(a, b)| a != b)
+            .count();
+        let diff_2_3: usize = bytes2
+            .iter()
+            .zip(bytes3.iter())
+            .filter(|(a, b)| a != b)
+            .count();
+
+        // With 16 bytes and randomness, expect at least half to differ
+        // (statistically, about 14-15 bytes should differ on average)
+        assert!(
+            diff_1_2 >= 8,
+            "IDs too similar - possible sequential pattern: {} bytes differ",
+            diff_1_2
+        );
+        assert!(
+            diff_2_3 >= 8,
+            "IDs too similar - possible sequential pattern: {} bytes differ",
+            diff_2_3
+        );
     }
 
     #[test]
@@ -857,9 +936,8 @@ mod tests {
         assert_eq!(registry.count(), 10);
 
         // All IDs should be unique
-        let mut unique_ids: Vec<_> = registered_ids.iter().copied().collect();
-        unique_ids.sort_by_key(|id| id.as_u64());
-        unique_ids.dedup();
+        use std::collections::HashSet;
+        let unique_ids: HashSet<_> = registered_ids.iter().copied().collect();
         assert_eq!(unique_ids.len(), 10);
     }
 

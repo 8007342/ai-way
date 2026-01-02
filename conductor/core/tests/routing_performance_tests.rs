@@ -457,7 +457,6 @@ async fn scenario_6_rate_limiting() {
 /// - No connection leaks
 /// - Idle connections cleaned up
 #[tokio::test]
-#[ignore = "Pre-existing failure: connection pool reuse not implemented"]
 async fn scenario_7_connection_pool() {
     use conductor_core::routing::config::ConnectionConfig;
     use conductor_core::routing::connection_pool::ConnectionPool;
@@ -468,29 +467,106 @@ async fn scenario_7_connection_pool() {
         ..Default::default()
     };
 
-    let pool = ConnectionPool::new("test-backend".to_string(), config);
+    // Use new_shared() for proper connection reuse via Arc
+    let pool = ConnectionPool::new_shared("test-backend".to_string(), config);
 
     println!("\nScenario 7: Connection Pool");
 
-    // Simulate connection usage
-    for i in 0..20 {
+    let num_requests = 20;
+
+    // Simulate connection usage with sequential requests
+    for _i in 0..num_requests {
         let conn = pool.acquire(Duration::from_secs(5)).await;
         assert!(conn.is_ok(), "Should acquire connection");
 
-        // Simulate request
+        // Simulate request processing
         tokio::time::sleep(Duration::from_millis(10)).await;
 
         // Connection automatically returned when dropped
+        drop(conn);
+
+        // Process returns to make connection available for reuse
+        pool.process_returns().await;
     }
 
     let stats = pool.stats().await;
     println!("  Connections created: {}", stats.connections_created);
     println!("  Connections closed: {}", stats.connections_closed);
+    println!("  Connections reused: {}", stats.connections_reused);
     println!("  Currently idle: {}", stats.idle_connections);
     println!("  Connection errors: {}", stats.connection_errors);
 
-    // Verify reuse (created should be much less than 20)
-    assert!(stats.connections_created < 20, "Should reuse connections");
+    // Calculate reuse ratio
+    let reuse_ratio = if stats.connections_created > 0 {
+        (stats.connections_reused as f64) / ((num_requests - 1) as f64) * 100.0
+    } else {
+        0.0
+    };
+    println!("  Reuse ratio: {:.1}%", reuse_ratio);
+
+    // Verify reuse (created should be much less than num_requests)
+    // With proper pooling, we should create only 1 connection and reuse it
+    assert!(
+        stats.connections_created < (num_requests as u64),
+        "Should reuse connections: created {} for {} requests",
+        stats.connections_created,
+        num_requests
+    );
+
+    // Verify reuse ratio > 90% (at least 18 of 19 possible reuses)
+    assert!(
+        reuse_ratio > 90.0,
+        "Reuse ratio should be > 90%, got {:.1}%",
+        reuse_ratio
+    );
+
+    // Test idle connection cleanup
+    println!("\n  Testing idle connection cleanup...");
+
+    // Force a short idle timeout for testing
+    let cleanup_config = ConnectionConfig {
+        max_connections: 4,
+        max_idle_connections: 4,
+        keepalive_interval_ms: 1, // Very short for testing
+        ..Default::default()
+    };
+    let cleanup_pool = ConnectionPool::new_shared("cleanup-test".to_string(), cleanup_config);
+
+    // Acquire and release a connection
+    {
+        let _conn = cleanup_pool.acquire(Duration::from_secs(5)).await.unwrap();
+    }
+    cleanup_pool.process_returns().await;
+
+    let before_cleanup = cleanup_pool.stats().await;
+    println!(
+        "  Before cleanup - idle: {}",
+        before_cleanup.idle_connections
+    );
+
+    // Wait for idle timeout
+    tokio::time::sleep(Duration::from_millis(10)).await;
+
+    // Cleanup should remove stale connections
+    cleanup_pool.cleanup_idle().await;
+
+    let after_cleanup = cleanup_pool.stats().await;
+    println!("  After cleanup - idle: {}", after_cleanup.idle_connections);
+
+    assert_eq!(
+        after_cleanup.idle_connections, 0,
+        "Stale connections should be cleaned up"
+    );
+
+    // Verify no connection leaks (active should be 0 after all work done)
+    let final_stats = pool.stats().await;
+    assert_eq!(
+        final_stats.active_connections, 0,
+        "No connection leaks: {} active connections remain",
+        final_stats.active_connections
+    );
+
+    println!("  All connection pool tests passed!");
 }
 
 // ============================================================================

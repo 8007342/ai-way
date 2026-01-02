@@ -7,10 +7,18 @@
 //! - Context-aware animations at ~10fps
 //! - State-driven behavior
 //! - Activity overlays (thinking, building, studying, etc.)
+//!
+//! # Animation System (P2.4-P2.5)
+//!
+//! The animation system provides:
+//! - [`AvatarAnimator`]: Frame timing and mood transitions
+//! - [`DirtyTracker`]: Partial rendering for CPU optimization
 
 mod activity;
 mod animation;
+mod animator;
 pub mod commands;
+mod dirty_tracker;
 mod sizes;
 mod sprites;
 mod states;
@@ -22,6 +30,8 @@ use ratatui::style::Style;
 
 pub use activity::{Activity, ActivityManager, OverlaySize};
 pub use animation::AnimationEngine;
+pub use animator::{AvatarAnimator, MoodTransition};
+pub use dirty_tracker::{DirtyRect, DirtyTracker, DirtyTrackingExt};
 pub use sizes::AvatarSize;
 pub use sprites::{Animation, CellBlendMode, ColoredCell, Frame};
 pub use states::{AvatarState, AvatarStateMachine, AvatarTrigger};

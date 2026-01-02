@@ -29,8 +29,8 @@ use crate::avatar::{AvatarCommand, AvatarState, CommandParser};
 use crate::backend::{LlmBackend, LlmRequest, StreamingToken};
 use crate::events::{ScrollDirection, SurfaceCapabilities, SurfaceEvent, SurfaceType};
 use crate::messages::{
-    ConductorMessage, ConductorState, ContentType, EventId, MessageId, MessageRole, NotifyLevel,
-    ResponseMetadata, SessionId,
+    AvatarStateSnapshot, ConductorMessage, ConductorState, ContentType, EventId, MessageId,
+    MessageRole, NotifyLevel, ResponseMetadata, SessionId, SessionSnapshot, SnapshotMessage,
 };
 use crate::routing::{
     policy::RoutingRequest, QueryRouter, RouterConfig, RouterError, RouterResponse,
@@ -293,9 +293,66 @@ impl<B: LlmBackend + 'static> Conductor<B> {
         &self.tasks
     }
 
+    /// Get a reference to the session
+    pub fn session(&self) -> &Session {
+        &self.session
+    }
+
+    /// Get the model name
+    pub fn model(&self) -> &str {
+        &self.config.model
+    }
+
     /// Check if warmup is complete
     pub fn is_ready(&self) -> bool {
         self.warmup_complete
+    }
+
+    /// Create a state snapshot for late-joining surfaces
+    ///
+    /// The snapshot includes:
+    /// - Recent conversation history (limited to prevent overwhelming)
+    /// - Current avatar state
+    /// - Session metadata
+    ///
+    /// # Arguments
+    /// * `max_messages` - Maximum number of recent messages to include (0 = use default of 20)
+    #[must_use]
+    pub fn create_state_snapshot(&self, max_messages: usize) -> ConductorMessage {
+        let max_messages = if max_messages == 0 { 20 } else { max_messages };
+
+        // Convert conversation messages to snapshot messages
+        let conversation_history: Vec<SnapshotMessage> = self
+            .session
+            .recent_messages(max_messages)
+            .iter()
+            .map(|msg| SnapshotMessage {
+                id: msg.id.clone(),
+                role: msg.role,
+                content: msg.content.clone(),
+                content_type: ContentType::default(),
+                timestamp: msg.timestamp,
+            })
+            .collect();
+
+        // Create avatar state snapshot
+        let avatar_state = AvatarStateSnapshot::from(&self.avatar);
+
+        // Create session snapshot
+        let session_info = SessionSnapshot::new(
+            self.session.id.clone(),
+            self.config.model.clone(),
+            self.warmup_complete,
+            self.state,
+            self.session.metadata.created_at,
+            self.session.metadata.message_count,
+        );
+
+        ConductorMessage::StateSnapshot {
+            conversation_history,
+            avatar_state,
+            session_info,
+        }
     }
 
     /// Start the Conductor (initialize and optionally warm up)
@@ -623,6 +680,10 @@ impl<B: LlmBackend + 'static> Conductor<B> {
                         ready: self.warmup_complete,
                     })
                     .await;
+
+                    // Send state snapshot for late-joining surfaces
+                    let snapshot = self.create_state_snapshot(20);
+                    self.send(snapshot).await;
                 }
             }
 
@@ -802,10 +863,16 @@ impl<B: LlmBackend + 'static> Conductor<B> {
                     )
                     .await;
 
+                    // Send state snapshot for late-joining surfaces
+                    // This allows surfaces to sync up with existing conversation state
+                    let snapshot = self.create_state_snapshot(20);
+                    self.send_to(&conn_id, snapshot).await;
+
                     tracing::info!(
                         connection_id = %conn_id,
                         surface_type = %surface_type.name(),
-                        "Handshake accepted"
+                        message_count = self.session.metadata.message_count,
+                        "Handshake accepted, state snapshot sent"
                     );
                 }
             }
@@ -1569,5 +1636,207 @@ mod tests {
 
         assert!(config.enable_routing);
         assert!(config.router_config.is_some());
+    }
+
+    #[tokio::test]
+    async fn test_create_state_snapshot_empty() {
+        // Test state snapshot with no messages
+        let (tx, _rx) = mpsc::channel(100);
+        let conductor = Conductor::new(
+            MockBackend,
+            ConductorConfig {
+                warmup_on_start: false,
+                ..Default::default()
+            },
+            tx,
+        );
+
+        let snapshot = conductor.create_state_snapshot(20);
+
+        match snapshot {
+            ConductorMessage::StateSnapshot {
+                conversation_history,
+                avatar_state,
+                session_info,
+            } => {
+                // Should have empty history for new conductor
+                assert!(
+                    conversation_history.is_empty(),
+                    "Empty conductor should have empty history"
+                );
+
+                // Avatar should be in default state
+                assert!(avatar_state.visible, "Avatar should be visible by default");
+                assert!(
+                    avatar_state.wandering,
+                    "Avatar should have wandering enabled by default"
+                );
+
+                // Session info should exist
+                assert!(
+                    !session_info.session_id.0.is_empty(),
+                    "Should have session ID"
+                );
+                assert_eq!(session_info.message_count, 0, "Should have 0 messages");
+            }
+            _ => panic!("Expected StateSnapshot message"),
+        }
+    }
+
+    #[tokio::test]
+    async fn test_create_state_snapshot_with_history() {
+        // Test state snapshot with conversation history
+        let (tx, mut rx) = mpsc::channel(100);
+        let mut conductor = Conductor::new(
+            MockBackend,
+            ConductorConfig {
+                warmup_on_start: false,
+                greet_on_connect: false,
+                ..Default::default()
+            },
+            tx,
+        );
+
+        // Start conductor
+        conductor.start().await.unwrap();
+
+        // Drain initial messages
+        while rx.try_recv().is_ok() {}
+
+        // Add a user message to create history
+        conductor
+            .handle_event(SurfaceEvent::UserMessage {
+                event_id: SurfaceEvent::new_event_id(),
+                content: "Test message".to_string(),
+            })
+            .await
+            .unwrap();
+
+        // Wait for streaming to complete
+        for _ in 0..10 {
+            if conductor.poll_streaming().await {
+                tokio::time::sleep(tokio::time::Duration::from_millis(50)).await;
+            } else {
+                break;
+            }
+        }
+
+        // Create snapshot
+        let snapshot = conductor.create_state_snapshot(20);
+
+        match snapshot {
+            ConductorMessage::StateSnapshot {
+                conversation_history,
+                session_info,
+                ..
+            } => {
+                // Should have at least the user message in history
+                assert!(
+                    !conversation_history.is_empty(),
+                    "Should have conversation history"
+                );
+
+                // Check session has messages
+                assert!(session_info.message_count >= 1, "Should have message count");
+            }
+            _ => panic!("Expected StateSnapshot message"),
+        }
+    }
+
+    #[tokio::test]
+    async fn test_create_state_snapshot_limit() {
+        // Test that snapshot respects message limit
+        let (tx, _rx) = mpsc::channel(100);
+        let mut conductor = Conductor::new(
+            MockBackend,
+            ConductorConfig {
+                warmup_on_start: false,
+                greet_on_connect: false,
+                ..Default::default()
+            },
+            tx,
+        );
+
+        // Manually add messages to session (bypassing event handling)
+        for i in 0..30 {
+            conductor.session.add_user_message(format!("Message {}", i));
+        }
+
+        // Request snapshot with limit of 5
+        let snapshot = conductor.create_state_snapshot(5);
+
+        match snapshot {
+            ConductorMessage::StateSnapshot {
+                conversation_history,
+                ..
+            } => {
+                assert_eq!(conversation_history.len(), 5, "Should limit to 5 messages");
+                // Should be the most recent 5 messages (25-29)
+                assert!(
+                    conversation_history[0].content.contains("Message 25"),
+                    "Should have message 25"
+                );
+                assert!(
+                    conversation_history[4].content.contains("Message 29"),
+                    "Should have message 29"
+                );
+            }
+            _ => panic!("Expected StateSnapshot message"),
+        }
+    }
+
+    #[tokio::test]
+    async fn test_state_snapshot_sent_on_handshake() {
+        // Test that StateSnapshot is sent when handshake is accepted
+        let (tx, mut rx) = mpsc::channel(100);
+        let mut conductor = Conductor::new(
+            MockBackend,
+            ConductorConfig {
+                warmup_on_start: false,
+                greet_on_connect: false,
+                ..Default::default()
+            },
+            tx,
+        );
+
+        // Start conductor
+        conductor.start().await.unwrap();
+
+        // Drain initial messages
+        while rx.try_recv().is_ok() {}
+
+        // Send handshake event
+        conductor
+            .handle_event(SurfaceEvent::Handshake {
+                event_id: SurfaceEvent::new_event_id(),
+                protocol_version: 1,
+                surface_type: SurfaceType::Tui,
+                capabilities: SurfaceCapabilities::tui(),
+                auth_token: None,
+            })
+            .await
+            .unwrap();
+
+        // Collect messages
+        let mut found_handshake_ack = false;
+        let mut found_state_snapshot = false;
+
+        while let Ok(msg) = rx.try_recv() {
+            match msg {
+                ConductorMessage::HandshakeAck { accepted: true, .. } => {
+                    found_handshake_ack = true;
+                }
+                ConductorMessage::StateSnapshot { .. } => {
+                    found_state_snapshot = true;
+                }
+                _ => {}
+            }
+        }
+
+        assert!(found_handshake_ack, "Should have received HandshakeAck");
+        assert!(
+            found_state_snapshot,
+            "Should have received StateSnapshot after handshake"
+        );
     }
 }

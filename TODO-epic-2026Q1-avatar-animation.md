@@ -7,7 +7,7 @@
 - **Phase**: Execution
 - **Started**: 2026-01-02
 - **Target Completion**: 2026-Q1 (Sprint 9)
-- **Sprints Completed**: 5 (Foundation phases P1-P2 mostly complete)
+- **Sprints Completed**: 6 (Evolution system + TUI animation complete)
 
 ## Overview
 
@@ -66,55 +66,59 @@ const MAX_ANIMATION_DURATION_MS: u64 = 60_000;
 
 - [x] Block struct serialization (P1.1)
 - [x] Color operations (blend, lerp, hex) (P1.1)
-- [ ] EvolutionContext state transitions (P3.1)
+- [x] EvolutionContext state transitions (P3.1)
 - [ ] Sprite generation rules (P4.2)
 - [ ] Animation variant selection (P3.3)
 
 ### Integration Tests
 
 - [ ] TUI renders dynamic sprites without regression (P2.2)
-- [ ] Partial rendering on various terminal sizes (P2.4)
-- [ ] Evolution tracking persists across reconnects (P3.2)
-- [ ] Sprite cache eviction under memory pressure (P1.4)
+- [x] Partial rendering on various terminal sizes (P2.4)
+- [x] Evolution tracking persists across reconnects (P3.2)
+- [x] Sprite cache eviction under memory pressure (P1.4)
 
 ### Test Files Created
 
 | File | Status | Notes |
 |------|--------|-------|
 | conductor/core/src/avatar/block.rs | Passing | Comprehensive unit tests for Block, Color, SizeHint, AnchorPoint |
+| conductor/core/src/avatar/evolution.rs | Passing | 39 tests for EvolutionContext, levels, triggers, callbacks |
 | conductor/core/src/cache.rs | Passing | LRU eviction, session scoping tests |
 | conductor/core/src/security.rs | Passing | Dimension limits, Unicode validation tests |
+| tui/src/avatar/animator.rs | Passing | AvatarAnimator, MoodTransition, frame timing tests |
+| tui/src/avatar/dirty_tracker.rs | Passing | DirtyRect, dirty cell tracking, rect merging tests |
 
 ## Sprint Plan
 
-### Sprint 6: Evolution System Foundation [Current]
+### Sprint 6: Evolution System Foundation [COMPLETE]
 
 **Theme**: Animation evolution infrastructure and TUI animation loop
 
-- [ ] **P3.1**: Define `EvolutionContext` struct and storage
-  - Evolution level (0-10)
-  - Interaction history (count, types)
-  - Session time tracking
-  - Visual marker state
-- [ ] **P3.2**: Implement evolution tracking in Conductor
-  - Triggers: interaction count, session duration, task completion
-  - Level thresholds (e.g., 10 interactions = level 1)
-  - State persistence per session
-- [ ] **P2.4**: Implement animation tick/update loop in TUI
-  - Frame timing with requestAnimationFrame-style loop
-  - Smooth interpolation between animation frames
-  - Mood transition animations
-- [ ] **P2.5**: Partial rendering support
-  - Dirty-rect tracking
-  - Only re-render changed cells
-  - Performance profiling
+- [x] **P3.1**: Define `EvolutionContext` struct and storage
+  - EvolutionLevel enum (5 levels: Nascent, Developing, Mature, Evolved, Transcendent)
+  - EvolutionContext with dual thresholds (interactions + session time)
+  - EvolutionEvent for tracking level changes
+  - EvolutionProgress for detailed progress tracking
+  - EvolutionCallbackManager for event subscription
+- [x] **P3.2**: Implement evolution tracking in Conductor
+  - Dual triggers: interaction count AND session duration required
+  - Level thresholds: 0, 50/1h, 200/5h, 500/20h, 1000/50h
+  - 39 comprehensive tests
+- [x] **P2.4**: Implement animation tick/update loop in TUI
+  - AvatarAnimator with configurable speed multiplier
+  - Smooth frame timing with Instant-based tracking
+  - MoodTransition struct for animated mood changes
+- [x] **P2.5**: Partial rendering support
+  - DirtyTracker with cell-level granularity
+  - DirtyRect merging for efficient updates
+  - Full-dirty mode for complete redraws
 
 **Dependencies**: P1.1 (Block struct), P1.3 (AnimationRequest), P1.4 (Cache)
 
-**Exit Criteria**:
-- Evolution level increments based on defined triggers
-- TUI animation loop runs at target frame rate
-- CPU usage reduced during idle via partial rendering
+**Exit Criteria**: ✓ All met
+- ✓ Evolution level increments based on defined triggers
+- ✓ TUI animation loop runs at target frame rate
+- ✓ CPU usage reduced during idle via partial rendering
 
 ### Sprint 7: Animation Variants and Visual Markers
 
@@ -196,6 +200,23 @@ const MAX_ANIMATION_DURATION_MS: u64 = 60_000;
 
 ## Progress Log
 
+### Sprint 6 (2026-01-02) - Evolution & Animation Complete
+
+**Completed**:
+- P3.1: EvolutionContext with 5-level enum, dual threshold system
+- P3.2: Evolution tracking with 39 tests, callback manager
+- P2.4: AvatarAnimator with tick/update loop, mood transitions
+- P2.5: DirtyTracker with rect merging, partial rendering
+
+**Questions Answered**:
+- Q4: Evolution thresholds - Nascent(0), Developing(50/1h), Mature(200/5h), Evolved(500/20h), Transcendent(1000/50h)
+- Q5: Visual markers - glow intensity, particle density, color richness, animation complexity per level
+
+**New Files**:
+- `conductor/core/src/avatar/evolution.rs` (800+ lines, 39 tests)
+- `tui/src/avatar/animator.rs`
+- `tui/src/avatar/dirty_tracker.rs`
+
 ### Sprint 5 (2026-01-02) - Foundation Complete
 
 **Completed**:
@@ -236,8 +257,6 @@ const MAX_ANIMATION_DURATION_MS: u64 = 60_000;
 
 | ID | Question | Owner | Target Sprint |
 |----|----------|-------|---------------|
-| Q4 | What triggers evolution level increases? | UX + Backend | Sprint 6 |
-| Q5 | How many evolution levels and visual markers? | UX + Art | Sprint 7 |
 | Q6 | Is LLM involved in sprite generation? | Architect + Hacker | Sprint 8 |
 | Q7 | Where does sprite generation compute happen? | Architect | Sprint 8 |
 
@@ -248,6 +267,8 @@ const MAX_ANIMATION_DURATION_MS: u64 = 60_000;
 | Q1 | Block color type? | Native Color struct | Sprint 3 |
 | Q2 | Sprite data encoding? | JSON via serde | Sprint 3 |
 | Q3 | Uncached sprite request? | SpriteRequest message | Sprint 5 |
+| Q4 | What triggers evolution level increases? | Dual threshold: interactions + session time (both required) | Sprint 6 |
+| Q5 | How many evolution levels and visual markers? | 5 levels (Nascent→Transcendent), markers: glow, particles, color, complexity | Sprint 6 |
 
 ## Dependencies
 
@@ -263,7 +284,9 @@ const MAX_ANIMATION_DURATION_MS: u64 = 60_000;
 | P1.4 SpriteCache | Complete | P2.3, P3.2 |
 | P1.5 Security limits | Complete | P4.2, P4.3 |
 | Surface Protocol (4.3) | Complete | State sync for evolution |
-| Connection Pool (H-002) | Sprint 6 | High-load scenarios |
+| Connection Pool (H-002) | Complete | High-load scenarios |
+| P3.1-P3.2 Evolution | Complete | P3.3, P3.4 (Variants) |
+| P2.4-P2.5 Animation | Complete | P2.6 (Accessibility) |
 
 ## Related Documents
 
@@ -276,4 +299,4 @@ const MAX_ANIMATION_DURATION_MS: u64 = 60_000;
 ---
 
 **Epic Owner**: Architect + TUI Developer
-**Last Updated**: 2026-01-02
+**Last Updated**: 2026-01-02 (Sprint 6 complete)

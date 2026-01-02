@@ -27,6 +27,7 @@
 
 pub mod block;
 pub mod cache;
+pub mod evolution;
 pub mod security;
 
 // Re-export block types at the avatar module level for convenience
@@ -47,6 +48,15 @@ pub use security::{
     MAX_ANIMATION_FRAMES, MAX_BLOCKS_PER_SPRITE, MAX_CACHE_SIZE_BYTES,
     MAX_PENDING_REQUESTS_PER_SESSION, MAX_SPRITE_HEIGHT, MAX_SPRITE_REQUESTS_PER_MINUTE,
     MAX_SPRITE_WIDTH,
+};
+
+// Re-export evolution types
+pub use evolution::{
+    EvolutionCallback, EvolutionCallbackManager, EvolutionContext, EvolutionEvent, EvolutionLevel,
+    EvolutionProgress, THRESHOLD_DEVELOPING_INTERACTIONS, THRESHOLD_DEVELOPING_TIME_SECS,
+    THRESHOLD_EVOLVED_INTERACTIONS, THRESHOLD_EVOLVED_TIME_SECS, THRESHOLD_MATURE_INTERACTIONS,
+    THRESHOLD_MATURE_TIME_SECS, THRESHOLD_TRANSCENDENT_INTERACTIONS,
+    THRESHOLD_TRANSCENDENT_TIME_SECS,
 };
 
 use std::collections::VecDeque;
