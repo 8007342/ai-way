@@ -711,6 +711,31 @@ async fn chaos_concurrent_pruning() { ... }
 
 ---
 
+## Developer Convenience
+
+### Quick Dev Mode (Tiny Model)
+
+For rapid TUI/Conductor testing on low-powered devices, use a tiny model:
+
+```bash
+# Option 1: Environment variable (already works)
+YOLLAYAH_MODEL=tinyllama yollayah.sh
+
+# Option 2: After A4 launcher update, add --dev flag
+yollayah.sh --dev   # Uses tinyllama for fast responses
+
+# Recommended tiny models for testing:
+# - tinyllama     (1.1B params, very fast)
+# - phi           (2.7B params, good quality/speed balance)
+# - llama3.2:1b   (1B params, official llama tiny)
+```
+
+Add to A4 (Launcher Script):
+- [ ] `--dev` flag that sets `YOLLAYAH_MODEL=tinyllama`
+- [ ] `--model <name>` flag for explicit model selection
+
+---
+
 ## Post-Completion: WebSocket Preparation
 
 After Phase 4/5 complete, prerequisites for WebSocket:
