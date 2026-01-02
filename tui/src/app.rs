@@ -36,7 +36,7 @@ use crate::theme::{
     BREATHING_AGENT_BRIGHT, BREATHING_AGENT_CYCLE_MS, BREATHING_INPUT_BASE, BREATHING_INPUT_BRIGHT,
     BREATHING_INPUT_CYCLE_MS, BREATHING_PROCESSING_BASE, BREATHING_PROCESSING_BRIGHT,
     BREATHING_PROCESSING_CYCLE_MS, BREATHING_STATUS_BASE, BREATHING_STATUS_BRIGHT,
-    BREATHING_STATUS_CYCLE_MS, INDICATOR_AGENT_IDLE, YOLLAYAH_MAGENTA,
+    BREATHING_STATUS_CYCLE_MS, INDICATOR_AGENT_IDLE, METADATA_COLOR, YOLLAYAH_MAGENTA,
 };
 
 /// Input box height (lines) for text wrapping
@@ -700,6 +700,15 @@ impl App {
             for line in wrapped {
                 all_lines.push((line.to_string(), base_style));
             }
+
+            // Add metadata line for assistant messages (subtle, dim)
+            if msg.role == DisplayRole::Assistant && !msg.streaming {
+                if let Some(meta_text) = msg.format_metadata() {
+                    let meta_style = Style::default().fg(METADATA_COLOR);
+                    all_lines.push((format!("  ⌁ {}", meta_text), meta_style));
+                }
+            }
+
             all_lines.push((String::new(), Style::default()));
         }
 

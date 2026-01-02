@@ -133,7 +133,8 @@ pub use backend::{
 pub use conductor::{Conductor, ConductorConfig};
 pub use events::{ScrollDirection, SurfaceCapabilities, SurfaceEvent, SurfaceType};
 pub use messages::{
-    ConductorMessage, ConductorState, EventId, MessageId, MessageRole, NotifyLevel, SessionId,
+    ConductorMessage, ConductorState, EventId, MessageId, MessageRole, NotifyLevel,
+    ResponseMetadata, SessionId,
 };
 pub use security::{
     CommandRejectionReason, CommandValidator, ConductorLimits, InputValidator, SecurityConfig,

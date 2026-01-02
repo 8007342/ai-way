@@ -16,7 +16,7 @@ use std::time::{Duration, Instant};
 
 use conductor_core::{
     AvatarGesture, AvatarMood, AvatarPosition, AvatarReaction, AvatarSize, ConductorMessage,
-    ConductorState, MessageId, MessageRole, TaskId, TaskStatus,
+    ConductorState, MessageId, MessageRole, ResponseMetadata, TaskId, TaskStatus,
 };
 
 /// A rendered conversation message
@@ -30,6 +30,8 @@ pub struct DisplayMessage {
     pub content: String,
     /// Whether this message is still being streamed
     pub streaming: bool,
+    /// Response metadata (for assistant messages)
+    pub metadata: Option<ResponseMetadata>,
 }
 
 impl DisplayMessage {
@@ -40,6 +42,7 @@ impl DisplayMessage {
             role: role.into(),
             content,
             streaming: false,
+            metadata: None,
         }
     }
 
@@ -50,6 +53,7 @@ impl DisplayMessage {
             role: DisplayRole::Assistant,
             content: String::new(),
             streaming: true,
+            metadata: None,
         }
     }
 
@@ -58,10 +62,65 @@ impl DisplayMessage {
         self.content.push_str(text);
     }
 
-    /// Mark stream as complete
-    pub fn complete(&mut self, final_content: String) {
+    /// Mark stream as complete with metadata
+    pub fn complete(&mut self, final_content: String, metadata: ResponseMetadata) {
         self.content = final_content;
         self.streaming = false;
+        self.metadata = Some(metadata);
+    }
+
+    /// Format metadata as Yollayah-style commentary
+    pub fn format_metadata(&self) -> Option<String> {
+        let meta = self.metadata.as_ref()?;
+
+        // Build a friendly summary based on metrics
+        let mut parts = Vec::new();
+
+        // Tokens per second
+        if let Some(tps) = meta.tokens_per_second {
+            if tps > 50.0 {
+                parts.push(format!("⚡ {:.0} tok/s", tps));
+            } else if tps > 20.0 {
+                parts.push(format!("{:.0} tok/s", tps));
+            } else if tps > 0.0 {
+                parts.push(format!("{:.1} tok/s", tps));
+            }
+        }
+
+        // Elapsed time with friendly messages
+        let elapsed_secs = meta.elapsed_ms as f32 / 1000.0;
+        if elapsed_secs > 30.0 {
+            parts.push(format!("{:.1}s — that was a journey!", elapsed_secs));
+        } else if elapsed_secs > 10.0 {
+            parts.push(format!("{:.1}s — worth the wait!", elapsed_secs));
+        } else if elapsed_secs > 5.0 {
+            parts.push(format!("{:.1}s", elapsed_secs));
+        } else if elapsed_secs > 0.0 {
+            parts.push(format!("{:.1}s", elapsed_secs));
+        }
+
+        // Agent work
+        if meta.agent_tasks_spawned > 2 {
+            parts.push(format!("{}+ agents helped", meta.agent_tasks_spawned));
+        } else if meta.agent_tasks_spawned > 0 {
+            parts.push("teamwork ◆".to_string());
+        }
+
+        // Context hints
+        if let Some(ref hint) = meta.context_hint {
+            match hint.as_str() {
+                "large_file" => parts.push("📄 big file".to_string()),
+                "slow_network" => parts.push("🌐 network lag".to_string()),
+                "complex_reasoning" => parts.push("🧠 deep think".to_string()),
+                _ => {}
+            }
+        }
+
+        if parts.is_empty() {
+            None
+        } else {
+            Some(parts.join(" · "))
+        }
     }
 }
 
@@ -449,9 +508,10 @@ impl DisplayState {
             ConductorMessage::StreamEnd {
                 message_id,
                 final_content,
+                metadata,
             } => {
                 if let Some(msg) = self.messages.iter_mut().find(|m| m.id == message_id) {
-                    msg.complete(final_content);
+                    msg.complete(final_content, metadata);
                 }
                 self.streaming_id = None;
             }
@@ -652,9 +712,10 @@ mod tests {
         let id = MessageId::new();
         let mut msg = DisplayMessage::streaming(id);
         msg.append("Partial");
-        msg.complete("Final content".to_string());
+        msg.complete("Final content".to_string(), ResponseMetadata::default());
         assert_eq!(msg.content, "Final content");
         assert!(!msg.streaming);
+        assert!(msg.metadata.is_some());
     }
 
     // ========================================================================
@@ -1115,6 +1176,7 @@ mod tests {
         state.apply_message(ConductorMessage::StreamEnd {
             message_id: id.clone(),
             final_content: "Final content".to_string(),
+            metadata: ResponseMetadata::default(),
         });
 
         assert!(!state.is_streaming());

@@ -55,6 +55,9 @@ pub enum ConductorMessage {
         message_id: MessageId,
         /// Final complete content (may differ from concatenated tokens due to cleanup)
         final_content: String,
+        /// Response metadata for surface display
+        #[serde(default)]
+        metadata: ResponseMetadata,
     },
 
     /// Stream encountered an error
@@ -387,6 +390,59 @@ pub enum NotifyLevel {
     Error,
     /// Success
     Success,
+}
+
+/// Response metadata for surface display
+///
+/// Contains metrics and context about a completed response that surfaces
+/// can use to display meaningful information to users. Surfaces decide
+/// how to present this information in their own style.
+#[derive(Clone, Debug, Default, Serialize, Deserialize)]
+pub struct ResponseMetadata {
+    /// Response generation time in milliseconds
+    pub elapsed_ms: u64,
+    /// Total tokens generated
+    pub token_count: u32,
+    /// Tokens per second (if calculable)
+    pub tokens_per_second: Option<f32>,
+    /// Number of sub-agent tasks spawned during this response
+    pub agent_tasks_spawned: u32,
+    /// Number of files read/processed
+    pub files_processed: u32,
+    /// Bytes of content processed (for context about size)
+    pub bytes_processed: u64,
+    /// Whether response involved network calls (API, web)
+    pub network_involved: bool,
+    /// Optional context hint for surface commentary
+    /// e.g., "large_file", "slow_network", "complex_reasoning"
+    pub context_hint: Option<String>,
+}
+
+impl ResponseMetadata {
+    /// Create metadata with timing info
+    pub fn with_timing(elapsed_ms: u64, token_count: u32) -> Self {
+        let tokens_per_second = if elapsed_ms > 0 {
+            Some((token_count as f32 / elapsed_ms as f32) * 1000.0)
+        } else {
+            None
+        };
+        Self {
+            elapsed_ms,
+            token_count,
+            tokens_per_second,
+            ..Default::default()
+        }
+    }
+
+    /// Check if this was a "slow" response (> 10 seconds)
+    pub fn is_slow(&self) -> bool {
+        self.elapsed_ms > 10_000
+    }
+
+    /// Check if this involved significant processing
+    pub fn is_heavy(&self) -> bool {
+        self.agent_tasks_spawned > 0 || self.files_processed > 3 || self.bytes_processed > 100_000
+    }
 }
 
 /// Conductor operational states

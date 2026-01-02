@@ -86,6 +86,9 @@ pub const WATER_BLUE: Color = Color::Rgb(100, 180, 255);
 /// Bubble color
 pub const BUBBLE: Color = Color::Rgb(200, 230, 255);
 
+/// Response metadata - subtle dim color
+pub const METADATA_COLOR: Color = Color::Rgb(120, 120, 140);
+
 // ============================================================================
 // Breathing Effect Configuration
 // ============================================================================

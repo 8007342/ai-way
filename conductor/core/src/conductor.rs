@@ -30,7 +30,7 @@ use crate::backend::{LlmBackend, LlmRequest, StreamingToken};
 use crate::events::{ScrollDirection, SurfaceCapabilities, SurfaceEvent, SurfaceType};
 use crate::messages::{
     ConductorMessage, ConductorState, ContentType, EventId, MessageId, MessageRole, NotifyLevel,
-    SessionId,
+    ResponseMetadata, SessionId,
 };
 use crate::security::{CommandValidator, ConductorLimits, InputValidator, ValidationResult};
 use crate::session::Session;
@@ -123,6 +123,10 @@ pub struct Conductor<B: LlmBackend> {
     streaming_rx: Option<mpsc::Receiver<StreamingToken>>,
     /// Current streaming message ID
     streaming_message_id: Option<MessageId>,
+    /// Streaming response start time for metrics
+    streaming_start: Option<std::time::Instant>,
+    /// Token count for current streaming response
+    streaming_token_count: u32,
     /// Input validator for surface events
     input_validator: InputValidator,
     /// Command validator for LLM-generated commands
@@ -165,6 +169,8 @@ impl<B: LlmBackend + 'static> Conductor<B> {
             warmup_complete: false,
             streaming_rx: None,
             streaming_message_id: None,
+            streaming_start: None,
+            streaming_token_count: 0,
             input_validator,
             command_validator,
         }
@@ -298,6 +304,8 @@ impl<B: LlmBackend + 'static> Conductor<B> {
                 let msg_id = self.session.start_assistant_response();
                 self.streaming_rx = Some(rx);
                 self.streaming_message_id = Some(msg_id);
+                self.streaming_start = Some(std::time::Instant::now());
+                self.streaming_token_count = 0;
                 // Note: poll_streaming() will handle the tokens and set state to Ready when done
             }
             Err(e) => {
@@ -557,6 +565,8 @@ impl<B: LlmBackend + 'static> Conductor<B> {
                 let msg_id = self.session.start_assistant_response();
                 self.streaming_rx = Some(rx);
                 self.streaming_message_id = Some(msg_id);
+                self.streaming_start = Some(std::time::Instant::now());
+                self.streaming_token_count = 0;
                 self.set_state(ConductorState::Responding).await;
             }
             Err(e) => {
@@ -607,6 +617,9 @@ impl<B: LlmBackend + 'static> Conductor<B> {
         for token in tokens {
             match token {
                 StreamingToken::Token(text) => {
+                    // Count tokens for metrics
+                    self.streaming_token_count += 1;
+
                     // Parse for avatar commands
                     let clean_text = self.command_parser.parse(&text);
 
@@ -651,11 +664,27 @@ impl<B: LlmBackend + 'static> Conductor<B> {
                     // Complete the session message
                     self.session.complete_streaming();
 
-                    // Send completion to UI
+                    // Build response metadata
+                    let elapsed_ms = self
+                        .streaming_start
+                        .map(|s| s.elapsed().as_millis() as u64)
+                        .unwrap_or(0);
+                    let token_count = self.streaming_token_count;
+                    let active_tasks = self.tasks.active_count() as u32;
+
+                    let mut metadata = ResponseMetadata::with_timing(elapsed_ms, token_count);
+                    metadata.agent_tasks_spawned = active_tasks;
+
+                    // Reset streaming metrics
+                    self.streaming_start = None;
+                    self.streaming_token_count = 0;
+
+                    // Send completion to UI with metadata
                     if let Some(msg_id) = self.streaming_message_id.take() {
                         self.send(ConductorMessage::StreamEnd {
                             message_id: msg_id,
                             final_content: message,
+                            metadata,
                         })
                         .await;
                     }
