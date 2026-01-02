@@ -61,9 +61,9 @@ _integrity_get_level() {
             echo "$level"
             ;;
         *)
-            warn "Invalid integrity level: $level"
-            warn "Valid levels: 0, 1, 2, disabled"
-            warn "Using default: $INTEGRITY_DEFAULT_LEVEL"
+            ux_warn "Invalid integrity level: $level"
+            ux_warn "Valid levels: 0, 1, 2, disabled"
+            ux_warn "Using default: $INTEGRITY_DEFAULT_LEVEL"
             echo "$INTEGRITY_DEFAULT_LEVEL"
             ;;
     esac
@@ -78,36 +78,24 @@ integrity_verify() {
     local level
     level=$(_integrity_get_level)
     log_integrity "INFO" "Starting integrity verification (level=$level)"
+    pj_step "Integrity verification (level=$level)"
 
     # Handle manifest generation mode (developers only)
     if integrity_should_generate; then
         log_integrity "INFO" "Generating integrity manifest (developer mode)"
-        info "Generating integrity manifest..."
+        pj_result "Developer mode: generating checksums"
+        ux_info "Generating integrity manifest..."
         integrity_generate_manifest
-        info "Manifest generated. Exiting."
-        info "Commit .integrity/ to version control."
+        ux_info "Manifest generated. Exiting."
+        ux_info "Commit .integrity/ to version control."
         exit 0
     fi
 
     # Handle disabled mode
     if [[ "$level" == "disabled" ]]; then
         log_integrity "WARN" "Integrity checks DISABLED by user"
-        warn "=========================================="
-        warn "  INTEGRITY CHECKS DISABLED"
-        warn "=========================================="
-        warn ""
-        warn "You have disabled integrity verification."
-        warn "This is not recommended for normal use."
-        warn ""
-        warn "Reasons to disable:"
-        warn "  - You're developing/modifying the scripts"
-        warn "  - You're debugging an integrity issue"
-        warn "  - You understand and accept the risks"
-        warn ""
-        warn "To re-enable:"
-        warn "  unset YOLLAYAH_SKIP_INTEGRITY"
-        warn "  unset YOLLAYAH_INTEGRITY_LEVEL"
-        warn ""
+        pj_result "Integrity checks DISABLED"
+        ux_warn "Integrity checks disabled (YOLLAYAH_SKIP_INTEGRITY=1)"
         return 0
     fi
 
@@ -115,19 +103,23 @@ integrity_verify() {
     case "$level" in
         0)
             log_integrity "INFO" "Running git-based verification (level 0)"
+            pj_cmd "git fetch && git diff (paranoid mode)"
             integrity_verify_git
             ;;
         1)
             log_integrity "INFO" "Running checksum verification (level 1)"
+            pj_cmd "sha256sum verify (default mode)"
             integrity_verify_checksums
             ;;
         2)
             log_integrity "INFO" "Running signature verification (level 2)"
+            pj_cmd "signature verify (future)"
             integrity_verify_signatures
             ;;
     esac
 
     log_integrity "INFO" "Integrity verification complete"
+    pj_result "Integrity check passed"
 }
 
 # ============================================================================

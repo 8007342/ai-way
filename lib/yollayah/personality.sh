@@ -143,34 +143,50 @@ yollayah_create_model() {
     local base_model="${SELECTED_MODEL:-$DEFAULT_MODEL}"
     local modelfile_path="/tmp/yollayah.modelfile"
 
+    pj_step "Creating Yollayah personality model"
+    pj_result "Base model: $base_model"
+
     # Check if model already exists
+    pj_cmd "ollama list | grep $YOLLAYAH_MODEL_NAME"
     if yollayah_model_exists; then
+        pj_found "Existing yollayah model"
         # Rebuild if agents changed
         if [[ "$AGENTS_CHANGED" == "true" ]]; then
+            pj_result "Agents updated, rebuilding model"
             ux_yollayah "$(yollayah_interjection) Agents got updated! Rebuilding myself real quick..."
+            pj_cmd "ollama rm $YOLLAYAH_MODEL_NAME"
             ollama rm "$YOLLAYAH_MODEL_NAME" 2>/dev/null || true
         else
+            pj_result "Model up to date, skipping rebuild"
             ux_yollayah "$(yollayah_celebration) Already good to go."
             return 0
         fi
+    else
+        pj_missing "yollayah model (will create)"
     fi
 
     # Try to load from agents repo first (dynamic personality)
+    pj_check "Conductor profile"
     if yollayah_load_from_agents; then
         log_info "Using dynamic personality from conductor profile"
+        pj_found "Dynamic personality from agents/conductors/"
         _generate_modelfile_from_profile "$base_model" > "$modelfile_path"
     else
         log_info "Using hardcoded personality (fallback)"
+        pj_result "Using hardcoded personality (fallback)"
         _generate_modelfile "$base_model" > "$modelfile_path"
     fi
 
     # Create the model using friendly wrapper (hides scary hashes!)
+    pj_cmd "ollama create $YOLLAYAH_MODEL_NAME -f $modelfile_path"
     if ux_ollama_create "$YOLLAYAH_MODEL_NAME" "$modelfile_path"; then
         rm -f "$modelfile_path"
+        pj_result "Model created successfully"
         ux_yollayah "$(yollayah_celebration) Ready to roll, amigo!"
         return 0
     else
         rm -f "$modelfile_path"
+        pj_result "Model creation failed"
         ux_yollayah "$(yollayah_interjection) Couldn't put myself together. Check your internet?"
         return 1
     fi

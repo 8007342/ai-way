@@ -41,6 +41,11 @@ UX_ANIMATE="${YOLLAYAH_UX_ANIMATE:-true}"
 # Quiet mode (minimal output)
 UX_QUIET="${YOLLAYAH_QUIET:-false}"
 
+# Debug mode - shows technical messages for PJ (Power Joe/Jane)
+# When off, only Yollayah personality messages are shown to AJ
+UX_DEBUG="${YOLLAYAH_DEBUG:-false}"
+[[ "$UX_DEBUG" == "1" ]] && UX_DEBUG="true"
+
 # ============================================================================
 # Color Definitions (for color mode)
 # ============================================================================
@@ -73,30 +78,84 @@ fi
 # Core Output Functions (AJ sees these)
 # ============================================================================
 
-# Informational message
+# Informational message - HIDDEN unless debug mode
 ux_info() {
     [[ "$UX_QUIET" == "true" ]] && return
-    echo -e "${UX_CYAN}[INFO]${UX_NC} $1"
     log_ux "INFO" "$1"
+    [[ "$UX_DEBUG" != "true" ]] && return
+    echo -e "${UX_CYAN}ℹ${UX_NC}  $1"
 }
 
-# Success message
+# Success message - HIDDEN unless debug mode
 ux_success() {
     [[ "$UX_QUIET" == "true" ]] && return
-    echo -e "${UX_GREEN}[OK]${UX_NC} $1"
     log_ux "INFO" "SUCCESS: $1"
+    [[ "$UX_DEBUG" != "true" ]] && return
+    echo -e "${UX_GREEN}✓${UX_NC}  $1"
 }
 
-# Warning message (AJ should know, but not panic)
+# Warning message - always shown (important for AJ too)
 ux_warn() {
-    echo -e "${UX_YELLOW}[WARN]${UX_NC} $1"
+    echo -e "${UX_YELLOW}⚠${UX_NC}  $1"
     log_ux "WARN" "$1"
 }
 
-# Error message (something went wrong)
+# Error message - always shown (something went wrong)
 ux_error() {
-    echo -e "${UX_RED}[ERROR]${UX_NC} $1" >&2
+    echo -e "${UX_RED}✗${UX_NC}  $1" >&2
     log_ux "ERROR" "$1"
+}
+
+# ============================================================================
+# PJ Debug Output (Power Joe/Jane - technical but accessible)
+#
+# These show ONLY when YOLLAYAH_DEBUG=1, providing helpful insight
+# into what's happening under the hood. Messages are:
+# - Short and sweet (one line)
+# - Command-focused (show what's being run)
+# - Informative but not overwhelming
+# ============================================================================
+
+# Show a command being run (for transparency)
+pj_cmd() {
+    [[ "$UX_DEBUG" != "true" ]] && return
+    echo -e "${UX_DIM}→ Running:${UX_NC} ${UX_CYAN}$1${UX_NC}"
+    log_ux "DEBUG" "CMD: $1"
+}
+
+# Show a check being performed
+pj_check() {
+    [[ "$UX_DEBUG" != "true" ]] && return
+    echo -e "${UX_DIM}→ Checking:${UX_NC} $1"
+    log_ux "DEBUG" "CHECK: $1"
+}
+
+# Show a result or finding
+pj_result() {
+    [[ "$UX_DEBUG" != "true" ]] && return
+    echo -e "${UX_DIM}  └─${UX_NC} $1"
+    log_ux "DEBUG" "RESULT: $1"
+}
+
+# Show a step in progress
+pj_step() {
+    [[ "$UX_DEBUG" != "true" ]] && return
+    echo -e "${UX_BLUE}▸${UX_NC} $1"
+    log_ux "DEBUG" "STEP: $1"
+}
+
+# Show detection/discovery
+pj_found() {
+    [[ "$UX_DEBUG" != "true" ]] && return
+    echo -e "${UX_GREEN}✓${UX_NC} Found: $1"
+    log_ux "DEBUG" "FOUND: $1"
+}
+
+# Show something wasn't found (not an error, just info)
+pj_missing() {
+    [[ "$UX_DEBUG" != "true" ]] && return
+    echo -e "${UX_YELLOW}○${UX_NC} Not found: $1"
+    log_ux "DEBUG" "MISSING: $1"
 }
 
 # Plain message (no prefix)

@@ -10,8 +10,17 @@
 #
 # Output Architecture:
 # - log_* functions → Write to .logs/ (for PJ debugging)
-# - ux_*  functions → Display to terminal (for AJ)
+# - ux_*  functions → Display to terminal (for AJ, hidden unless YOLLAYAH_DEBUG=1)
+# - pj_*  functions → Debug display for PJ (only shown when YOLLAYAH_DEBUG=1)
 # - info/success/warn/error → Legacy wrappers (use ux_* in new code)
+#
+# Debug Mode (YOLLAYAH_DEBUG=1):
+# - pj_step()   → Show a step in progress
+# - pj_cmd()    → Show command being run
+# - pj_check()  → Show what's being checked
+# - pj_result() → Show result of check/command
+# - pj_found()  → Show something was found
+# - pj_missing() → Show something wasn't found
 #
 # Constitution Reference:
 # - Law of Truth: Logging is honest and transparent
@@ -129,11 +138,13 @@ error() {
 }
 
 # Debug only goes to log, never displayed to AJ
+# When YOLLAYAH_DEBUG=1, use pj_* functions for user-facing debug output
 debug() {
     if declare -f log_debug &>/dev/null; then
         log_debug "$1"
     fi
     # Only show to terminal if YOLLAYAH_DEBUG is set AND we're early in boot
+    # After ux module loads, pj_* functions handle debug display
     if [[ -n "${YOLLAYAH_DEBUG:-}" ]] && ! declare -f log_debug &>/dev/null; then
         echo -e "${_C_BLUE}[DEBUG]${_C_NC} $1"
     fi

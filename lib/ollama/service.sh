@@ -29,24 +29,34 @@ _YOLLAYAH_OLLAMA_SERVICE_LOADED=1
 # This lets us restore to pre-Yollayah state on exit
 ollama_record_state() {
     log_ollama "INFO" "Recording pre-Yollayah Ollama state"
+    pj_step "Recording Ollama state (for cleanup later)"
 
     # Check if Ollama is currently responding
+    pj_cmd "curl -s http://localhost:11434/api/tags"
     if ollama_is_running; then
         OLLAMA_WAS_RUNNING=true
+        pj_result "Ollama already running"
         log_ollama "DEBUG" "Ollama was already running"
+    else
+        pj_result "Ollama not running yet"
     fi
 
     # Check systemd service state (Linux only)
     if command_exists systemctl; then
+        pj_check "systemd service status"
         if systemctl list-unit-files ollama.service &> /dev/null 2>&1; then
             if systemctl is-enabled ollama.service &> /dev/null 2>&1; then
                 OLLAMA_SERVICE_WAS_ENABLED=true
+                pj_result "Service enabled (auto-starts on boot)"
                 log_ollama "DEBUG" "Ollama service was enabled"
             fi
             if systemctl is-active ollama.service &> /dev/null 2>&1; then
                 OLLAMA_SERVICE_WAS_ACTIVE=true
+                pj_result "Service currently active"
                 log_ollama "DEBUG" "Ollama service was active"
             fi
+        else
+            pj_result "No systemd service found"
         fi
     fi
 
@@ -67,11 +77,13 @@ EOF
 
 # Check if Ollama is installed
 ollama_check_installed() {
+    pj_check "ollama binary"
+    pj_cmd "command -v ollama"
     if command_exists ollama; then
-        success "Ollama found"
+        pj_found "ollama at $(command -v ollama)"
         return 0
     else
-        error "Ollama not found"
+        pj_missing "ollama"
 
         # Use ux_* for user-facing messages if available
         if declare -f ux_blank &>/dev/null; then
@@ -114,36 +126,45 @@ ollama_check_installed() {
 
 # Ensure Ollama is running (start if needed)
 ollama_ensure_running() {
+    pj_step "Ensuring Ollama is running"
+    pj_cmd "curl -s http://localhost:11434/api/tags"
+
     if ollama_is_running; then
         log_ollama "INFO" "Ollama already running"
-        success "Ollama is running"
+        pj_result "Ollama API responding on port 11434"
+        ux_success "Ollama is running"
         return 0
     fi
 
     log_ollama "WARN" "Ollama not running, starting..."
-    warn "Ollama is not running"
-    info "Starting Ollama..."
+    pj_result "Ollama not responding, will start it"
 
     # Start Ollama serve in background
+    pj_cmd "ollama serve (background)"
     ollama serve > /dev/null 2>&1 &
+    local pid=$!
     WE_STARTED_OLLAMA=true
-    log_ollama "INFO" "Started ollama serve (PID: $!)"
+    log_ollama "INFO" "Started ollama serve (PID: $pid)"
+    pj_result "Started ollama serve (PID: $pid)"
 
     # Wait for it to come up
+    pj_step "Waiting for Ollama API..."
     local attempts=0
     while ! ollama_is_running; do
         sleep 1
         ((attempts++))
+        pj_result "Attempt $attempts/10..."
         if [[ $attempts -ge 10 ]]; then
             log_ollama "ERROR" "Failed to start Ollama after 10 seconds"
-            error "Failed to start Ollama after 10 seconds"
-            error "Please run 'ollama serve' manually"
+            ux_error "Failed to start Ollama after 10 seconds"
+            ux_error "Try running 'ollama serve' manually"
             return 1
         fi
     done
 
     log_ollama "INFO" "Ollama started successfully"
-    success "Ollama started (will stop on exit)"
+    pj_result "Ollama API now responding"
+    ux_success "Ollama started (will stop on exit)"
 }
 
 # ============================================================================
@@ -156,17 +177,20 @@ ollama_cleanup() {
     # Only clean up if we started Ollama
     if [[ "$WE_STARTED_OLLAMA" != "true" ]]; then
         log_ollama "DEBUG" "We didn't start Ollama, nothing to clean up"
+        pj_step "Cleanup: we didn't start Ollama, nothing to do"
         return 0
     fi
 
     log_ollama "INFO" "Cleaning up Ollama..."
-    info "Cleaning up..."
+    pj_step "Cleaning up Ollama..."
 
     # If Ollama wasn't running before, stop it
     if [[ "$OLLAMA_WAS_RUNNING" == "false" ]]; then
         log_ollama "INFO" "Stopping Ollama (wasn't running before)"
+        pj_result "Stopping Ollama (wasn't running before we started)"
 
         # Kill the ollama serve process we started
+        pj_cmd "pkill -f 'ollama serve'"
         pkill -f "ollama serve" 2>/dev/null || true
 
         # Handle systemd service if applicable
@@ -175,7 +199,7 @@ ollama_cleanup() {
             if systemctl is-active ollama.service &> /dev/null 2>&1; then
                 if [[ "$OLLAMA_SERVICE_WAS_ACTIVE" == "false" ]]; then
                     log_ollama "INFO" "Stopping Ollama systemd service"
-                    info "Stopping Ollama service..."
+                    pj_cmd "systemctl stop ollama.service"
                     sudo systemctl stop ollama.service 2>/dev/null || true
                 fi
             fi
@@ -184,17 +208,17 @@ ollama_cleanup() {
             if systemctl is-enabled ollama.service &> /dev/null 2>&1; then
                 if [[ "$OLLAMA_SERVICE_WAS_ENABLED" == "false" ]]; then
                     log_ollama "INFO" "Disabling Ollama service auto-start"
-                    info "Disabling Ollama service auto-start..."
+                    pj_cmd "systemctl disable ollama.service"
                     sudo systemctl disable ollama.service 2>/dev/null || true
                 fi
             fi
         fi
 
         log_ollama "INFO" "Ollama stopped, restored pre-Yollayah state"
-        success "Ollama stopped (restored pre-Yollayah state)"
+        pj_result "Restored system to pre-Yollayah state"
     else
         log_ollama "INFO" "Leaving Ollama running (was already running)"
-        info "Leaving Ollama running (was already running)"
+        pj_result "Leaving Ollama running (was already running)"
     fi
 
     # Clean up state file

@@ -66,10 +66,30 @@ Yollayah will detect your GPU and select an appropriate model size automatically
 
 ```bash
 YOLLAYAH_MODEL=llama3.2:3b    # Override model selection
-YOLLAYAH_DEBUG=1              # Enable debug logging
+YOLLAYAH_DEBUG=1              # Enable debug output (see what's happening under the hood)
 YOLLAYAH_PERSIST_LOGS=1       # Keep logs after shutdown (default: deleted)
 YOLLAYAH_SKIP_INTEGRITY=1     # Skip checksum verification (dev mode)
 ```
+
+### Debug Mode
+
+When `YOLLAYAH_DEBUG=1` is set, Yollayah shows informative messages about what's happening:
+
+```bash
+YOLLAYAH_DEBUG=1 ./yollayah.sh
+```
+
+You'll see output like:
+```
+▸ Detecting GPU hardware
+→ Running: nvidia-smi --query-gpu=name,memory.total
+✓ Found: NVIDIA GeForce RTX 3080, 10240 MiB
+▸ Selecting best model for your hardware
+  └─ Tier: powerful (10GB VRAM)
+  └─ Selected: llama3.1:8b
+```
+
+This is useful for understanding hardware detection, model selection, and troubleshooting.
 
 ## Meet Yollayah
 

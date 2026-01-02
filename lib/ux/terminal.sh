@@ -192,6 +192,7 @@ ux_conversation_loop() {
 # ============================================================================
 
 ux_show_startup_progress() {
+    pj_step "Yollayah startup sequence"
     ux_info "Checking dependencies..."
     ux_blank
 }
@@ -388,59 +389,78 @@ ux_tui_binary() {
 
 # Check if TUI needs to be rebuilt (sources newer than binary)
 ux_tui_needs_rebuild() {
+    pj_check "TUI binary status"
     local binary
     binary="$(ux_tui_binary)"
 
     # No binary at all? Definitely need to build
     if [[ -z "$binary" ]] || [[ ! -f "$binary" ]]; then
         log_ux "DEBUG" "TUI binary not found, needs build"
+        pj_missing "TUI binary (will compile)"
         return 0
     fi
+    pj_found "TUI binary at $binary"
 
     # Check if any Rust source file is newer than the binary
+    pj_check "Source files vs binary"
     local newest_source
     newest_source=$(find "$TUI_DIR/src" -name "*.rs" -newer "$binary" 2>/dev/null | head -1)
 
     if [[ -n "$newest_source" ]]; then
         log_ux "INFO" "TUI source newer than binary: $newest_source"
+        pj_result "Source changed: $newest_source (will recompile)"
         return 0
     fi
 
     # Check if Cargo.toml is newer (dependencies changed)
     if [[ "$TUI_DIR/Cargo.toml" -nt "$binary" ]]; then
         log_ux "INFO" "Cargo.toml newer than binary, rebuild needed"
+        pj_result "Cargo.toml changed (will recompile)"
         return 0
     fi
 
     log_ux "DEBUG" "TUI binary is up to date"
+    pj_result "Binary up to date, no rebuild needed"
     return 1
 }
 
 # Build the TUI (release mode)
 ux_tui_build() {
+    pj_step "Building TUI interface"
+
     # Check if Rust is available
+    pj_check "Cargo availability"
+    pj_cmd "command -v cargo"
     if ! command -v cargo &>/dev/null; then
         # Try sourcing cargo env
+        pj_result "Not in PATH, checking ~/.cargo/env"
         if [[ -f "$HOME/.cargo/env" ]]; then
+            pj_cmd "source $HOME/.cargo/env"
             source "$HOME/.cargo/env" 2>/dev/null || true
         fi
     fi
 
     if ! command -v cargo &>/dev/null; then
         log_ux "WARN" "Cargo not available, cannot build TUI"
+        pj_missing "cargo (can't compile TUI)"
         return 1
     fi
+    pj_found "cargo at $(command -v cargo)"
 
     log_ux "INFO" "Building TUI (this may take a moment on first build)..."
     ux_yollayah "$(yollayah_thinking) Getting my pretty face ready..."
 
     # Build in release mode for better performance
+    pj_cmd "cargo build --release --manifest-path $TUI_DIR/Cargo.toml"
+    pj_result "This compiles the Rust TUI (may take 1-2 min first time)"
     if ux_run_friendly "Building interface..." cargo build --release --manifest-path "$TUI_DIR/Cargo.toml" 2>&1; then
         log_ux "INFO" "TUI build successful"
+        pj_result "Build successful"
         ux_success "Interface ready!"
         return 0
     else
         log_ux "ERROR" "TUI build failed"
+        pj_result "Build failed (check cargo output)"
         ux_warn "Couldn't build the fancy interface, using simple mode"
         return 1
     fi
@@ -448,11 +468,16 @@ ux_tui_build() {
 
 # Ensure TUI is built and up to date
 ux_tui_ensure_ready() {
+    pj_step "Checking TUI readiness"
+
     # Check if TUI directory exists
+    pj_check "TUI source directory"
     if [[ ! -d "$TUI_DIR/src" ]]; then
         log_ux "DEBUG" "TUI source directory not found"
+        pj_missing "$TUI_DIR/src (TUI not available)"
         return 1
     fi
+    pj_found "$TUI_DIR/src"
 
     # Check if rebuild is needed
     if ux_tui_needs_rebuild; then
@@ -469,28 +494,36 @@ ux_launch_tui() {
     local model_name="$1"
     local tui_bin
 
+    pj_step "Launching TUI"
     tui_bin="$(ux_tui_binary)"
 
     if [[ -z "$tui_bin" ]]; then
         log_ux "DEBUG" "TUI binary not found, falling back to bash prompt"
+        pj_missing "TUI binary (using simple mode)"
         return 1
     fi
+    pj_found "TUI at $tui_bin"
 
     # If using daemon mode, ensure conductor is running first
     if conductor_needs_daemon; then
         log_ux "INFO" "Daemon mode enabled, ensuring Conductor is running"
+        pj_step "Starting Conductor daemon (socket mode)"
         if ! conductor_ensure_running; then
             log_ux "ERROR" "Failed to start Conductor daemon"
+            pj_result "Conductor failed to start"
             return 1
         fi
     fi
 
     log_ux "INFO" "Launching rich TUI: $tui_bin"
+    pj_result "Launching: $tui_bin"
 
     # Export model info for TUI to use
+    pj_step "Setting up TUI environment"
     export YOLLAYAH_MODEL="$model_name"
     export YOLLAYAH_OLLAMA_HOST="${OLLAMA_HOST:-localhost}"
     export YOLLAYAH_OLLAMA_PORT="${OLLAMA_PORT:-11434}"
+    pj_result "Model: $model_name, Host: ${OLLAMA_HOST:-localhost}:${OLLAMA_PORT:-11434}"
 
     # Export paths for TUI shell integration (routing, task management)
     export YOLLAYAH_SCRIPT_DIR="$SCRIPT_DIR"
@@ -509,15 +542,18 @@ ux_launch_tui() {
 # Start UI - tries TUI first, falls back to bash
 ux_start_interface() {
     local model_name="$1"
+    pj_step "Starting user interface"
 
     # Ensure TUI is built and up to date (rebuilds if sources changed)
     ux_tui_ensure_ready
 
     if ux_tui_available; then
         log_ux "INFO" "Launching rich TUI interface"
+        pj_result "Using rich TUI interface"
         ux_launch_tui "$model_name"
     else
         log_ux "INFO" "Starting conversation loop (bash interface)"
+        pj_result "Using simple bash interface"
         ux_conversation_loop "$model_name"
     fi
 }
