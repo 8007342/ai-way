@@ -140,6 +140,34 @@ pub const BREATHING_AGENT_BRIGHT: Color = Color::Rgb(255, 150, 255);
 pub const BREATHING_AGENT_CYCLE_MS: u64 = 1200;
 
 // ============================================================================
+// Conversation Message Breathing Effects
+// ============================================================================
+
+/// Breathing effect: User message role prefix ("You:")
+/// Subtle green pulse - slower, calming rhythm
+pub const BREATHING_USER_PREFIX_BASE: Color = Color::Rgb(130, 220, 130);
+pub const BREATHING_USER_PREFIX_BRIGHT: Color = Color::Rgb(160, 245, 160);
+pub const BREATHING_USER_PREFIX_CYCLE_MS: u64 = 4000;
+
+/// Breathing effect: Assistant message role prefix ("Yollayah:")
+/// Subtle magenta pulse - medium rhythm
+pub const BREATHING_ASSISTANT_PREFIX_BASE: Color = Color::Rgb(200, 100, 200);
+pub const BREATHING_ASSISTANT_PREFIX_BRIGHT: Color = Color::Rgb(255, 140, 255);
+pub const BREATHING_ASSISTANT_PREFIX_CYCLE_MS: u64 = 3500;
+
+/// Breathing effect: Latest/current message highlight
+/// Very subtle background glow on the most recent message
+pub const BREATHING_LATEST_MSG_BASE: Color = Color::Rgb(40, 40, 50);
+pub const BREATHING_LATEST_MSG_BRIGHT: Color = Color::Rgb(50, 50, 65);
+pub const BREATHING_LATEST_MSG_CYCLE_MS: u64 = 2500;
+
+/// Breathing effect: Streaming message cursor
+/// Faster pulse to indicate active typing
+pub const BREATHING_STREAMING_BASE: Color = Color::Rgb(200, 100, 200);
+pub const BREATHING_STREAMING_BRIGHT: Color = Color::Rgb(255, 180, 255);
+pub const BREATHING_STREAMING_CYCLE_MS: u64 = 800;
+
+// ============================================================================
 // Scroll Gradient Colors
 // ============================================================================
 

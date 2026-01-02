@@ -33,10 +33,14 @@ use crate::conductor_client::ConductorClient;
 use crate::display::{DisplayRole, DisplayState};
 use crate::theme::{
     breathing_color, scroll_fade_color, scroll_fade_factor, BREATHING_AGENT_BASE,
-    BREATHING_AGENT_BRIGHT, BREATHING_AGENT_CYCLE_MS, BREATHING_INPUT_BASE, BREATHING_INPUT_BRIGHT,
-    BREATHING_INPUT_CYCLE_MS, BREATHING_PROCESSING_BASE, BREATHING_PROCESSING_BRIGHT,
-    BREATHING_PROCESSING_CYCLE_MS, BREATHING_STATUS_BASE, BREATHING_STATUS_BRIGHT,
-    BREATHING_STATUS_CYCLE_MS, INDICATOR_AGENT_IDLE, METADATA_COLOR, YOLLAYAH_MAGENTA,
+    BREATHING_AGENT_BRIGHT, BREATHING_AGENT_CYCLE_MS, BREATHING_ASSISTANT_PREFIX_BASE,
+    BREATHING_ASSISTANT_PREFIX_BRIGHT, BREATHING_ASSISTANT_PREFIX_CYCLE_MS, BREATHING_INPUT_BASE,
+    BREATHING_INPUT_BRIGHT, BREATHING_INPUT_CYCLE_MS, BREATHING_PROCESSING_BASE,
+    BREATHING_PROCESSING_BRIGHT, BREATHING_PROCESSING_CYCLE_MS, BREATHING_STATUS_BASE,
+    BREATHING_STATUS_BRIGHT, BREATHING_STATUS_CYCLE_MS, BREATHING_STREAMING_BASE,
+    BREATHING_STREAMING_BRIGHT, BREATHING_STREAMING_CYCLE_MS, BREATHING_USER_PREFIX_BASE,
+    BREATHING_USER_PREFIX_BRIGHT, BREATHING_USER_PREFIX_CYCLE_MS, INDICATOR_AGENT_IDLE,
+    METADATA_COLOR, YOLLAYAH_MAGENTA,
 };
 
 /// Input box height (lines) for text wrapping
@@ -859,8 +863,20 @@ impl App {
             return;
         }
 
+        let elapsed = self.start_time.elapsed();
+
+        // Line metadata for breathing effects
+        #[derive(Clone)]
+        struct LineMeta {
+            text: String,
+            base_style: Style,
+            prefix_len: usize,         // Length of role prefix (for breathing)
+            role: Option<DisplayRole>, // Role for prefix breathing
+            is_streaming: bool,        // Streaming message cursor
+        }
+
         // Build wrapped lines from display messages
-        let mut all_lines: Vec<(String, Style)> = Vec::new();
+        let mut all_lines: Vec<LineMeta> = Vec::new();
 
         for msg in &self.display.messages {
             let (prefix, base_style) = match msg.role {
@@ -869,6 +885,7 @@ impl App {
                 DisplayRole::System => ("", Style::default().fg(Color::DarkGray)),
             };
 
+            let prefix_len = prefix.len();
             let content = if msg.streaming {
                 format!("{}{}_", prefix, msg.content)
             } else {
@@ -876,19 +893,38 @@ impl App {
             };
 
             let wrapped = textwrap::wrap(&content, width);
-            for line in wrapped {
-                all_lines.push((line.to_string(), base_style));
+            for (line_idx, line) in wrapped.iter().enumerate() {
+                all_lines.push(LineMeta {
+                    text: line.to_string(),
+                    base_style,
+                    // Only first line has the prefix
+                    prefix_len: if line_idx == 0 { prefix_len } else { 0 },
+                    role: if line_idx == 0 { Some(msg.role) } else { None },
+                    is_streaming: msg.streaming,
+                });
             }
 
             // Add metadata line for assistant messages (subtle, dim)
             if msg.role == DisplayRole::Assistant && !msg.streaming {
                 if let Some(meta_text) = msg.format_metadata() {
                     let meta_style = Style::default().fg(METADATA_COLOR);
-                    all_lines.push((format!("  ⌁ {}", meta_text), meta_style));
+                    all_lines.push(LineMeta {
+                        text: format!("  ⌁ {}", meta_text),
+                        base_style: meta_style,
+                        prefix_len: 0,
+                        role: None,
+                        is_streaming: false,
+                    });
                 }
             }
 
-            all_lines.push((String::new(), Style::default()));
+            all_lines.push(LineMeta {
+                text: String::new(),
+                base_style: Style::default(),
+                prefix_len: 0,
+                role: None,
+                is_streaming: false,
+            });
         }
 
         self.total_lines = all_lines.len();
@@ -915,7 +951,7 @@ impl App {
             // Number of lines to fade at edges for scroll indication
             const FADE_LINES: usize = 3;
 
-            for (i, (line, style)) in visible_lines.iter().enumerate() {
+            for (i, line_meta) in visible_lines.iter().enumerate() {
                 let y = i as u16;
                 if y >= area.height {
                     break;
@@ -925,16 +961,68 @@ impl App {
                 let fade =
                     scroll_fade_factor(i, height, FADE_LINES, has_content_above, has_content_below);
 
-                let final_style = if fade < 1.0 {
-                    // Apply fade color from theme
+                // If faded, use fade color for entire line
+                if fade < 1.0 {
                     let fade_color = scroll_fade_color(fade);
-                    Style::default().fg(fade_color)
-                } else {
-                    *style
-                };
+                    let fade_style = Style::default().fg(fade_color);
+                    let display_line: String =
+                        line_meta.text.chars().take(area.width as usize).collect();
+                    buf.set_string(area.x, y, &display_line, fade_style);
+                    continue;
+                }
 
-                let display_line: String = line.chars().take(area.width as usize).collect();
-                buf.set_string(area.x, y, &display_line, final_style);
+                // Render with breathing effects
+                let display_line: String =
+                    line_meta.text.chars().take(area.width as usize).collect();
+
+                // Handle lines with role prefix (first line of each message)
+                if line_meta.prefix_len > 0 && line_meta.role.is_some() {
+                    let role = line_meta.role.unwrap();
+                    let prefix_end = line_meta.prefix_len.min(display_line.len());
+
+                    // Calculate breathing color for prefix
+                    let prefix_color = match role {
+                        DisplayRole::User => breathing_color(
+                            BREATHING_USER_PREFIX_BASE,
+                            BREATHING_USER_PREFIX_BRIGHT,
+                            BREATHING_USER_PREFIX_CYCLE_MS,
+                            elapsed,
+                        ),
+                        DisplayRole::Assistant => {
+                            if line_meta.is_streaming {
+                                // Faster pulse for streaming messages
+                                breathing_color(
+                                    BREATHING_STREAMING_BASE,
+                                    BREATHING_STREAMING_BRIGHT,
+                                    BREATHING_STREAMING_CYCLE_MS,
+                                    elapsed,
+                                )
+                            } else {
+                                breathing_color(
+                                    BREATHING_ASSISTANT_PREFIX_BASE,
+                                    BREATHING_ASSISTANT_PREFIX_BRIGHT,
+                                    BREATHING_ASSISTANT_PREFIX_CYCLE_MS,
+                                    elapsed,
+                                )
+                            }
+                        }
+                        DisplayRole::System => Color::DarkGray,
+                    };
+
+                    // Render prefix with breathing color
+                    let prefix_str: String = display_line.chars().take(prefix_end).collect();
+                    let prefix_style = Style::default().fg(prefix_color);
+                    buf.set_string(area.x, y, &prefix_str, prefix_style);
+
+                    // Render rest of line with base style
+                    if display_line.len() > prefix_end {
+                        let rest: String = display_line.chars().skip(prefix_end).collect();
+                        buf.set_string(area.x + prefix_end as u16, y, &rest, line_meta.base_style);
+                    }
+                } else {
+                    // No prefix - render entire line with base style
+                    buf.set_string(area.x, y, &display_line, line_meta.base_style);
+                }
             }
         }
     }

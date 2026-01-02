@@ -599,13 +599,10 @@ impl RoutingPolicy {
                         }
                     }
 
-                    // Check latency requirement
-                    if !profile.can_meet_latency(task_class) {
-                        // For quick response, strictly filter; for others, allow with penalty
-                        if task_class == TaskClass::QuickResponse {
-                            return false;
-                        }
-                    }
+                    // Note: Latency is used as a scoring factor in select_best(), not as a hard filter.
+                    // This prevents NoModelsAvailable errors when no models meet strict latency
+                    // targets (e.g., QuickResponse requires <100ms TTFT, but default models have 1000ms).
+                    // Models with better latency characteristics will still be preferred via scoring.
                 }
 
                 true

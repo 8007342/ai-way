@@ -584,7 +584,6 @@ async fn scenario_8_concurrent_streaming() {
 /// - All requests in same conversation use same model
 /// - Different conversations can use different models
 #[tokio::test]
-#[ignore = "Pre-existing failure: model registration for routing policy not working"]
 async fn scenario_9_session_affinity() {
     use conductor_core::routing::config::ModelProfile;
     use conductor_core::routing::policy::{RoutingPolicy, RoutingRequest};
