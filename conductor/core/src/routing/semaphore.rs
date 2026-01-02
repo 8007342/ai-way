@@ -162,15 +162,17 @@ impl WeightedSemaphore {
             // Check if we can acquire now
             if let Some(permit) = self.try_acquire(weight) {
                 self.stats.current_waiters.fetch_sub(1, Ordering::Relaxed);
-                self.stats.total_wait_time_ms.fetch_add(
-                    wait_start.elapsed().as_millis() as u64,
-                    Ordering::Relaxed,
-                );
+                self.stats
+                    .total_wait_time_ms
+                    .fetch_add(wait_start.elapsed().as_millis() as u64, Ordering::Relaxed);
 
                 // Remove ourselves from the wait queue
                 {
                     let mut waiters = self.waiters.lock().await;
-                    if let Some(pos) = waiters.iter().position(|w| w.weight == weight && w.queued_at == wait_start) {
+                    if let Some(pos) = waiters
+                        .iter()
+                        .position(|w| w.weight == weight && w.queued_at == wait_start)
+                    {
                         waiters.remove(pos);
                     }
                 }
@@ -447,14 +449,21 @@ impl std::fmt::Display for MemoryError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             Self::AlreadyLoaded(id) => write!(f, "Model {} is already loaded", id),
-            Self::InsufficientMemory { requested, available } => {
+            Self::InsufficientMemory {
+                requested,
+                available,
+            } => {
                 write!(
                     f,
                     "Insufficient memory: requested {} bytes, {} available",
                     requested, available
                 )
             }
-            Self::ModelTooLarge { model_id, size, capacity } => {
+            Self::ModelTooLarge {
+                model_id,
+                size,
+                capacity,
+            } => {
                 write!(
                     f,
                     "Model {} ({} bytes) exceeds total capacity ({} bytes)",
@@ -491,7 +500,9 @@ mod tests {
         assert_eq!(sem.available(), 50);
 
         // Now should succeed
-        let _p3 = sem.try_acquire(30).expect("should acquire 30 after release");
+        let _p3 = sem
+            .try_acquire(30)
+            .expect("should acquire 30 after release");
         assert_eq!(sem.available(), 20);
 
         // Clean up

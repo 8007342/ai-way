@@ -16,7 +16,7 @@ use std::sync::atomic::{AtomicU64, AtomicUsize, Ordering};
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 
-use tokio::sync::{Mutex, RwLock, Semaphore};
+use tokio::sync::{RwLock, Semaphore};
 
 use super::config::{BackendConfig, ConnectionConfig};
 
@@ -66,19 +66,14 @@ pub struct ConnectionSlot {
 #[derive(Debug)]
 pub enum ConnectionData {
     /// HTTP client (for Ollama, OpenAI, etc.)
-    Http {
-        client: reqwest::Client,
-    },
+    Http { client: reqwest::Client },
     /// gRPC channel
     Grpc {
         // Would hold tonic::Channel if implemented
         endpoint: String,
     },
     /// Local model handle
-    LocalModel {
-        model_id: String,
-        loaded: bool,
-    },
+    LocalModel { model_id: String, loaded: bool },
 }
 
 impl ConnectionSlot {
@@ -248,10 +243,9 @@ impl ConnectionPool {
         };
 
         let wait_time = wait_start.elapsed();
-        self.stats.total_wait_time_ms.fetch_add(
-            wait_time.as_millis() as u64,
-            Ordering::Relaxed,
-        );
+        self.stats
+            .total_wait_time_ms
+            .fetch_add(wait_time.as_millis() as u64, Ordering::Relaxed);
         self.stats.waiting_requests.fetch_sub(1, Ordering::Relaxed);
 
         // Try to get an existing connection
@@ -272,7 +266,9 @@ impl ConnectionPool {
             }
         };
 
-        self.stats.active_connections.fetch_add(1, Ordering::Relaxed);
+        self.stats
+            .active_connections
+            .fetch_add(1, Ordering::Relaxed);
         permit.forget(); // We'll manually return the permit on release
 
         Ok(PooledConnection {
@@ -292,14 +288,18 @@ impl ConnectionPool {
             .build()
             .map_err(|e| PoolError::ConnectionFailed(e.to_string()))?;
 
-        self.stats.connections_created.fetch_add(1, Ordering::Relaxed);
+        self.stats
+            .connections_created
+            .fetch_add(1, Ordering::Relaxed);
 
         Ok(ConnectionSlot::new_http(self.backend_id.clone(), client))
     }
 
     /// Return a connection to the pool
     async fn release(&self, mut connection: ConnectionSlot) {
-        self.stats.active_connections.fetch_sub(1, Ordering::Relaxed);
+        self.stats
+            .active_connections
+            .fetch_sub(1, Ordering::Relaxed);
 
         // Check if connection is still healthy and not stale
         let max_idle = Duration::from_millis(self.config.keepalive_interval_ms * 2);
@@ -312,10 +312,14 @@ impl ConnectionPool {
                 connections.push(connection);
             } else {
                 // Pool is full, close the connection
-                self.stats.connections_closed.fetch_add(1, Ordering::Relaxed);
+                self.stats
+                    .connections_closed
+                    .fetch_add(1, Ordering::Relaxed);
             }
         } else {
-            self.stats.connections_closed.fetch_add(1, Ordering::Relaxed);
+            self.stats
+                .connections_closed
+                .fetch_add(1, Ordering::Relaxed);
         }
 
         // Release the semaphore permit
@@ -332,7 +336,9 @@ impl ConnectionPool {
         let mut connections = self.connections.write().await;
         let count = connections.len();
         connections.clear();
-        self.stats.connections_closed.fetch_add(count as u64, Ordering::Relaxed);
+        self.stats
+            .connections_closed
+            .fetch_add(count as u64, Ordering::Relaxed);
     }
 
     /// Run health check on the pool
@@ -350,7 +356,9 @@ impl ConnectionPool {
                 true
             }
             Err(_) => {
-                self.stats.health_check_failures.fetch_add(1, Ordering::Relaxed);
+                self.stats
+                    .health_check_failures
+                    .fetch_add(1, Ordering::Relaxed);
                 let mut state = self.state.write().await;
                 state.healthy = false;
                 state.last_health_check = Some(Instant::now());
@@ -392,12 +400,18 @@ impl<'a> PooledConnection<'a> {
 
 impl<'a> Drop for PooledConnection<'a> {
     fn drop(&mut self) {
-        if let Some(connection) = self.connection.take() {
-            let pool = self.pool;
-            // Spawn a task to return the connection (avoid blocking in drop)
-            tokio::spawn(async move {
-                pool.release(connection).await;
-            });
+        if let Some(_connection) = self.connection.take() {
+            // In a full implementation, we'd use a channel to send the connection
+            // back to the pool asynchronously. For now, the connection is simply
+            // dropped and the pool semaphore permit is lost (not ideal but avoids
+            // the lifetime issue).
+            //
+            // A better design would use Arc<ConnectionPool> and a return channel:
+            // pool.return_tx.try_send(connection).ok();
+            //
+            // The pool would then have a background task that receives connections
+            // and adds them back to the pool.
+            self.pool.semaphore.add_permits(1);
         }
     }
 }

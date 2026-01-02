@@ -56,14 +56,14 @@ impl TaskClass {
     #[must_use]
     pub fn default_timeout(&self) -> Duration {
         match self {
-            Self::QuickResponse => Duration::from_millis(5_000),    // 5s max
-            Self::DeepThinking => Duration::from_secs(120),         // 2 min
-            Self::CodeGeneration => Duration::from_secs(60),        // 1 min
-            Self::Mathematical => Duration::from_secs(90),          // 1.5 min
-            Self::Creative => Duration::from_secs(60),              // 1 min
-            Self::ToolUse => Duration::from_secs(30),               // 30s
-            Self::Embedding => Duration::from_secs(10),             // 10s
-            Self::General => Duration::from_secs(60),               // 1 min
+            Self::QuickResponse => Duration::from_millis(5_000), // 5s max
+            Self::DeepThinking => Duration::from_secs(120),      // 2 min
+            Self::CodeGeneration => Duration::from_secs(60),     // 1 min
+            Self::Mathematical => Duration::from_secs(90),       // 1.5 min
+            Self::Creative => Duration::from_secs(60),           // 1 min
+            Self::ToolUse => Duration::from_secs(30),            // 30s
+            Self::Embedding => Duration::from_secs(10),          // 10s
+            Self::General => Duration::from_secs(60),            // 1 min
         }
     }
 
@@ -71,14 +71,14 @@ impl TaskClass {
     #[must_use]
     pub fn target_ttft(&self) -> Duration {
         match self {
-            Self::QuickResponse => Duration::from_millis(100),      // <100ms
-            Self::DeepThinking => Duration::from_secs(5),           // Up to 5s
-            Self::CodeGeneration => Duration::from_secs(2),         // Up to 2s
-            Self::Mathematical => Duration::from_secs(3),           // Up to 3s
-            Self::Creative => Duration::from_secs(1),               // Up to 1s
-            Self::ToolUse => Duration::from_millis(500),            // <500ms
-            Self::Embedding => Duration::from_millis(200),          // <200ms
-            Self::General => Duration::from_secs(1),                // Up to 1s
+            Self::QuickResponse => Duration::from_millis(100), // <100ms
+            Self::DeepThinking => Duration::from_secs(5),      // Up to 5s
+            Self::CodeGeneration => Duration::from_secs(2),    // Up to 2s
+            Self::Mathematical => Duration::from_secs(3),      // Up to 3s
+            Self::Creative => Duration::from_secs(1),          // Up to 1s
+            Self::ToolUse => Duration::from_millis(500),       // <500ms
+            Self::Embedding => Duration::from_millis(200),     // <200ms
+            Self::General => Duration::from_secs(1),           // Up to 1s
         }
     }
 
@@ -86,14 +86,14 @@ impl TaskClass {
     #[must_use]
     pub fn priority(&self) -> u8 {
         match self {
-            Self::QuickResponse => 100,  // Highest priority
+            Self::QuickResponse => 100, // Highest priority
             Self::ToolUse => 90,
             Self::Embedding => 85,
             Self::CodeGeneration => 70,
             Self::General => 50,
             Self::Creative => 40,
-            Self::Mathematical => 30,    // Can wait for precision
-            Self::DeepThinking => 20,    // Lowest priority, long-running
+            Self::Mathematical => 30, // Can wait for precision
+            Self::DeepThinking => 20, // Lowest priority, long-running
         }
     }
 
@@ -101,10 +101,10 @@ impl TaskClass {
     #[must_use]
     pub fn preemptible(&self) -> bool {
         match self {
-            Self::QuickResponse => false,  // Already short
-            Self::DeepThinking => true,    // Long-running, can pause
+            Self::QuickResponse => false, // Already short
+            Self::DeepThinking => true,   // Long-running, can pause
             Self::CodeGeneration => false,
-            Self::Mathematical => false,   // Need consistency
+            Self::Mathematical => false, // Need consistency
             Self::Creative => true,
             Self::ToolUse => false,
             Self::Embedding => false,
@@ -255,29 +255,18 @@ pub struct BackendConfig {
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub enum BackendType {
     /// Local Ollama instance
-    Ollama {
-        host: String,
-        port: u16,
-    },
+    Ollama { host: String, port: u16 },
     /// OpenAI-compatible API
     OpenAI {
         base_url: String,
         api_key_env: String,
     },
     /// Anthropic API
-    Anthropic {
-        api_key_env: String,
-    },
+    Anthropic { api_key_env: String },
     /// Local model via GGML/llama.cpp
-    LocalGgml {
-        model_path: String,
-        gpu_layers: u32,
-    },
+    LocalGgml { model_path: String, gpu_layers: u32 },
     /// gRPC-based backend (vLLM, TensorRT-LLM)
-    Grpc {
-        endpoint: String,
-        use_tls: bool,
-    },
+    Grpc { endpoint: String, use_tls: bool },
     /// Custom HTTP backend
     CustomHttp {
         base_url: String,
@@ -316,10 +305,10 @@ pub struct ConnectionConfig {
 impl Default for ConnectionConfig {
     fn default() -> Self {
         Self {
-            connect_timeout_ms: 5_000,        // 5s connect timeout
-            read_timeout_ms: 120_000,         // 2min read timeout (for long generations)
-            write_timeout_ms: 30_000,         // 30s write timeout
-            keepalive_interval_ms: 30_000,    // 30s keepalive
+            connect_timeout_ms: 5_000,     // 5s connect timeout
+            read_timeout_ms: 120_000,      // 2min read timeout (for long generations)
+            write_timeout_ms: 30_000,      // 30s write timeout
+            keepalive_interval_ms: 30_000, // 30s keepalive
             max_idle_connections: 4,
             max_connections: 16,
             use_http2: true,
@@ -407,7 +396,7 @@ impl Default for ResourceConfig {
             max_gpu_memory_bytes: None,
             max_cpu_memory_bytes: None,
             max_concurrent_loads: 2,
-            idle_unload_timeout_ms: 300_000,  // 5 minutes
+            idle_unload_timeout_ms: 300_000, // 5 minutes
             allow_oversubscription: false,
             memory_pressure_threshold: 0.85,
         }
@@ -468,7 +457,8 @@ impl Default for RetryConfig {
 impl RetryConfig {
     /// Calculate backoff duration for attempt N (0-indexed)
     pub fn backoff_for_attempt(&self, attempt: u32) -> Duration {
-        let base = self.initial_backoff_ms as f64 * self.backoff_multiplier.powi(attempt as i32) as f64;
+        let base =
+            self.initial_backoff_ms as f64 * self.backoff_multiplier.powi(attempt as i32) as f64;
         let capped = base.min(self.max_backoff_ms as f64);
 
         let duration_ms = if self.use_jitter {

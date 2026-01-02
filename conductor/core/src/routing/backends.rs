@@ -3,15 +3,13 @@
 //! Adapters for different LLM backends that can be used with the router.
 //! Each adapter implements a common interface for the router to interact with.
 
-use std::sync::Arc;
-use std::time::{Duration, Instant};
+use std::time::Duration;
 
 use async_trait::async_trait;
 use tokio::sync::mpsc;
 
-use crate::backend::{LlmRequest, LlmResponse, StreamingToken};
 use super::config::BackendType;
-use super::connection_pool::PooledConnection;
+use crate::backend::{LlmRequest, LlmResponse, StreamingToken};
 
 // ============================================================================
 // Backend Adapter Trait
@@ -33,10 +31,7 @@ pub trait BackendAdapter: Send + Sync {
     ) -> Result<mpsc::Receiver<StreamingToken>, BackendAdapterError>;
 
     /// Send a non-streaming request
-    async fn send(
-        &self,
-        request: &LlmRequest,
-    ) -> Result<LlmResponse, BackendAdapterError>;
+    async fn send(&self, request: &LlmRequest) -> Result<LlmResponse, BackendAdapterError>;
 
     /// List available models
     async fn list_models(&self) -> Result<Vec<String>, BackendAdapterError>;
@@ -174,9 +169,11 @@ impl BackendAdapter for OllamaAdapter {
             let _ = tx.send(StreamingToken::Token("Hello ".to_string())).await;
             let _ = tx.send(StreamingToken::Token("from ".to_string())).await;
             let _ = tx.send(StreamingToken::Token(model.clone())).await;
-            let _ = tx.send(StreamingToken::Complete {
-                message: format!("Hello from {}", model),
-            }).await;
+            let _ = tx
+                .send(StreamingToken::Complete {
+                    message: format!("Hello from {}", model),
+                })
+                .await;
         });
 
         Ok(rx)
@@ -269,11 +266,15 @@ impl BackendAdapter for OpenAIAdapter {
         let model = request.model.clone();
 
         tokio::spawn(async move {
-            let _ = tx.send(StreamingToken::Token("Response from ".to_string())).await;
+            let _ = tx
+                .send(StreamingToken::Token("Response from ".to_string()))
+                .await;
             let _ = tx.send(StreamingToken::Token(model.clone())).await;
-            let _ = tx.send(StreamingToken::Complete {
-                message: format!("Response from {}", model),
-            }).await;
+            let _ = tx
+                .send(StreamingToken::Complete {
+                    message: format!("Response from {}", model),
+                })
+                .await;
         });
 
         Ok(rx)
@@ -328,29 +329,41 @@ impl BackendAdapter for OpenAIAdapter {
 /// Create a backend adapter from configuration
 pub fn create_adapter(config: &BackendType) -> Box<dyn BackendAdapter> {
     match config {
-        BackendType::Ollama { host, port } => {
-            Box::new(OllamaAdapter::new(host.clone(), *port))
-        }
-        BackendType::OpenAI { base_url, api_key_env } => {
+        BackendType::Ollama { host, port } => Box::new(OllamaAdapter::new(host.clone(), *port)),
+        BackendType::OpenAI {
+            base_url,
+            api_key_env,
+        } => {
             let api_key = std::env::var(api_key_env).unwrap_or_default();
-            let url = base_url.clone().unwrap_or_else(|| "https://api.openai.com".to_string());
-            Box::new(OpenAIAdapter::new(url, api_key))
+            Box::new(OpenAIAdapter::new(base_url.clone(), api_key))
         }
         BackendType::Anthropic { api_key_env } => {
             let api_key = std::env::var(api_key_env).unwrap_or_default();
             // Anthropic uses OpenAI-compatible adapter with different base URL
-            Box::new(OpenAIAdapter::new("https://api.anthropic.com".to_string(), api_key))
+            Box::new(OpenAIAdapter::new(
+                "https://api.anthropic.com".to_string(),
+                api_key,
+            ))
         }
-        BackendType::LocalGgml { model_path, gpu_layers: _ } => {
+        BackendType::LocalGgml {
+            model_path: _,
+            gpu_layers: _,
+        } => {
             // For now, use Ollama adapter as a placeholder
             // A real implementation would load the model directly
             Box::new(OllamaAdapter::new("localhost".to_string(), 11434))
         }
-        BackendType::Grpc { endpoint, use_tls: _ } => {
+        BackendType::Grpc {
+            endpoint: _,
+            use_tls: _,
+        } => {
             // Placeholder - would need gRPC implementation
             Box::new(OllamaAdapter::new("localhost".to_string(), 11434))
         }
-        BackendType::CustomHttp { base_url, auth_header: _ } => {
+        BackendType::CustomHttp {
+            base_url,
+            auth_header: _,
+        } => {
             // Use OpenAI adapter as base
             Box::new(OpenAIAdapter::new(base_url.clone(), String::new()))
         }

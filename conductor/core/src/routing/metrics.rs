@@ -55,8 +55,8 @@ impl Histogram {
     /// Create with default latency buckets (in milliseconds)
     pub fn latency_default() -> Self {
         Self::new(vec![
-            10.0, 25.0, 50.0, 100.0, 250.0, 500.0, 1000.0, 2500.0, 5000.0, 10000.0,
-            30000.0, 60000.0, 120000.0,
+            10.0, 25.0, 50.0, 100.0, 250.0, 500.0, 1000.0, 2500.0, 5000.0, 10000.0, 30000.0,
+            60000.0, 120000.0,
         ])
     }
 
@@ -104,7 +104,11 @@ impl Histogram {
 
     /// Get histogram snapshot
     pub fn snapshot(&self) -> HistogramSnapshot {
-        let counts: Vec<u64> = self.counts.iter().map(|c| c.load(Ordering::Relaxed)).collect();
+        let counts: Vec<u64> = self
+            .counts
+            .iter()
+            .map(|c| c.load(Ordering::Relaxed))
+            .collect();
         let total = self.total_count.load(Ordering::Relaxed);
         let sum = self.sum.load(Ordering::Relaxed);
         let min = self.min.load(Ordering::Relaxed);
@@ -117,7 +121,11 @@ impl Histogram {
             sum,
             min: if min == u64::MAX { 0 } else { min },
             max,
-            mean: if total > 0 { sum as f64 / total as f64 } else { 0.0 },
+            mean: if total > 0 {
+                sum as f64 / total as f64
+            } else {
+                0.0
+            },
         }
     }
 }
@@ -431,10 +439,7 @@ impl RouterMetrics {
 
         // Record task class
         let mut classes = self.task_class_counts.write().await;
-        classes
-            .entry(task_class)
-            .or_insert_with(Counter::new)
-            .inc();
+        classes.entry(task_class).or_insert_with(Counter::new).inc();
     }
 
     /// Record a successful request
@@ -668,9 +673,9 @@ mod tests {
     fn test_histogram() {
         let hist = Histogram::new(vec![10.0, 25.0, 50.0, 100.0]);
 
-        hist.record(5.0);   // Goes into bucket 10
-        hist.record(15.0);  // Goes into bucket 25
-        hist.record(75.0);  // Goes into bucket 100
+        hist.record(5.0); // Goes into bucket 10
+        hist.record(15.0); // Goes into bucket 25
+        hist.record(75.0); // Goes into bucket 100
         hist.record(200.0); // Goes into bucket 100 (last bucket)
 
         let snap = hist.snapshot();
@@ -699,10 +704,16 @@ mod tests {
         let metrics = RouterMetrics::new();
 
         // Record some requests
-        metrics.record_request_start("model-a", TaskClass::CodeGeneration).await;
-        metrics.record_request_success("model-a", 100, 2000, 500).await;
+        metrics
+            .record_request_start("model-a", TaskClass::CodeGeneration)
+            .await;
+        metrics
+            .record_request_success("model-a", 100, 2000, 500)
+            .await;
 
-        metrics.record_request_start("model-a", TaskClass::QuickResponse).await;
+        metrics
+            .record_request_start("model-a", TaskClass::QuickResponse)
+            .await;
         metrics.record_request_failure("model-a", false).await;
 
         let summary = metrics.model_metrics("model-a").await.summary();

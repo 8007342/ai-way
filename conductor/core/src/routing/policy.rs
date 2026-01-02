@@ -22,7 +22,7 @@ use std::time::{Duration, Instant};
 
 use tokio::sync::RwLock;
 
-use super::config::{ModelProfile, TaskClass, CostTier};
+use super::config::{CostTier, ModelProfile, TaskClass};
 use super::metrics::RouterMetrics;
 
 // ============================================================================
@@ -209,13 +209,13 @@ impl RoutingRequest {
         // Adjust by urgency (1-10 maps to -9 to +0)
         let urgency_adjust = (self.urgency as i16 - 10) as i8;
 
-        (base_priority as i16 + urgency_adjust as i16)
-            .clamp(0, 100) as u8
+        (base_priority as i16 + urgency_adjust as i16).clamp(0, 100) as u8
     }
 
     /// Get effective timeout
     pub fn effective_timeout(&self) -> Duration {
-        self.timeout.unwrap_or_else(|| self.classify().default_timeout())
+        self.timeout
+            .unwrap_or_else(|| self.classify().default_timeout())
     }
 }
 
@@ -418,7 +418,9 @@ impl RoutingPolicy {
         }
         {
             let mut states = self.states.write().await;
-            states.entry(model_id).or_insert_with_key(|id| ModelState::new(id.clone()));
+            states
+                .entry(model_id)
+                .or_insert_with_key(|id| ModelState::new(id.clone()));
         }
     }
 
@@ -442,7 +444,16 @@ impl RoutingPolicy {
 
         // 1. Check for explicitly requested model
         if let Some(ref requested) = request.requested_model {
-            if let Some(decision) = self.try_route_to(requested, task_class, priority, timeout, RoutingReason::UserRequested).await {
+            if let Some(decision) = self
+                .try_route_to(
+                    requested,
+                    task_class,
+                    priority,
+                    timeout,
+                    RoutingReason::UserRequested,
+                )
+                .await
+            {
                 return Ok(decision);
             }
             // Requested model not available, fall through to routing
@@ -450,7 +461,10 @@ impl RoutingPolicy {
 
         // 2. Check session affinity
         if let Some(ref conv_id) = request.conversation_id {
-            if let Some(decision) = self.try_session_affinity(conv_id, task_class, priority, timeout).await {
+            if let Some(decision) = self
+                .try_session_affinity(conv_id, task_class, priority, timeout)
+                .await
+            {
                 return Ok(decision);
             }
         }
@@ -469,7 +483,8 @@ impl RoutingPolicy {
 
         // 6. Get profile for the selected model
         let profiles = self.profiles.read().await;
-        let profile = profiles.get(&model_id)
+        let profile = profiles
+            .get(&model_id)
             .ok_or_else(|| RoutingError::ModelNotFound(model_id.clone()))?;
 
         Ok(RoutingDecision {
@@ -591,6 +606,7 @@ impl RoutingPolicy {
     }
 
     /// Score and select the best model from candidates
+    #[allow(unused_variables)]
     async fn select_best(
         &self,
         candidates: &[(String, ModelState)],
@@ -678,10 +694,7 @@ impl RoutingPolicy {
         let mut states = self.states.write().await;
         if let Some(state) = states.get_mut(model_id) {
             if success {
-                state.record_success(
-                    ttft_ms.unwrap_or(1000),
-                    tokens_per_sec.unwrap_or(20.0),
-                );
+                state.record_success(ttft_ms.unwrap_or(1000), tokens_per_sec.unwrap_or(20.0));
             } else {
                 state.record_failure();
             }
@@ -799,16 +812,26 @@ mod tests {
     async fn test_routing_policy() {
         let policy = RoutingPolicy::new();
 
-        // Register a model
-        let profile = ModelProfile::new("test-model", "ollama");
+        // Register a model with streaming support
+        let mut profile = ModelProfile::new("test-model", "ollama");
+        profile.supports_streaming = true;
+        profile.avg_ttft_ms = 500; // Set a reasonable TTFT
         policy.register_model(profile).await;
-        policy.set_default(TaskClass::General, "test-model".to_string()).await;
+        policy
+            .set_default(TaskClass::General, "test-model".to_string())
+            .await;
 
-        // Route a request
-        let request = RoutingRequest::new("Hello!");
+        // Verify model state is available
+        let state = policy.get_state("test-model").await;
+        assert!(state.is_some(), "Model state should exist");
+        assert!(state.unwrap().is_available(), "Model should be available");
+
+        // Route a general request (explicitly set task class to avoid QuickResponse filtering)
+        let request =
+            RoutingRequest::new("Explain how computers work").with_task_class(TaskClass::General);
         let decision = policy.route(&request).await;
 
-        assert!(decision.is_ok());
+        assert!(decision.is_ok(), "Routing should succeed: {:?}", decision);
         let decision = decision.unwrap();
         assert_eq!(decision.model_id, "test-model");
         assert_eq!(decision.backend_id, "ollama");
@@ -820,17 +843,23 @@ mod tests {
 
         // Initially healthy
         assert!(state.is_available());
+        assert!(state.healthy);
+        assert!(state.error_rate < 0.01);
 
-        // Record some failures
+        // Record one failure
+        state.record_failure();
+        assert!(state.healthy); // Still marked healthy after 1 failure
+        assert_eq!(state.consecutive_failures, 1);
+
+        // After 3 consecutive failures, model becomes unhealthy
         state.record_failure();
         state.record_failure();
-        assert!(state.is_available()); // Still available after 2 failures
+        assert!(!state.healthy); // Unhealthy after 3 consecutive failures
+        assert!(!state.is_available());
 
-        state.record_failure();
-        assert!(!state.is_available()); // Unhealthy after 3 consecutive failures
-
-        // Success resets
+        // Success resets consecutive failures and health
         state.record_success(100, 50.0);
-        assert!(state.is_available());
+        assert!(state.healthy);
+        assert_eq!(state.consecutive_failures, 0);
     }
 }

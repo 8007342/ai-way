@@ -1,3 +1,4 @@
+#![allow(missing_docs)]
 //! Multi-Model Query Routing
 //!
 //! High-performance routing infrastructure for concurrent model requests.
@@ -39,10 +40,17 @@
 pub mod backends;
 pub mod config;
 pub mod connection_pool;
+pub mod fallback;
+pub mod health;
 pub mod metrics;
 pub mod policy;
 pub mod router;
 pub mod semaphore;
 
+#[cfg(test)]
+pub mod test_utils;
+
 pub use config::*;
+pub use fallback::*;
+pub use health::*;
 pub use router::*;

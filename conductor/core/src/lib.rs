@@ -100,6 +100,7 @@
 //! - [`transport`]: IPC transport layer (Unix sockets, WebSocket)
 //! - [`accessibility`]: Accessibility support for screen readers and assistive tech
 //! - [`conversation`]: Multi-conversation management for parallel agent work
+//! - [`streaming`]: Streaming infrastructure for parallel conversation responses
 //!
 //! # No TUI Dependencies
 //!
@@ -119,8 +120,10 @@ pub mod conductor;
 pub mod conversation;
 pub mod events;
 pub mod messages;
+pub mod routing;
 pub mod security;
 pub mod session;
+pub mod streaming;
 pub mod tasks;
 pub mod transport;
 
@@ -156,3 +159,16 @@ pub use animation::{
 
 // Conversation exports
 pub use conversation::{Conversation, ConversationId, ConversationManager, ConversationState};
+
+// Routing exports
+pub use routing::policy::RoutingRequest;
+pub use routing::{
+    MetricsConfig, ModelProfile, QueryRouter, RetryConfig, RouterConfig, RouterError,
+    RouterResponse, TaskClass,
+};
+
+// Streaming exports
+pub use streaming::{
+    BufferOverflowPolicy, ConversationStream, StreamEvent, StreamEventKind, StreamManager,
+    StreamManagerConfig, StreamStats,
+};

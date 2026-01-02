@@ -32,6 +32,9 @@ use crate::messages::{
     ConductorMessage, ConductorState, ContentType, EventId, MessageId, MessageRole, NotifyLevel,
     ResponseMetadata, SessionId,
 };
+use crate::routing::{
+    policy::RoutingRequest, QueryRouter, RouterConfig, RouterError, RouterResponse,
+};
 use crate::security::{CommandValidator, ConductorLimits, InputValidator, ValidationResult};
 use crate::session::Session;
 use crate::tasks::{TaskId, TaskManager};
@@ -54,6 +57,10 @@ pub struct ConductorConfig {
     pub limits: ConductorLimits,
     /// Additional allowed agents beyond defaults
     pub additional_agents: Vec<String>,
+    /// Whether to enable intelligent routing (multi-model support)
+    pub enable_routing: bool,
+    /// Router configuration (if routing is enabled)
+    pub router_config: Option<RouterConfig>,
 }
 
 impl Default for ConductorConfig {
@@ -66,6 +73,8 @@ impl Default for ConductorConfig {
             system_prompt: None,
             limits: ConductorLimits::default(),
             additional_agents: Vec::new(),
+            enable_routing: false,
+            router_config: None,
         }
     }
 }
@@ -74,6 +83,10 @@ impl ConductorConfig {
     /// Create configuration from environment variables
     #[must_use]
     pub fn from_env() -> Self {
+        let enable_routing = std::env::var("CONDUCTOR_ENABLE_ROUTING")
+            .map(|v| v == "1" || v.to_lowercase() == "true")
+            .unwrap_or(false);
+
         Self {
             model: std::env::var("YOLLAYAH_MODEL").unwrap_or_else(|_| "yollayah".to_string()),
             warmup_on_start: std::env::var("YOLLAYAH_SKIP_WARMUP")
@@ -92,7 +105,21 @@ impl ConductorConfig {
                 .ok()
                 .map(|v| v.split(',').map(|s| s.trim().to_string()).collect())
                 .unwrap_or_default(),
+            enable_routing,
+            router_config: if enable_routing {
+                Some(RouterConfig::default())
+            } else {
+                None
+            },
         }
+    }
+
+    /// Enable routing with a custom configuration
+    #[must_use]
+    pub fn with_routing(mut self, router_config: RouterConfig) -> Self {
+        self.enable_routing = true;
+        self.router_config = Some(router_config);
+        self
     }
 }
 
@@ -100,8 +127,10 @@ impl ConductorConfig {
 pub struct Conductor<B: LlmBackend> {
     /// Configuration
     config: ConductorConfig,
-    /// LLM backend
+    /// LLM backend (fallback when routing is disabled or fails)
     backend: Arc<B>,
+    /// Query router for intelligent model selection (optional)
+    router: Option<Arc<QueryRouter>>,
     /// Current session
     session: Session,
     /// Avatar state
@@ -131,6 +160,8 @@ pub struct Conductor<B: LlmBackend> {
     input_validator: InputValidator,
     /// Command validator for LLM-generated commands
     command_validator: CommandValidator,
+    /// Model used for current streaming response (for metrics)
+    streaming_model: Option<String>,
 }
 
 impl<B: LlmBackend + 'static> Conductor<B> {
@@ -155,9 +186,20 @@ impl<B: LlmBackend + 'static> Conductor<B> {
             config.limits.task_cleanup_age_ms,
         );
 
+        // Create the router if routing is enabled
+        let router = if config.enable_routing {
+            config
+                .router_config
+                .as_ref()
+                .map(|rc| Arc::new(QueryRouter::new(rc.clone())))
+        } else {
+            None
+        };
+
         Self {
             config,
             backend: Arc::new(backend),
+            router,
             session,
             avatar: AvatarState::default(),
             command_parser: CommandParser::new(),
@@ -173,6 +215,7 @@ impl<B: LlmBackend + 'static> Conductor<B> {
             streaming_token_count: 0,
             input_validator,
             command_validator,
+            streaming_model: None,
         }
     }
 
@@ -204,6 +247,16 @@ impl<B: LlmBackend + 'static> Conductor<B> {
     /// Start the Conductor (initialize and optionally warm up)
     pub async fn start(&mut self) -> anyhow::Result<()> {
         self.set_state(ConductorState::Initializing).await;
+
+        // Initialize the router if enabled
+        if let Some(ref router) = self.router {
+            if let Err(e) = router.start().await {
+                tracing::warn!(error = %e, "Failed to start query router, falling back to direct backend");
+                // Don't fail startup - we can fall back to the direct backend
+            } else {
+                tracing::info!("Query router started successfully");
+            }
+        }
 
         // Check backend health
         if !self.backend.health_check().await {
@@ -592,9 +645,79 @@ impl<B: LlmBackend + 'static> Conductor<B> {
         // Start processing
         self.set_state(ConductorState::Thinking).await;
 
+        // Try routing first if enabled, fall back to direct backend
+        if let Some(ref router) = self.router {
+            if router.is_healthy().await {
+                match self.route_message(&content).await {
+                    Ok(()) => return Ok(()),
+                    Err(e) => {
+                        tracing::warn!(error = %e, "Routing failed, falling back to direct backend");
+                        // Fall through to direct backend
+                    }
+                }
+            }
+        }
+
+        // Direct backend path (fallback or when routing is disabled)
+        self.send_via_backend(&content).await
+    }
+
+    /// Route a message through the QueryRouter
+    async fn route_message(&mut self, content: &str) -> Result<(), RouterError> {
+        let router = self.router.as_ref().ok_or(RouterError::NotRunning)?;
+
+        // Build a routing request with context
+        let routing_request =
+            RoutingRequest::new(content).with_conversation(self.session.id.0.clone());
+
+        // Route the request
+        match router.route(routing_request).await? {
+            RouterResponse::Streaming {
+                receiver, model_id, ..
+            } => {
+                let msg_id = self.session.start_assistant_response();
+                self.streaming_rx = Some(receiver);
+                self.streaming_message_id = Some(msg_id);
+                self.streaming_start = Some(std::time::Instant::now());
+                self.streaming_token_count = 0;
+                self.streaming_model = Some(model_id);
+                self.set_state(ConductorState::Responding).await;
+                Ok(())
+            }
+            RouterResponse::Complete {
+                response, model_id, ..
+            } => {
+                // Handle non-streaming response
+                let msg_id = self.session.start_assistant_response();
+                self.session.append_streaming(&response.content);
+                self.session.complete_streaming();
+
+                // Build response metadata
+                let metadata = ResponseMetadata::with_timing(
+                    response.duration_ms.unwrap_or(0),
+                    response.tokens_used.unwrap_or(0),
+                );
+
+                // Send complete message to UI
+                self.send(ConductorMessage::StreamEnd {
+                    message_id: msg_id,
+                    final_content: response.content,
+                    metadata,
+                })
+                .await;
+
+                tracing::debug!(model = %model_id, "Completed non-streaming response via router");
+                self.set_state(ConductorState::Ready).await;
+                Ok(())
+            }
+        }
+    }
+
+    /// Send a message directly via the backend (fallback path)
+    async fn send_via_backend(&mut self, content: &str) -> anyhow::Result<()> {
         // Build request with conversation history
         let history = self.session.build_context(self.config.max_context_messages);
-        let mut request = LlmRequest::new(&content, &self.config.model).with_stream(true);
+        let mut request = LlmRequest::new(content, &self.config.model).with_stream(true);
 
         if !history.is_empty() {
             request = request.with_context(history);
@@ -612,6 +735,7 @@ impl<B: LlmBackend + 'static> Conductor<B> {
                 self.streaming_message_id = Some(msg_id);
                 self.streaming_start = Some(std::time::Instant::now());
                 self.streaming_token_count = 0;
+                self.streaming_model = Some(self.config.model.clone());
                 self.set_state(ConductorState::Responding).await;
             }
             Err(e) => {
@@ -941,6 +1065,12 @@ impl<B: LlmBackend + 'static> Conductor<B> {
         self.set_state(ConductorState::ShuttingDown).await;
         self.session.end();
 
+        // Shutdown the router if running
+        if let Some(ref router) = self.router {
+            router.shutdown().await;
+            tracing::info!("Query router shut down");
+        }
+
         // Send quit to UI
         self.send(ConductorMessage::Quit {
             message: Some("Goodbye!".to_string()),
@@ -948,6 +1078,20 @@ impl<B: LlmBackend + 'static> Conductor<B> {
         .await;
 
         Ok(())
+    }
+
+    /// Get a reference to the query router (if enabled)
+    pub fn router(&self) -> Option<&Arc<QueryRouter>> {
+        self.router.as_ref()
+    }
+
+    /// Check if routing is enabled and healthy
+    pub async fn is_routing_active(&self) -> bool {
+        if let Some(ref router) = self.router {
+            router.is_healthy().await
+        } else {
+            false
+        }
     }
 
     /// Set state and notify UI
@@ -1082,5 +1226,102 @@ mod tests {
         // Should have received state and session info
         let msg = rx.recv().await.unwrap();
         assert!(matches!(msg, ConductorMessage::State { .. }));
+    }
+
+    #[tokio::test]
+    async fn test_conductor_with_routing() {
+        use crate::routing::{ModelProfile, RouterConfig, TaskClass};
+
+        let (tx, mut rx) = mpsc::channel(100);
+
+        // Create a router config with a test model
+        let mut router_config = RouterConfig::default();
+        let mut test_model = ModelProfile::new("test-model", "ollama");
+        test_model.supports_streaming = true;
+        test_model.avg_ttft_ms = 500;
+        router_config.models.push(test_model);
+        router_config
+            .default_models
+            .insert(TaskClass::General, "test-model".to_string());
+
+        // Create conductor with routing enabled
+        let config = ConductorConfig {
+            warmup_on_start: false,
+            enable_routing: true,
+            router_config: Some(router_config),
+            ..Default::default()
+        };
+
+        let mut conductor = Conductor::new(MockBackend, config, tx);
+
+        // Verify router was created
+        assert!(conductor.router().is_some());
+
+        // Start conductor
+        conductor.start().await.unwrap();
+
+        // Drain initial messages
+        while rx.try_recv().is_ok() {}
+
+        // Router should not be active yet (no backends registered)
+        // but conductor should still work via fallback
+        assert!(conductor.is_ready());
+        assert_eq!(conductor.state(), ConductorState::Ready);
+    }
+
+    #[tokio::test]
+    async fn test_conductor_routing_fallback() {
+        // Test that when routing fails, we fall back to direct backend
+        let (tx, mut rx) = mpsc::channel(100);
+
+        // Create conductor with routing enabled but no models configured
+        // This should trigger fallback to direct backend
+        let config = ConductorConfig {
+            warmup_on_start: false,
+            enable_routing: true,
+            router_config: Some(RouterConfig::default()), // Empty config
+            ..Default::default()
+        };
+
+        let mut conductor = Conductor::new(MockBackend, config, tx);
+        conductor.start().await.unwrap();
+
+        // Drain initial messages
+        while rx.try_recv().is_ok() {}
+
+        // Send a user message - should fall back to direct backend
+        conductor
+            .handle_event(SurfaceEvent::UserMessage {
+                event_id: SurfaceEvent::new_event_id(),
+                content: "Hello!".to_string(),
+            })
+            .await
+            .unwrap();
+
+        // Should receive acknowledgment and user message echo
+        let mut found_user_message = false;
+        while let Ok(msg) = rx.try_recv() {
+            if matches!(
+                msg,
+                ConductorMessage::Message {
+                    role: MessageRole::User,
+                    ..
+                }
+            ) {
+                found_user_message = true;
+                break;
+            }
+        }
+        assert!(found_user_message, "Should have received user message echo");
+    }
+
+    #[tokio::test]
+    async fn test_conductor_config_with_routing() {
+        // Test the with_routing builder method
+        let router_config = RouterConfig::default();
+        let config = ConductorConfig::default().with_routing(router_config);
+
+        assert!(config.enable_routing);
+        assert!(config.router_config.is_some());
     }
 }
