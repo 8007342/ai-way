@@ -16,6 +16,7 @@ Master index for all TODO tracking documents. Check here first to find pending w
 
 | Document | Status | Description |
 |----------|--------|-------------|
+| [TODO-accessibility.md](TODO-accessibility.md) | **ACTIVE** | Accessibility roadmap (WCAG compliance, TTS, high contrast) |
 | [TODO-rich-ux.md](TODO-rich-ux.md) | SUPERSEDED | Original UX plan (now Rust-based, not Python Textual) |
 | [agents/TODO.md](agents/TODO.md) | ONGOING | Agent profiles and future enhancements |
 | [TODO-documentation.md](TODO-documentation.md) | ROLLING | Documentation updates needed for user docs |
@@ -48,6 +49,33 @@ Architect and UX specialist reviewed avatar system for extensibility:
 
 Key principle: **Meta-agent drives avatar entirely, surface is thin rendering layer.**
 
+## TUI UX Enhancements (2026-01-01)
+
+Deep usability review by UX Specialist, Architect, and Ethical Hacker:
+
+### Quick Wins (Implementing)
+| Feature | Status | Impact |
+|---------|--------|--------|
+| Scroll gradient indicators | PENDING | High - discoverability |
+| Input history (Up/Down) | PENDING | High - efficiency |
+| Breathing color effect | PENDING | High - perceived aliveness |
+| Micro-interactions | PENDING | Medium - tactile feedback |
+
+### Planned Enhancements
+| Feature | Effort | Impact |
+|---------|--------|--------|
+| Autocomplete (trie + context) | 3-4 hours | High |
+| Focus management (Tab nav) | 3-5 hours | High |
+| High contrast mode | 2-3 hours | Critical (a11y) |
+| Reduced motion support | 1-2 hours | High (a11y) |
+| RTL language support | Medium | Medium |
+| Small screen layouts | Medium | Medium |
+
+### Accessibility Status
+- **Current WCAG compliance**: ~25% AA
+- **Critical gaps**: Screen reader, keyboard nav, high contrast, colorblind
+- **See**: [TODO-accessibility.md](TODO-accessibility.md) for full roadmap
+
 ## Principles
 
 - Each major refactor/feature gets its own TODO-*.md file
@@ -57,4 +85,4 @@ Key principle: **Meta-agent drives avatar entirely, surface is thin rendering la
 
 ---
 
-**Last Updated**: 2026-01-01 (Meta-agent + Avatar architecture)
+**Last Updated**: 2026-01-01 (Accessibility + TUI UX deep dive)

@@ -31,7 +31,11 @@ use crate::avatar::{Activity, Avatar, AvatarSize as TuiAvatarSize};
 use crate::compositor::{Compositor, LayerId};
 use crate::conductor_client::ConductorClient;
 use crate::display::{DisplayRole, DisplayState};
-use crate::theme::YOLLAYAH_MAGENTA;
+use crate::theme::{
+    breathing_color, scroll_fade_color, scroll_fade_factor, BREATHING_INPUT_BASE,
+    BREATHING_INPUT_BRIGHT, BREATHING_INPUT_CYCLE_MS, BREATHING_STATUS_BASE,
+    BREATHING_STATUS_BRIGHT, BREATHING_STATUS_CYCLE_MS, YOLLAYAH_MAGENTA,
+};
 
 /// Input box height (lines) for text wrapping
 const INPUT_HEIGHT: u16 = 5;
@@ -93,6 +97,8 @@ pub struct App {
     // === Misc State ===
     /// Last frame time (for animations)
     last_frame: Instant,
+    /// App start time (for breathing effects)
+    start_time: Instant,
     /// Developer mode
     dev_mode: bool,
     /// Terminal size
@@ -181,6 +187,7 @@ impl App {
         // Create conductor client
         let conductor = ConductorClient::new();
 
+        let now = Instant::now();
         Ok(Self {
             running: true,
             goodbye_message: None,
@@ -195,7 +202,8 @@ impl App {
             avatar_pos: (avatar_x, avatar_y),
             avatar_target: (avatar_x, avatar_y),
             wander_timer: Duration::from_secs(5),
-            last_frame: Instant::now(),
+            last_frame: now,
+            start_time: now,
             dev_mode: false,
             size: (size.0, size.1),
         })
@@ -714,27 +722,23 @@ impl App {
 
             let visible_lines: Vec<_> = all_lines.iter().skip(visible_start).take(height).collect();
 
+            // Number of lines to fade at edges for scroll indication
+            const FADE_LINES: usize = 3;
+
             for (i, (line, style)) in visible_lines.iter().enumerate() {
                 let y = i as u16;
                 if y >= area.height {
                     break;
                 }
 
-                let final_style = if has_content_above && i < 2 {
-                    let shade = if i == 0 {
-                        Color::Rgb(80, 80, 80)
-                    } else {
-                        Color::Rgb(120, 120, 120)
-                    };
-                    Style::default().fg(shade)
-                } else if has_content_below && i >= height.saturating_sub(2) {
-                    let dist_from_bottom = height.saturating_sub(1).saturating_sub(i);
-                    let shade = if dist_from_bottom == 0 {
-                        Color::Rgb(80, 80, 80)
-                    } else {
-                        Color::Rgb(120, 120, 120)
-                    };
-                    Style::default().fg(shade)
+                // Calculate fade factor based on position and scroll state
+                let fade =
+                    scroll_fade_factor(i, height, FADE_LINES, has_content_above, has_content_below);
+
+                let final_style = if fade < 1.0 {
+                    // Apply fade color from theme
+                    let fade_color = scroll_fade_color(fade);
+                    Style::default().fg(fade_color)
                 } else {
                     *style
                 };
@@ -750,6 +754,7 @@ impl App {
         if let Some(buf) = self.compositor.layer_buffer_mut(self.layers.input) {
             buf.reset();
             let area = buf.area;
+            let elapsed = self.start_time.elapsed();
 
             let separator = "-".repeat(area.width as usize);
             buf.set_string(
@@ -781,10 +786,19 @@ impl App {
                 wrapped_lines.iter().collect()
             };
 
+            // Breathing color for input text - subtle green pulse
+            let input_color = breathing_color(
+                BREATHING_INPUT_BASE,
+                BREATHING_INPUT_BRIGHT,
+                BREATHING_INPUT_CYCLE_MS,
+                elapsed,
+            );
+            let input_style = Style::default().fg(input_color);
+
             for (i, line) in visible_lines.iter().enumerate() {
                 let y = area.y + 1 + i as u16;
                 if y < area.y + area.height {
-                    buf.set_string(area.x, y, line, Style::default().fg(Color::Green));
+                    buf.set_string(area.x, y, line, input_style);
                 }
             }
 
@@ -806,10 +820,22 @@ impl App {
             let area = buf.area;
 
             let state_str = self.display.conductor_state.description();
+            let elapsed = self.start_time.elapsed();
 
+            // Use breathing effect for Ready state to make app feel alive
             let status_style = match self.display.conductor_state {
                 ConductorState::WarmingUp | ConductorState::Initializing => {
                     Style::default().fg(YOLLAYAH_MAGENTA)
+                }
+                ConductorState::Ready => {
+                    // Gentle breathing between dim gray and magenta
+                    let color = breathing_color(
+                        BREATHING_STATUS_BASE,
+                        BREATHING_STATUS_BRIGHT,
+                        BREATHING_STATUS_CYCLE_MS,
+                        elapsed,
+                    );
+                    Style::default().fg(color)
                 }
                 _ => Style::default().fg(Color::DarkGray),
             };
