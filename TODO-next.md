@@ -169,6 +169,72 @@ From `TODO-avatar-animation-system.md`:
 
 ---
 
+## Disabled Tests (Triage: Architect + QA + Hacker)
+
+Tests currently marked `#[ignore]` that need attention:
+
+### 1. scenario_7_connection_pool [HIGH - Architect/Backend]
+**File**: `conductor/core/tests/routing_performance_tests.rs:460`
+**Reason**: Connection pool reuse not implemented
+
+**Root Cause Analysis**:
+- `PooledConnection::Drop` doesn't return connections to pool due to async/lifetime constraints
+- Currently just releases semaphore permit but drops the actual connection
+- Comment in code acknowledges this: "A better design would use Arc<ConnectionPool> and a return channel"
+
+**Fix Required**:
+- Refactor `ConnectionPool` to use `Arc<Self>`
+- Add async channel for connection returns
+- Background task to receive and reinsert connections
+- Estimated scope: Medium (refactor pool ownership model)
+
+**Security Note** (Hacker): Connection exhaustion risk if pool doesn't reuse - potential DoS vector under load.
+
+---
+
+### 2. scenario_9_session_affinity [MEDIUM - Architect]
+**File**: `conductor/core/tests/routing_performance_tests.rs:587`
+**Reason**: Model registration for routing policy not working
+
+**Root Cause Analysis**:
+- Test sends "Hello" which auto-classifies as `TaskClass::QuickResponse`
+- `QuickResponse` requires `target_ttft < 100ms`
+- Default `ModelProfile::new()` sets `avg_ttft_ms: 1000` (1 second)
+- Both models filtered out by `can_meet_latency()` check
+- Result: `NoModelsAvailable` error
+
+**Fix Options**:
+1. **Test fix**: Set `avg_ttft_ms: 50` on test profiles, OR
+2. **Test fix**: Explicitly set `task_class: General` on request, OR
+3. **Design fix**: Relax QuickResponse filtering to allow fallback
+
+**Security Note** (Hacker): No security implications - test logic issue only.
+
+---
+
+### 3. scenario_10_stress_test [LOW - QA]
+**File**: `conductor/core/tests/routing_performance_tests.rs:653`
+**Reason**: Long-running test (10 min), run manually
+
+**Status**: Working correctly, intentionally ignored for CI.
+
+**Recommendation**:
+- Keep ignored in normal CI
+- Add to separate "stress test" CI job (nightly/weekly)
+- Document how to run: `cargo test scenario_10 -- --ignored`
+
+---
+
+## Disabled Test Summary
+
+| Test | Priority | Owner | Sprint Target | Blocker? |
+|------|----------|-------|---------------|----------|
+| scenario_7_connection_pool | HIGH | Backend | Sprint 5 | No (perf) |
+| scenario_9_session_affinity | MEDIUM | Architect | Sprint 4 | No (test bug) |
+| scenario_10_stress_test | LOW | QA | N/A | Intentional |
+
+---
+
 ## Technical Debt to Watch
 
 | Debt | Risk | Notes |
@@ -178,6 +244,7 @@ From `TODO-avatar-animation-system.md`:
 | Sequential ConnectionId | Medium | Should be cryptographically random before production |
 | auth_token field unused | Low | Implement or remove in security cleanup |
 | TUI ColoredCell vs protocol Block | Low | Will diverge further until P2.1 migration |
+| Connection pool doesn't reuse | Medium | See scenario_7 above - performance issue |
 
 ---
 
