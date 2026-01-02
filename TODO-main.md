@@ -7,7 +7,9 @@ Master index for all TODO tracking documents. Check here first to find pending w
 | Document | Status | Description |
 |----------|--------|-------------|
 | [TODO-conductor-ux-split.md](TODO-conductor-ux-split.md) | **IN PROGRESS** | TUI/Conductor separation with Unix Socket IPC |
+| [TODO-implementation-plan.md](TODO-implementation-plan.md) | **ACTIVE** | Detailed implementation plan with dependencies |
 | [TODO-qa-testing.md](TODO-qa-testing.md) | **PENDING** | Unit tests, integration tests, pre-commit hooks |
+| [TODO-integration-testing.md](TODO-integration-testing.md) | **ACTIVE** | Integration test suite documentation |
 
 ## Enhancement Tracking
 
@@ -16,6 +18,19 @@ Master index for all TODO tracking documents. Check here first to find pending w
 | [TODO-rich-ux.md](TODO-rich-ux.md) | SUPERSEDED | Original UX plan (now Rust-based, not Python Textual) |
 | [agents/TODO.md](agents/TODO.md) | ONGOING | Agent profiles and future enhancements |
 | [TODO-documentation.md](TODO-documentation.md) | ROLLING | Documentation updates needed for user docs |
+
+## Specialist Reviews (2026-01-01)
+
+Four specialist agents reviewed the project architecture:
+
+| Specialist | Focus | Key Findings |
+|------------|-------|--------------|
+| Solutions Architect | Architecture gaps | Daemon binary needed, multi-surface refactor required |
+| UX Designer | Multi-surface UX | ContentType, VoiceState, LayoutHint messages needed |
+| Ethical Hacker | Security hardening | Auth tokens, session isolation, frame integrity |
+| Mad Scientist | Edge cases & chaos | 5 critical edge cases, chaos test infrastructure needed |
+
+Full findings integrated into [TODO-conductor-ux-split.md](TODO-conductor-ux-split.md).
 
 ## Principles
 
@@ -26,4 +41,4 @@ Master index for all TODO tracking documents. Check here first to find pending w
 
 ---
 
-**Last Updated**: 2025-12-31
+**Last Updated**: 2026-01-01
