@@ -90,7 +90,29 @@ pub const BUBBLE: Color = Color::Rgb(200, 230, 255);
 pub const METADATA_COLOR: Color = Color::Rgb(120, 120, 140);
 
 // ============================================================================
-// Breathing Effect Configuration
+// Static Colors (Replacing Breathing Effects for Performance)
+// ============================================================================
+
+/// User message prefix ("You:") - static bright green
+pub const USER_PREFIX_COLOR: Color = Color::Rgb(160, 245, 160);
+
+/// Assistant message prefix ("Yollayah:") - static bright magenta
+pub const ASSISTANT_PREFIX_COLOR: Color = Color::Rgb(255, 140, 255);
+
+/// Streaming message cursor - brighter magenta for active streaming
+pub const STREAMING_CURSOR_COLOR: Color = Color::Rgb(255, 180, 255);
+
+/// Input field text - bright green
+pub const INPUT_TEXT_COLOR: Color = Color::Rgb(170, 255, 170);
+
+/// Status bar "Ready" indicator - classic magenta
+pub const STATUS_READY_COLOR: Color = Color::Magenta;
+
+/// Status bar during thinking/responding - warm yellow
+pub const STATUS_THINKING_COLOR: Color = Color::Rgb(255, 223, 128);
+
+// ============================================================================
+// Breathing Effect Configuration (DEPRECATED - To Be Removed)
 // ============================================================================
 
 /// Breathing effect: status bar "Ready" indicator

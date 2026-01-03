@@ -32,15 +32,10 @@ use crate::compositor::{Compositor, LayerId};
 use crate::conductor_client::ConductorClient;
 use crate::display::{DisplayRole, DisplayState};
 use crate::theme::{
-    breathing_color, scroll_fade_color, scroll_fade_factor, BREATHING_AGENT_BASE,
-    BREATHING_AGENT_BRIGHT, BREATHING_AGENT_CYCLE_MS, BREATHING_ASSISTANT_PREFIX_BASE,
-    BREATHING_ASSISTANT_PREFIX_BRIGHT, BREATHING_ASSISTANT_PREFIX_CYCLE_MS, BREATHING_INPUT_BASE,
-    BREATHING_INPUT_BRIGHT, BREATHING_INPUT_CYCLE_MS, BREATHING_PROCESSING_BASE,
-    BREATHING_PROCESSING_BRIGHT, BREATHING_PROCESSING_CYCLE_MS, BREATHING_STATUS_BASE,
-    BREATHING_STATUS_BRIGHT, BREATHING_STATUS_CYCLE_MS, BREATHING_STREAMING_BASE,
-    BREATHING_STREAMING_BRIGHT, BREATHING_STREAMING_CYCLE_MS, BREATHING_USER_PREFIX_BASE,
-    BREATHING_USER_PREFIX_BRIGHT, BREATHING_USER_PREFIX_CYCLE_MS, INDICATOR_AGENT_IDLE,
-    METADATA_COLOR, YOLLAYAH_MAGENTA,
+    scroll_fade_color, scroll_fade_factor, ASSISTANT_PREFIX_COLOR, INDICATOR_AGENT_ACTIVE,
+    INDICATOR_AGENT_IDLE, INDICATOR_PROCESSING_ACTIVE, INPUT_TEXT_COLOR, METADATA_COLOR,
+    STATUS_READY_COLOR, STATUS_THINKING_COLOR, STREAMING_CURSOR_COLOR, USER_PREFIX_COLOR,
+    YOLLAYAH_MAGENTA,
 };
 
 /// Input box height (lines) for text wrapping
@@ -114,8 +109,6 @@ pub struct App {
     // === Misc State ===
     /// Last frame time (for animations)
     last_frame: Instant,
-    /// App start time (for breathing effects)
-    start_time: Instant,
     /// Developer mode
     dev_mode: bool,
     /// Terminal size
@@ -224,7 +217,6 @@ impl App {
             avatar_target: (avatar_x, avatar_y),
             wander_timer: Duration::from_secs(5),
             last_frame: now,
-            start_time: now,
             dev_mode: false,
             size: (size.0, size.1),
         })
@@ -275,8 +267,8 @@ impl App {
                     }
                 }
 
-                // Frame tick - do work and render
-                _ = tokio::time::sleep(Duration::from_millis(16)) => {
+                // Frame tick - do work and render (10 FPS = 100ms)
+                _ = tokio::time::sleep(Duration::from_millis(100)) => {
                     // Handle startup phases incrementally
                     match startup_phase {
                         StartupPhase::NeedStart => {
@@ -865,16 +857,14 @@ impl App {
             return;
         }
 
-        let elapsed = self.start_time.elapsed();
-
-        // Line metadata for breathing effects
+        // Line metadata for rendering
         #[derive(Clone)]
         struct LineMeta {
             text: String,
             base_style: Style,
-            prefix_len: usize,         // Length of role prefix (for breathing)
-            role: Option<DisplayRole>, // Role for prefix breathing
-            is_streaming: bool,        // Streaming message cursor
+            prefix_len: usize,         // Length of role prefix
+            role: Option<DisplayRole>, // Role for prefix coloring
+            is_streaming: bool,        // Streaming message indicator
         }
 
         // Build wrapped lines from display messages
@@ -982,36 +972,21 @@ impl App {
                     let role = line_meta.role.unwrap();
                     let prefix_end = line_meta.prefix_len.min(display_line.len());
 
-                    // Calculate breathing color for prefix
+                    // Static colors for prefix (breathing removed for performance)
                     let prefix_color = match role {
-                        DisplayRole::User => breathing_color(
-                            BREATHING_USER_PREFIX_BASE,
-                            BREATHING_USER_PREFIX_BRIGHT,
-                            BREATHING_USER_PREFIX_CYCLE_MS,
-                            elapsed,
-                        ),
+                        DisplayRole::User => USER_PREFIX_COLOR,
                         DisplayRole::Assistant => {
                             if line_meta.is_streaming {
-                                // Faster pulse for streaming messages
-                                breathing_color(
-                                    BREATHING_STREAMING_BASE,
-                                    BREATHING_STREAMING_BRIGHT,
-                                    BREATHING_STREAMING_CYCLE_MS,
-                                    elapsed,
-                                )
+                                // Brighter for streaming messages
+                                STREAMING_CURSOR_COLOR
                             } else {
-                                breathing_color(
-                                    BREATHING_ASSISTANT_PREFIX_BASE,
-                                    BREATHING_ASSISTANT_PREFIX_BRIGHT,
-                                    BREATHING_ASSISTANT_PREFIX_CYCLE_MS,
-                                    elapsed,
-                                )
+                                ASSISTANT_PREFIX_COLOR
                             }
                         }
                         DisplayRole::System => Color::DarkGray,
                     };
 
-                    // Render prefix with breathing color
+                    // Render prefix with static color
                     let prefix_str: String = display_line.chars().take(prefix_end).collect();
                     let prefix_style = Style::default().fg(prefix_color);
                     buf.set_string(area.x, y, &prefix_str, prefix_style);
@@ -1034,7 +1009,6 @@ impl App {
         if let Some(buf) = self.compositor.layer_buffer_mut(self.layers.input) {
             buf.reset();
             let area = buf.area;
-            let elapsed = self.start_time.elapsed();
 
             let separator = "-".repeat(area.width as usize);
             buf.set_string(
@@ -1077,14 +1051,8 @@ impl App {
                 wrapped_lines.iter().collect()
             };
 
-            // Breathing color for input text - subtle green pulse
-            let input_color = breathing_color(
-                BREATHING_INPUT_BASE,
-                BREATHING_INPUT_BRIGHT,
-                BREATHING_INPUT_CYCLE_MS,
-                elapsed,
-            );
-            let input_style = Style::default().fg(input_color);
+            // Static color for input text (breathing removed for performance)
+            let input_style = Style::default().fg(INPUT_TEXT_COLOR);
 
             for (i, line) in visible_lines.iter().enumerate() {
                 let y = area.y + 1 + i as u16;
@@ -1111,7 +1079,6 @@ impl App {
             let area = buf.area;
 
             let state_str = self.display.conductor_state.description();
-            let elapsed = self.start_time.elapsed();
 
             // Count active sub-agent tasks
             let active_task_count = self
@@ -1136,13 +1103,12 @@ impl App {
 
             // Processing indicator: ⚡ when thinking/responding
             if is_processing {
-                let processing_color = breathing_color(
-                    BREATHING_PROCESSING_BASE,
-                    BREATHING_PROCESSING_BRIGHT,
-                    BREATHING_PROCESSING_CYCLE_MS,
-                    elapsed,
+                buf.set_string(
+                    x_pos,
+                    area.y,
+                    "⚡",
+                    Style::default().fg(INDICATOR_PROCESSING_ACTIVE),
                 );
-                buf.set_string(x_pos, area.y, "⚡", Style::default().fg(processing_color));
                 x_pos += 1;
             }
 
@@ -1154,14 +1120,9 @@ impl App {
                     x_pos += 1;
                 }
 
-                // Agent diamonds with breathing when active
+                // Agent diamonds - static colors (breathing removed for performance)
                 let agent_color = if active_task_count > 0 {
-                    breathing_color(
-                        BREATHING_AGENT_BASE,
-                        BREATHING_AGENT_BRIGHT,
-                        BREATHING_AGENT_CYCLE_MS,
-                        elapsed,
-                    )
+                    INDICATOR_AGENT_ACTIVE
                 } else {
                     INDICATOR_AGENT_IDLE
                 };
@@ -1191,19 +1152,14 @@ impl App {
                 x_pos += 1;
             }
 
-            // State description with breathing effect for Ready state
+            // State description with static colors (breathing removed for performance)
             let status_style = match self.display.conductor_state {
                 ConductorState::WarmingUp | ConductorState::Initializing => {
                     Style::default().fg(YOLLAYAH_MAGENTA)
                 }
-                ConductorState::Ready => {
-                    let color = breathing_color(
-                        BREATHING_STATUS_BASE,
-                        BREATHING_STATUS_BRIGHT,
-                        BREATHING_STATUS_CYCLE_MS,
-                        elapsed,
-                    );
-                    Style::default().fg(color)
+                ConductorState::Ready => Style::default().fg(STATUS_READY_COLOR),
+                ConductorState::Thinking | ConductorState::Responding => {
+                    Style::default().fg(STATUS_THINKING_COLOR)
                 }
                 _ => Style::default().fg(Color::DarkGray),
             };
