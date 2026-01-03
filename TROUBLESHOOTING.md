@@ -1,4 +1,130 @@
-# Troubleshooting: Slow Model Responses
+# Troubleshooting Guide
+
+## Table of Contents
+
+- [TTY/Terminal Issues](#ttyterminal-issues)
+- [Slow Model Responses](#slow-model-responses)
+
+---
+
+# TTY/Terminal Issues
+
+## Error: "yollayah-tui requires a terminal (TTY)"
+
+**Issue**: TUI fails to launch with error about missing TTY
+
+**Full Error Message**:
+```
+❌ Error: yollayah-tui requires a terminal (TTY)
+
+This usually means:
+  • Running in a non-interactive environment (CI, container)
+  • SSH without -t flag
+  • Piped stdin/stdout
+```
+
+### Common Causes
+
+#### 1. SSH Without TTY Allocation
+
+**Symptoms**:
+- Connecting via SSH
+- Error appears immediately
+
+**Fix**:
+```bash
+# Wrong: ssh without -t
+ssh user@host ./yollayah.sh
+
+# Right: ssh with -t flag
+ssh -t user@host ./yollayah.sh
+```
+
+#### 2. Running in Toolbox (Fedora Silverblue)
+
+**Symptoms**:
+- Using `toolbox run` without proper flags
+- Error about TTY device
+
+**Fix**:
+```bash
+# Wrong: toolbox run without directory
+toolbox run ./yollayah.sh
+
+# Right: toolbox run with --directory
+toolbox run --directory $PWD ./yollayah.sh
+
+# Or: Enter toolbox first
+toolbox enter ai-way
+./yollayah.sh
+```
+
+#### 3. Piped Input/Output
+
+**Symptoms**:
+- Using pipes or redirection with TUI
+- Running in background
+
+**Fix**:
+```bash
+# Wrong: piping to TUI
+echo "hello" | ./yollayah.sh
+
+# Right: run interactively
+./yollayah.sh
+
+# Or: use script command as wrapper
+script -c './yollayah.sh' /dev/null
+```
+
+#### 4. Running in CI/Automated Environment
+
+**Symptoms**:
+- GitHub Actions, GitLab CI, or similar
+- No real terminal attached
+
+**Fix**:
+```bash
+# For CI: Use test mode which gracefully falls back to bash interface
+./yollayah.sh --test
+
+# Or: Use smoke test that's CI-aware
+./tests/smoke_test_tui.sh  # Skips TUI launch if no TTY
+```
+
+### Verify You Have a TTY
+
+```bash
+# Check if stdin is a terminal
+[ -t 0 ] && echo "stdin is TTY" || echo "stdin NOT a TTY"
+
+# Check if stdout is a terminal
+[ -t 1 ] && echo "stdout is TTY" || echo "stdout NOT a TTY"
+
+# Both must be TTY for TUI to work
+```
+
+### Fallback Options
+
+If you can't get a TTY, yollayah.sh will automatically fall back to the bash interface:
+
+```bash
+# If TUI fails, this happens automatically:
+# 1. TTY check fails
+# 2. Error message displayed
+# 3. Falls back to simple bash prompt
+# 4. You can still chat with Yollayah!
+```
+
+**Bash interface**:
+- No animated avatar
+- Simple text prompt
+- All functionality works
+- Type `/quit` to exit
+
+---
+
+# Slow Model Responses
 
 **Issue**: Test mode launches fast but responses are slow
 
