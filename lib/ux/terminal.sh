@@ -564,7 +564,13 @@ ux_start_interface() {
     if ux_tui_available; then
         log_ux "INFO" "Launching rich TUI interface"
         pj_result "Using rich TUI interface"
-        ux_launch_tui "$model_name"
+
+        # Try to launch TUI, fall back to bash if it fails (e.g., no TTY)
+        if ! ux_launch_tui "$model_name"; then
+            log_ux "WARN" "TUI launch failed, falling back to simple mode"
+            pj_result "Falling back to simple bash interface"
+            ux_conversation_loop "$model_name"
+        fi
     else
         log_ux "INFO" "Starting conversation loop (bash interface)"
         pj_result "Using simple bash interface"
