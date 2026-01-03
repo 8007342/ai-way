@@ -31,6 +31,24 @@ async fn main() -> anyhow::Result<()> {
         .with(tracing_subscriber::EnvFilter::from_default_env())
         .init();
 
+    // Check if we have a TTY before attempting initialization
+    use std::io::IsTerminal;
+
+    if !io::stdin().is_terminal() || !io::stdout().is_terminal() {
+        eprintln!("❌ Error: yollayah-tui requires a terminal (TTY)");
+        eprintln!("");
+        eprintln!("This usually means:");
+        eprintln!("  • Running in a non-interactive environment (CI, container)");
+        eprintln!("  • SSH without -t flag");
+        eprintln!("  • Piped stdin/stdout");
+        eprintln!("");
+        eprintln!("Solutions:");
+        eprintln!("  • Run interactively: ./yollayah.sh");
+        eprintln!("  • Or with toolbox: toolbox run --directory $PWD ./yollayah.sh");
+        eprintln!("  • Or with script: script -c './yollayah.sh' /dev/null");
+        std::process::exit(1);
+    }
+
     // Set up panic hook to restore terminal
     let original_hook = panic::take_hook();
     panic::set_hook(Box::new(move |panic_info| {

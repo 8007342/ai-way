@@ -504,6 +504,20 @@ ux_launch_tui() {
     fi
     pj_found "TUI at $tui_bin"
 
+    # Ensure we have a TTY (TUI requires interactive terminal)
+    pj_check "TTY availability"
+    if ! [ -t 0 ] || ! [ -t 1 ]; then
+        log_ux "ERROR" "No TTY available for TUI"
+        pj_missing "TTY (interactive terminal required)"
+        ux_error "TUI requires an interactive terminal"
+        ux_info "Solutions:"
+        ux_info "  • Run from interactive shell"
+        ux_info "  • SSH with: ssh -t user@host"
+        ux_info "  • Toolbox: toolbox run --directory \$PWD ./yollayah.sh"
+        return 1
+    fi
+    pj_result "TTY available (stdin and stdout are terminals)"
+
     # If using daemon mode, ensure conductor is running first
     if conductor_needs_daemon; then
         log_ux "INFO" "Daemon mode enabled, ensuring Conductor is running"
