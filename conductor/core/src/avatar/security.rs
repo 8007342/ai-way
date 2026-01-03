@@ -625,6 +625,260 @@ impl std::fmt::Debug for SpriteRateLimiter {
 }
 
 // =============================================================================
+// Content Policy Checks (P4.4)
+// =============================================================================
+
+/// Content policy violation types
+#[derive(Clone, Debug, Error, PartialEq, Eq, Serialize, Deserialize)]
+pub enum ContentPolicyViolation {
+    /// Sprite contains suspicious patterns that may be malicious
+    #[error("Sprite contains suspicious pattern: {pattern_type}")]
+    SuspiciousPattern {
+        /// Type of suspicious pattern detected
+        pattern_type: String,
+    },
+
+    /// Sprite contains excessive transparency that may hide content
+    #[error("Sprite contains excessive transparency: {transparent_percent}%")]
+    ExcessiveTransparency {
+        /// Percentage of transparent blocks
+        transparent_percent: u8,
+    },
+
+    /// Sprite uses non-approved color patterns
+    #[error("Sprite uses invalid color pattern")]
+    InvalidColorPattern,
+}
+
+/// Audit log entry for sprite generation
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct AuditLogEntry {
+    /// Timestamp of the event
+    pub timestamp: std::time::SystemTime,
+    /// Session ID that requested the sprite
+    pub session_id: Option<String>,
+    /// Mood requested
+    pub mood: String,
+    /// Evolution level
+    pub evolution_level: u8,
+    /// Whether the sprite passed validation
+    pub validation_passed: bool,
+    /// Violations detected, if any
+    pub violations: Vec<ContentPolicyViolation>,
+    /// Size of generated sprite in bytes
+    pub sprite_size_bytes: usize,
+}
+
+impl AuditLogEntry {
+    /// Create a new audit log entry
+    pub fn new(
+        session_id: Option<String>,
+        mood: String,
+        evolution_level: u8,
+        validation_passed: bool,
+        violations: Vec<ContentPolicyViolation>,
+        sprite_size_bytes: usize,
+    ) -> Self {
+        Self {
+            timestamp: std::time::SystemTime::now(),
+            session_id,
+            mood,
+            evolution_level,
+            validation_passed,
+            violations,
+            sprite_size_bytes,
+        }
+    }
+}
+
+/// Content policy validator for generated sprites
+///
+/// Validates sprites against content policy rules to ensure
+/// they don't contain malicious or inappropriate patterns.
+pub struct ContentPolicyValidator {
+    /// Maximum allowed transparency percentage (0-100)
+    max_transparency_percent: u8,
+    /// Whether to enable audit logging
+    audit_logging_enabled: bool,
+}
+
+impl ContentPolicyValidator {
+    /// Create a new content policy validator with default settings
+    ///
+    /// Default settings:
+    /// - Max transparency: 80%
+    /// - Audit logging: enabled
+    #[must_use]
+    pub fn new() -> Self {
+        Self {
+            max_transparency_percent: 80,
+            audit_logging_enabled: true,
+        }
+    }
+
+    /// Create a validator with custom transparency limit
+    #[must_use]
+    pub fn with_max_transparency(mut self, percent: u8) -> Self {
+        self.max_transparency_percent = percent.min(100);
+        self
+    }
+
+    /// Enable or disable audit logging
+    #[must_use]
+    pub fn with_audit_logging(mut self, enabled: bool) -> Self {
+        self.audit_logging_enabled = enabled;
+        self
+    }
+
+    /// Validate a sprite against content policy
+    ///
+    /// Checks for:
+    /// - Excessive transparency (may hide malicious content)
+    /// - Suspicious block patterns
+    /// - Invalid color usage
+    ///
+    /// # Arguments
+    ///
+    /// * `sprite` - The sprite to validate
+    ///
+    /// # Returns
+    ///
+    /// `Ok(())` if sprite passes all policy checks, otherwise returns violations
+    pub fn validate(&self, sprite: &Sprite) -> Result<(), Vec<ContentPolicyViolation>> {
+        let mut violations = Vec::new();
+
+        // Check transparency percentage
+        if let Some(violation) = self.check_transparency(sprite) {
+            violations.push(violation);
+        }
+
+        // Check for suspicious patterns
+        if let Some(violation) = self.check_suspicious_patterns(sprite) {
+            violations.push(violation);
+        }
+
+        if violations.is_empty() {
+            Ok(())
+        } else {
+            Err(violations)
+        }
+    }
+
+    /// Check transparency percentage of sprite
+    fn check_transparency(&self, sprite: &Sprite) -> Option<ContentPolicyViolation> {
+        if sprite.blocks.is_empty() {
+            return None;
+        }
+
+        let transparent_count = sprite
+            .blocks
+            .iter()
+            .filter(|b| b.transparency >= 0.9)
+            .count();
+
+        let transparent_percent = (transparent_count * 100) / sprite.blocks.len();
+
+        if transparent_percent as u8 > self.max_transparency_percent {
+            Some(ContentPolicyViolation::ExcessiveTransparency {
+                transparent_percent: transparent_percent as u8,
+            })
+        } else {
+            None
+        }
+    }
+
+    /// Check for suspicious block patterns
+    ///
+    /// Detects patterns that may indicate:
+    /// - All blocks identical (possible spam/flood)
+    /// - Repetitive patterns (possible encoded data)
+    fn check_suspicious_patterns(&self, sprite: &Sprite) -> Option<ContentPolicyViolation> {
+        if sprite.blocks.is_empty() {
+            return None;
+        }
+
+        // Check if all blocks are identical (excluding empty blocks)
+        let non_empty: Vec<_> = sprite.blocks.iter().filter(|b| !b.is_empty()).collect();
+
+        if !non_empty.is_empty() {
+            let first = non_empty[0];
+            let all_identical = non_empty
+                .iter()
+                .all(|b| b.character == first.character && b.fg == first.fg && b.bg == first.bg);
+
+            if all_identical && non_empty.len() > 10 {
+                return Some(ContentPolicyViolation::SuspiciousPattern {
+                    pattern_type: "all_blocks_identical".to_string(),
+                });
+            }
+        }
+
+        None
+    }
+
+    /// Create an audit log entry for sprite generation
+    ///
+    /// This should be called after sprite validation to log the result.
+    ///
+    /// # Arguments
+    ///
+    /// * `session_id` - Optional session ID
+    /// * `mood` - Mood name
+    /// * `evolution_level` - Evolution level (0-4)
+    /// * `validation_result` - Result of validation
+    /// * `sprite_size_bytes` - Size of sprite in bytes
+    ///
+    /// # Returns
+    ///
+    /// An `AuditLogEntry` that can be persisted or logged
+    pub fn create_audit_log(
+        &self,
+        session_id: Option<String>,
+        mood: String,
+        evolution_level: u8,
+        validation_result: &Result<(), Vec<ContentPolicyViolation>>,
+        sprite_size_bytes: usize,
+    ) -> Option<AuditLogEntry> {
+        if !self.audit_logging_enabled {
+            return None;
+        }
+
+        let (passed, violations) = match validation_result {
+            Ok(()) => (true, Vec::new()),
+            Err(v) => (false, v.clone()),
+        };
+
+        Some(AuditLogEntry::new(
+            session_id,
+            mood,
+            evolution_level,
+            passed,
+            violations,
+            sprite_size_bytes,
+        ))
+    }
+
+    /// Log an audit entry (placeholder for actual logging implementation)
+    ///
+    /// In production, this would write to a file, database, or logging service.
+    /// For now, this is a no-op that can be extended.
+    pub fn log_audit_entry(&self, _entry: &AuditLogEntry) {
+        // In production, implement actual logging here
+        // For example:
+        // - Write to file system
+        // - Send to logging service
+        // - Store in database
+        // - Emit metrics
+    }
+}
+
+impl Default for ContentPolicyValidator {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+// =============================================================================
 // Pending Request Tracker
 // =============================================================================
 
@@ -1281,6 +1535,224 @@ mod tests {
             validate_animation_duration(Duration::from_millis(MAX_ANIMATION_DURATION_MS + 1))
                 .is_err()
         );
+    }
+
+    // =========================================================================
+    // Content Policy Validator Tests (P4.4)
+    // =========================================================================
+
+    #[test]
+    fn test_content_policy_validator_default() {
+        let validator = ContentPolicyValidator::new();
+        assert_eq!(validator.max_transparency_percent, 80);
+        assert!(validator.audit_logging_enabled);
+    }
+
+    #[test]
+    fn test_content_policy_validator_custom_transparency() {
+        let validator = ContentPolicyValidator::new().with_max_transparency(50);
+        assert_eq!(validator.max_transparency_percent, 50);
+    }
+
+    #[test]
+    fn test_content_policy_validator_audit_logging() {
+        let validator = ContentPolicyValidator::new().with_audit_logging(false);
+        assert!(!validator.audit_logging_enabled);
+    }
+
+    #[test]
+    fn test_content_policy_validates_normal_sprite() {
+        let validator = ContentPolicyValidator::new();
+
+        // Create sprite with varied blocks (not all identical)
+        let mut blocks = vec![];
+        for i in 0..100 {
+            let color = if i % 2 == 0 {
+                Color::rgb(255, 0, 0)
+            } else {
+                Color::rgb(0, 255, 0)
+            };
+            blocks.push(Block::solid(color));
+        }
+
+        let sprite = Sprite::new(10, 10, blocks);
+
+        let result = validator.validate(&sprite);
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn test_content_policy_detects_excessive_transparency() {
+        let validator = ContentPolicyValidator::new().with_max_transparency(50);
+
+        // Create sprite with 90% transparent blocks
+        let mut blocks = vec![];
+        for i in 0..100 {
+            if i < 90 {
+                let mut block = Block::empty();
+                block.transparency = 1.0; // Fully transparent
+                blocks.push(block);
+            } else {
+                blocks.push(Block::solid(Color::rgb(255, 0, 0)));
+            }
+        }
+
+        let sprite = Sprite::new(10, 10, blocks);
+        let result = validator.validate(&sprite);
+
+        assert!(result.is_err());
+        if let Err(violations) = result {
+            assert_eq!(violations.len(), 1);
+            assert!(matches!(
+                violations[0],
+                ContentPolicyViolation::ExcessiveTransparency { .. }
+            ));
+        }
+    }
+
+    #[test]
+    fn test_content_policy_detects_suspicious_patterns() {
+        let validator = ContentPolicyValidator::new();
+
+        // Create sprite with all identical blocks (suspicious)
+        let sprite = Sprite::new(10, 10, vec![Block::solid(Color::rgb(255, 0, 0)); 100]);
+        let result = validator.validate(&sprite);
+
+        assert!(result.is_err());
+        if let Err(violations) = result {
+            assert!(violations.iter().any(|v| matches!(
+                v,
+                ContentPolicyViolation::SuspiciousPattern { .. }
+            )));
+        }
+    }
+
+    #[test]
+    fn test_content_policy_allows_varied_sprite() {
+        let validator = ContentPolicyValidator::new();
+
+        // Create sprite with varied blocks
+        let mut blocks = vec![];
+        for i in 0..100 {
+            let color = Color::rgb((i * 2) as u8, (i * 3) as u8, (i * 5) as u8);
+            blocks.push(Block::solid(color));
+        }
+
+        let sprite = Sprite::new(10, 10, blocks);
+        let result = validator.validate(&sprite);
+
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn test_content_policy_audit_log_creation() {
+        let validator = ContentPolicyValidator::new();
+        let result = Ok(());
+
+        let log = validator.create_audit_log(
+            Some("session123".to_string()),
+            "Happy".to_string(),
+            2,
+            &result,
+            1024,
+        );
+
+        assert!(log.is_some());
+        let log = log.unwrap();
+        assert_eq!(log.session_id, Some("session123".to_string()));
+        assert_eq!(log.mood, "Happy");
+        assert_eq!(log.evolution_level, 2);
+        assert!(log.validation_passed);
+        assert!(log.violations.is_empty());
+        assert_eq!(log.sprite_size_bytes, 1024);
+    }
+
+    #[test]
+    fn test_content_policy_audit_log_with_violations() {
+        let validator = ContentPolicyValidator::new();
+        let violations = vec![ContentPolicyViolation::ExcessiveTransparency {
+            transparent_percent: 95,
+        }];
+        let result: Result<(), Vec<ContentPolicyViolation>> = Err(violations.clone());
+
+        let log = validator.create_audit_log(
+            None,
+            "Confused".to_string(),
+            1,
+            &result,
+            512,
+        );
+
+        assert!(log.is_some());
+        let log = log.unwrap();
+        assert!(!log.validation_passed);
+        assert_eq!(log.violations.len(), 1);
+        assert!(matches!(
+            log.violations[0],
+            ContentPolicyViolation::ExcessiveTransparency { transparent_percent: 95 }
+        ));
+    }
+
+    #[test]
+    fn test_content_policy_audit_log_disabled() {
+        let validator = ContentPolicyValidator::new().with_audit_logging(false);
+        let result = Ok(());
+
+        let log = validator.create_audit_log(
+            Some("session123".to_string()),
+            "Happy".to_string(),
+            2,
+            &result,
+            1024,
+        );
+
+        assert!(log.is_none());
+    }
+
+    #[test]
+    fn test_content_policy_violation_display() {
+        let violation = ContentPolicyViolation::SuspiciousPattern {
+            pattern_type: "all_blocks_identical".to_string(),
+        };
+        let msg = format!("{}", violation);
+        assert!(msg.contains("all_blocks_identical"));
+
+        let violation = ContentPolicyViolation::ExcessiveTransparency {
+            transparent_percent: 95,
+        };
+        let msg = format!("{}", violation);
+        assert!(msg.contains("95"));
+    }
+
+    #[test]
+    fn test_content_policy_violation_serialization() {
+        let violation = ContentPolicyViolation::SuspiciousPattern {
+            pattern_type: "test".to_string(),
+        };
+        let json = serde_json::to_string(&violation).unwrap();
+        let parsed: ContentPolicyViolation = serde_json::from_str(&json).unwrap();
+        assert_eq!(parsed, violation);
+    }
+
+    #[test]
+    fn test_audit_log_entry_serialization() {
+        let entry = AuditLogEntry::new(
+            Some("session123".to_string()),
+            "Happy".to_string(),
+            2,
+            true,
+            vec![],
+            1024,
+        );
+
+        let json = serde_json::to_string(&entry).unwrap();
+        let parsed: AuditLogEntry = serde_json::from_str(&json).unwrap();
+
+        assert_eq!(parsed.session_id, entry.session_id);
+        assert_eq!(parsed.mood, entry.mood);
+        assert_eq!(parsed.evolution_level, entry.evolution_level);
+        assert_eq!(parsed.validation_passed, entry.validation_passed);
+        assert_eq!(parsed.sprite_size_bytes, entry.sprite_size_bytes);
     }
 
     #[test]

@@ -140,11 +140,13 @@ ollama_ensure_running() {
     pj_result "Ollama not responding, will start it"
 
     # Start Ollama serve in background
+    # Set LD_LIBRARY_PATH to help Ollama find CUDA libraries on Fedora/Silverblue
+    # See TODO-ollama-gpu.md for details
     pj_cmd "ollama serve (background)"
-    ollama serve > /dev/null 2>&1 &
+    LD_LIBRARY_PATH="/usr/lib:/usr/lib64:${LD_LIBRARY_PATH:-}" ollama serve > /dev/null 2>&1 &
     local pid=$!
     WE_STARTED_OLLAMA=true
-    log_ollama "INFO" "Started ollama serve (PID: $pid)"
+    log_ollama "INFO" "Started ollama serve (PID: $pid) with CUDA library path"
     pj_result "Started ollama serve (PID: $pid)"
 
     # Wait for it to come up
