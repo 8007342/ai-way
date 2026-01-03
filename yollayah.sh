@@ -148,41 +148,41 @@ _toolbox_auto_enter "$@" || _toolbox_create_and_enter "$@"
 # ============================================================================
 
 # Core utilities (paths, helper functions) - must be first
-source "${SCRIPT_DIR}/lib/common.sh"
+source "${SCRIPT_DIR}/yollayah/lib/common.sh"
 
 # Logging bus - loaded early so all modules can log
-# Logs go to .logs/ for PJ debugging, not visible to AJ
-source "${SCRIPT_DIR}/lib/logging/init.sh"
+# Logs go to workdir/logs/ for PJ debugging, not visible to AJ
+source "${SCRIPT_DIR}/yollayah/lib/logging/init.sh"
 
 # UX output - loaded before modules that display to AJ
 # All user-facing output goes through ux_* functions
-source "${SCRIPT_DIR}/lib/ux/output.sh"
+source "${SCRIPT_DIR}/yollayah/lib/ux/output.sh"
 
 # Integrity verification - loaded early, runs environment sanitization immediately
 # This cannot be bypassed - environment.sh always runs
-source "${SCRIPT_DIR}/lib/integrity/init.sh"
+source "${SCRIPT_DIR}/yollayah/lib/integrity/init.sh"
 
 # Ollama management
-source "${SCRIPT_DIR}/lib/ollama/service.sh"
-source "${SCRIPT_DIR}/lib/ollama/lifecycle.sh"
+source "${SCRIPT_DIR}/yollayah/lib/ollama/service.sh"
+source "${SCRIPT_DIR}/yollayah/lib/ollama/lifecycle.sh"
 
 # Agent repository
-source "${SCRIPT_DIR}/lib/agents/sync.sh"
+source "${SCRIPT_DIR}/yollayah/lib/agents/sync.sh"
 
 # Yollayah personality
-source "${SCRIPT_DIR}/lib/yollayah/personality.sh"
+source "${SCRIPT_DIR}/yollayah/lib/yollayah/personality.sh"
 
 # Yollayah setup (first-run, dependency installation)
-source "${SCRIPT_DIR}/lib/yollayah/setup.sh"
+source "${SCRIPT_DIR}/yollayah/lib/yollayah/setup.sh"
 
 # Routing module (specialist agents, task management)
-source "${SCRIPT_DIR}/lib/routing/init.sh"
+source "${SCRIPT_DIR}/yollayah/lib/routing/init.sh"
 
 # User experience
-source "${SCRIPT_DIR}/lib/ux/terminal.sh"
+source "${SCRIPT_DIR}/yollayah/lib/ux/terminal.sh"
 
 # User customizations (privacy-first, mostly placeholders)
-source "${SCRIPT_DIR}/lib/user/init.sh"
+source "${SCRIPT_DIR}/yollayah/lib/user/init.sh"
 
 # ============================================================================
 # Conductor Daemon Management (Phase 5.2)

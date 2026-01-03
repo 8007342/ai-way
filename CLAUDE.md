@@ -20,25 +20,47 @@ This file provides guidance to Claude Code (claude.ai/code) when working with ai
 
 ```
 ai-way/
-├── agents/           # AI agent profiles and Constitution (core component)
-├── knowledge/        # Immutable knowledge base (methodology, principles, team)
-├── progress/         # Iterative progress tracking (TODOs, bugs, work logs)
-├── facts/            # Project-specific knowledge (design docs, constraints)
-├── conductor/        # Conductor Rust code
-├── tui/              # TUI Rust code
-├── lib/              # Bash modules
-├── scripts/          # Build and setup scripts
-├── tests/            # Integration tests
-├── docs/             # Additional documentation
-├── yollayah.sh       # Single entry point
-├── yollayah-build-log.sh  # Verbose build diagnostics
-├── README.md         # Comprehensive project overview
-├── CLAUDE.md         # This file
-├── LICENSE           # AGPL-3.0
-└── Cargo.toml        # Workspace manifest
+├── LICENSE              # AGPL-3.0
+├── .gitignore           # Git ignore rules
+├── README.md            # Project documentation
+├── yollayah.sh          # SINGLE POINT OF ENTRY (wrapper script)
+├── yollayah/            # EVERYTHING ELSE GOES HERE
+│   ├── conductor/       # Conductor Rust project (with Cargo.toml)
+│   ├── core/            # Core code components
+│   │   └── surfaces/    # User-facing interfaces
+│   │       ├── tui/     # TUI Rust project (with Cargo.toml)
+│   │       │   └── TODO-TUI.md
+│   │       └── bash/    # Bash fallback surface
+│   │           ├── TODO-bash-minimal-fallback.md
+│   │           └── TODO-move-bash-fallback-to-bash-module.md
+│   ├── shared/          # Shared components across surfaces
+│   │   └── yollayah/    # Yollayah-specific shared resources
+│   │       ├── proto/   # Protobufs, animations, graphics
+│   │       │   └── sprites/
+│   │       │       └── TODO-sprites-init.md
+│   │       ├── mood/    # Mood system for avatar animations
+│   │       │   └── TODO-coherent-evolving-mood-system-init.md
+│   │       └── cache/   # Animation caching
+│   │           └── TODO-animation-cache-init.md
+│   ├── lib/             # Bash modules
+│   ├── scripts/         # Build and setup scripts
+│   └── tests/           # Integration tests
+├── knowledge/           # Immutable methodology knowledge
+├── agents/              # AI agent profiles, Constitution (foreign tracked)
+├── workdir/             # Runtime generated files (logs, cache)
+│   ├── README.md        # "You can safely delete" message
+│   └── logs/            # Runtime logs
+├── progress/            # TODO-xxx and DONE-xxx tracking files (flat)
+└── facts/               # Project-specific knowledge
+    └── design/          # Design documents
 ```
 
-**Note**: Code is currently at root level - src/ reorganization proposed but deferred to avoid breaking builds.
+**Key Principles**:
+- **Root is clean**: Only entry point and top-level organization dirs
+- **Rust is NOT top-level**: Rust projects live in `yollayah/conductor/` and `yollayah/core/surfaces/tui/`
+- **Cargo files in components**: Each Rust project has its own Cargo.toml, NOT at root
+- **progress/ is flat**: Only TODO-xxx.md or DONE-xxx.md files, no subdirs
+- **TODO files WITH code**: Component-specific TODOs live with their components
 
 ---
 
@@ -79,16 +101,13 @@ All ai-way work serves AJ (defined in `agents/personas/average-joe.md`):
 ./yollayah.sh --test       # Fast startup for testing (qwen2:0.5b model)
 
 # Build diagnostics
-./yollayah-build-log.sh --all         # Full workspace with verbose logs
-./yollayah-build-log.sh --tui         # TUI only
-./yollayah-build-log.sh --conductor   # Conductor only
-./yollayah-build-log.sh --surfaces    # All surfaces (currently just TUI)
+./yollayah/yollayah-build-logs.sh --all         # Full workspace with verbose logs
+./yollayah/yollayah-build-logs.sh --tui         # TUI only
+./yollayah/yollayah-build-logs.sh --conductor   # Conductor only
 
 # Manual Rust builds
-cargo build --workspace
-cargo test --workspace
-cargo build --package yollayah-tui --release
-cargo build --package conductor-core --release
+cd yollayah/core/surfaces/tui && cargo build --release
+cd yollayah/conductor && cargo build --release
 ```
 
 ### Test Mode
@@ -120,6 +139,17 @@ toolbox rm ai-way          # Remove container (clean uninstall)
 ---
 
 ## Architecture
+
+### yollayah/ Directory Organization
+
+- **conductor/**: Independent Rust project, owns conversation state
+- **core/surfaces/**: User interfaces (TUI, bash fallback)
+  - **tui/**: Ratatui-based TUI, async, responsive
+  - **bash/**: Fallback interface when TUI fails
+- **shared/yollayah/**: Shared resources (proto, mood, cache)
+- **lib/**: Bash modules sourced by yollayah.sh
+- **scripts/**: Build and setup utilities
+- **tests/**: Integration and architectural enforcement tests
 
 ### Async/Non-Blocking Philosophy
 
@@ -158,6 +188,7 @@ toolbox rm ai-way          # Remove container (clean uninstall)
 - Mostly static, changes are rare
 - High-trust updates only (Architect role)
 - Defines "how we work"
+- De-yollayah-ized, de-ai-way-ized (general methodology)
 
 **Structure**:
 ```
@@ -183,27 +214,29 @@ knowledge/
 ```
 facts/
 └── design/           # Design documents and constraints
-    └── yollayah-avatar-constraints.md  # Avatar design specifications
+    └── yollayah-avatar-constraints.md
 ```
 
 ### `progress/` - Iterative Progress
 
 **Characteristics**:
 - Highly dynamic, changes every sprint/session
-- Tracks current state of work
+- **FLAT STRUCTURE**: Only TODO-xxx.md or DONE-xxx.md files
+- No subdirectories like "active", "completed", "bugs"
+- All tracking files at top level
 
-**Structure**:
-```
-progress/
-├── TODO-AI-WAY.md       # Main project tracker (will become DONE-AI-WAY.md!)
-├── active/              # Active TODOs, EPICs, Stories
-├── bugs/                # Bug tracking
-├── completed/           # Completed work (TODO → DONE renames)
-├── audits/              # Performance and architecture audits
-├── design/              # Design explorations
-├── odysseys/            # Long-term architectural journeys
-└── work-logs/           # Session summaries
-```
+**Naming Conventions**:
+- `TODO-xxx.md` - Active work
+- `DONE-xxx.md` - Completed work (renamed from TODO-xxx.md)
+- `EPIC-xxx.md`, `STORY-xxx.md`, `BUG-xxx.md` - Specific types
+- `PERFORMANCE-AUDIT-xxx.md`, `ODYSSEY-xxx.md` - Analysis
+
+**Component TODOs**: Some TODO files live WITH their components:
+- `yollayah/core/surfaces/tui/TODO-TUI.md` - TUI central tracking
+- `yollayah/core/surfaces/bash/TODO-bash-minimal-fallback.md`
+- `yollayah/shared/yollayah/proto/sprites/TODO-sprites-init.md`
+- `yollayah/shared/yollayah/mood/TODO-coherent-evolving-mood-system-init.md`
+- `yollayah/shared/yollayah/cache/TODO-animation-cache-init.md`
 
 ---
 
@@ -218,8 +251,8 @@ We use an iterative, tracked approach:
 
 **The Sweet Easter Egg** 🎉:
 When a `TODO-xyz` is 100% complete:
-1. Move to `progress/completed/`
-2. Rename to `DONE-xyz`
+1. Rename to `DONE-xyz` IN PLACE
+2. Update references in related files
 
 **Ultimate Goal**: `TODO-AI-WAY.md` → `DONE-AI-WAY.md` (when ai-way ships!)
 
@@ -249,7 +282,7 @@ When you need expertise, reference the appropriate team:
 - ✅ No blocking I/O in async code
 - ✅ All workspace tests pass
 
-**Tests**: `tests/architectural-enforcement/`
+**Tests**: `yollayah/tests/architectural-enforcement/`
 
 **Skip for .md-only changes** (performance optimization)
 
@@ -275,19 +308,23 @@ Co-Authored-By: Claude Sonnet 4.5 <noreply@anthropic.com>"
 
 ### Create a New TODO
 
+For progress tracking:
 ```bash
-# Create in progress/active/
-vim progress/active/TODO-###-description.md
+# Create in progress/ (flat)
+vim progress/TODO-###-description.md
+```
 
-# Follow TODO template (see methodology/)
-# Reference from TODO-AI-WAY.md
+For component tracking:
+```bash
+# Create WITH the component
+vim yollayah/core/surfaces/tui/TODO-new-feature.md
 ```
 
 ### Complete a TODO
 
 ```bash
-# When 100% complete:
-git mv progress/active/TODO-xyz.md progress/completed/DONE-xyz.md
+# When 100% complete, rename IN PLACE:
+git mv progress/TODO-xyz.md progress/DONE-xyz.md
 git commit -m "Complete xyz - rename TODO to DONE 🎉"
 ```
 
