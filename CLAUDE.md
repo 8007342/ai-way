@@ -23,11 +23,13 @@ ai-way/
 ├── agents/           # AI agent profiles and Constitution (core component)
 ├── knowledge/        # Immutable knowledge base (methodology, principles, team)
 ├── progress/         # Iterative progress tracking (TODOs, bugs, work logs)
-├── src/              # All source code (FUTURE - not yet moved)
-│   ├── conductor/    # Conductor Rust code
-│   ├── tui/          # TUI Rust code
-│   ├── lib/          # Bash modules
-│   └── tests/        # Integration tests
+├── facts/            # Project-specific knowledge (design docs, constraints)
+├── conductor/        # Conductor Rust code
+├── tui/              # TUI Rust code
+├── lib/              # Bash modules
+├── scripts/          # Build and setup scripts
+├── tests/            # Integration tests
+├── docs/             # Additional documentation
 ├── yollayah.sh       # Single entry point
 ├── yollayah-build-log.sh  # Verbose build diagnostics
 ├── README.md         # Comprehensive project overview
@@ -36,7 +38,7 @@ ai-way/
 └── Cargo.toml        # Workspace manifest
 ```
 
-**Note**: Code is still at root level (conductor/, tui/, lib/, tests/) - future reorganization will move to src/.
+**Note**: Code is currently at root level - src/ reorganization proposed but deferred to avoid breaking builds.
 
 ---
 
@@ -168,6 +170,20 @@ knowledge/
 ├── team/             # Agent specializations and associations
 ├── platform/         # Platform-specific guides (TOOLBOX.md)
 └── troubleshooting/  # Operational guides
+```
+
+### `facts/` - Project-Specific Knowledge
+
+**Characteristics**:
+- Domain-specific to ai-way (not general methodology)
+- Design constraints, technical decisions
+- Can change more frequently than knowledge/
+
+**Structure**:
+```
+facts/
+└── design/           # Design documents and constraints
+    └── yollayah-avatar-constraints.md  # Avatar design specifications
 ```
 
 ### `progress/` - Iterative Progress
