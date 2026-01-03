@@ -211,7 +211,9 @@ impl DaemonServer {
                     let mut c = conductor_for_streaming.lock().await;
                     c.poll_streaming().await;
                 }
-                tokio::time::sleep(tokio::time::Duration::from_millis(10)).await;
+                // Reduced from 10ms to 1ms for faster streaming responsiveness
+                // This reduces token batching latency from 10ms to 1ms
+                tokio::time::sleep(tokio::time::Duration::from_millis(1)).await;
             }
         });
 

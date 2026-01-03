@@ -108,7 +108,8 @@ impl Compositor {
         self.output.reset();
 
         // Render layers in z-order (back to front)
-        for &id in &self.render_order.clone() {
+        // No need to clone - we can iterate by reference
+        for &id in &self.render_order {
             if let Some(layer) = self.layers.get(&id) {
                 if layer.visible {
                     Self::blit_layer(&mut self.output, &self.area, layer);

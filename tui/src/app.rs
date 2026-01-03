@@ -844,6 +844,8 @@ impl App {
                 for x in 0..area.width.min(output.area.width) {
                     let idx = output.index_of(x, y);
                     if idx < output.content.len() {
+                        // TODO: Cell cloning is expensive (10k+ per frame)
+                        // Consider using bulk buffer operations or dirty tracking
                         buf[(x, y)] = output.content[idx].clone();
                     }
                 }

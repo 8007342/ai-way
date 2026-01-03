@@ -1387,9 +1387,10 @@ impl<B: LlmBackend + 'static> Conductor<B> {
     /// For backward compatibility, it also sends to the `legacy_tx` if present.
     async fn send(&self, msg: ConductorMessage) {
         // If we have a legacy single-surface channel, use it
+        // Use try_send to avoid blocking if channel is full (prevents streaming stalls)
         if let Some(ref tx) = self.legacy_tx {
-            if let Err(e) = tx.send(msg.clone()).await {
-                tracing::warn!("Failed to send message to legacy surface: {}", e);
+            if let Err(e) = tx.try_send(msg.clone()) {
+                tracing::warn!("Failed to send message to legacy surface (channel may be full): {}", e);
             }
         }
 
