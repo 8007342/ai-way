@@ -321,8 +321,11 @@ run_smoke_tests() {
 analyze_log() {
     log_section "Build Analysis"
 
-    local error_count=$(grep -c "error:" "$LOG_FILE" 2>/dev/null || echo "0")
-    local warning_count=$(grep -c "warning:" "$LOG_FILE" 2>/dev/null || echo "0")
+    local error_count=$(grep -c "error:" "$LOG_FILE" 2>/dev/null || true)
+    local warning_count=$(grep -c "warning:" "$LOG_FILE" 2>/dev/null || true)
+    # grep -c returns 0 when no matches, but exit code 1, so we use || true to ignore exit code
+    error_count=${error_count:-0}
+    warning_count=${warning_count:-0}
 
     echo "" | tee -a "$LOG_FILE"
     log "Error count: $error_count"
