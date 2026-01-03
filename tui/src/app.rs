@@ -829,19 +829,10 @@ impl App {
 
         terminal.draw(|frame| {
             let output = self.compositor.composite();
-            let area = frame.area();
-            let buf = frame.buffer_mut();
 
-            for y in 0..area.height.min(output.area.height) {
-                for x in 0..area.width.min(output.area.width) {
-                    let idx = output.index_of(x, y);
-                    if idx < output.content.len() {
-                        // TODO: Cell cloning is expensive (10k+ per frame)
-                        // Consider using bulk buffer operations or dirty tracking
-                        buf[(x, y)] = output.content[idx].clone();
-                    }
-                }
-            }
+            // Use Ratatui's Buffer::merge() instead of cell-by-cell cloning
+            // This leverages the framework's bulk operations and avoids 10k+ Cell::clone() calls
+            frame.buffer_mut().merge(output);
         })?;
 
         Ok(())
