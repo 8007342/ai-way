@@ -1,8 +1,45 @@
 # ai-way
 
-> **Work in Progress**: This project is under active development; and at a very early unstable-ish state. Features may change, and documentation is being updated regularly.
+Privacy-first local AI appliance. Your AI, your data, your rules.
 
-Privacy-first local AI runtime. Your AI, your data, your rules.
+---
+
+## ⚠️ EXPERIMENTAL SOFTWARE - USE AT YOUR OWN RISK
+
+This is early-stage development software - breaky-breaky stuff!
+
+**Expect:**
+- 🔥 **Breaking changes** without notice
+- 💥 **Bugs and crashes** - this is unstable
+- 🐌 **Performance issues** during ongoing optimization
+- 🚧 **Incomplete features** - work in progress
+- 📝 **Evolving documentation** - updated regularly
+
+**NOT RECOMMENDED FOR PRODUCTION USE**
+
+**If you're brave enough to try it, welcome aboard!** We appreciate bug reports and contributions.
+
+---
+
+> **Current Phase**: Foundation (80% complete) - Local AI chat with privacy, zero configuration
+
+## Prerequisites
+
+**Platform**:
+- **Fedora Silverblue** (recommended - tested and developed on this platform)
+- **toolbox** (preinstalled on Silverblue)
+- Other Linux distros supported but not as extensively tested
+
+**Required**:
+- bash (4.0+)
+- curl
+- git
+
+**Auto-installed by yollayah.sh**:
+- Ollama (AI model runtime)
+- Rust/Cargo (for TUI)
+
+---
 
 ## Recommended Setup (Fedora Silverblue)
 
@@ -24,7 +61,7 @@ Subsequent runs take ~5 seconds. Everything is automatic - no manual setup requi
 
 **Benefits**: Complete isolation, clean uninstall (`toolbox rm ai-way`), GPU passthrough works automatically.
 
-See [TOOLBOX.md](TOOLBOX.md) for details and troubleshooting.
+See [`knowledge/platform/TOOLBOX.md`](knowledge/platform/TOOLBOX.md) for details and troubleshooting.
 
 ## Quick Start (Other Systems)
 
@@ -136,6 +173,45 @@ Yollayah has a family of specialist agents they consult for deep expertise:
 
 When you ask something complex, Yollayah might say: "Hold up - let me check with my cousin Rita, she's the security expert in the family..."
 
+## Project Structure
+
+ai-way is organized for clarity and discoverability:
+
+```
+ai-way/
+├── agents/                  # AI agent profiles and Constitution (discoverable for AJ→PJ journey)
+├── knowledge/               # Immutable knowledge base (methodology, principles, team structure)
+│   ├── project/             # AI-WAY.md - project philosophy
+│   ├── methodology/         # TODO-driven development, DONE easter egg
+│   ├── principles/          # Async efficiency, data flow patterns
+│   ├── requirements/        # TUI/Conductor separation
+│   ├── anti-patterns/       # Forbidden practices (sleep, blocking I/O)
+│   ├── team/                # Agent specializations
+│   ├── platform/            # TOOLBOX.md and platform guides
+│   └── troubleshooting/     # Common issues and solutions
+├── progress/                # Iterative progress tracking (dynamic, changes every sprint)
+│   ├── TODO-AI-WAY.md       # Main project tracker (will become DONE-AI-WAY.md when we ship!)
+│   ├── active/              # Active TODOs, EPICs, Stories
+│   ├── bugs/                # Bug tracking
+│   ├── completed/           # Completed work (TODO → DONE renames)
+│   ├── audits/              # Performance and architecture audits
+│   ├── design/              # Design explorations
+│   └── work-logs/           # Session summaries
+├── conductor/               # Conductor Rust code (orchestration engine)
+├── tui/                     # TUI Rust code (animated axolotl interface)
+├── lib/                     # Bash modules for yollayah.sh
+├── tests/                   # Integration tests (architectural enforcement)
+├── yollayah.sh              # Single entry point (zero configuration)
+├── yollayah-build-log.sh    # Verbose build diagnostics
+└── README.md                # This file
+```
+
+**The Sweet Easter Egg** 🎉: When a `TODO-xyz` is 100% complete, it's renamed to `DONE-xyz` and moved to `progress/completed/`. Ultimate goal: `TODO-AI-WAY.md` → `DONE-AI-WAY.md` (when ai-way ships!)
+
+**See**: [`knowledge/KNOWLEDGE.md`](knowledge/KNOWLEDGE.md) for knowledge base details
+
+---
+
 ## Architecture
 
 ```
@@ -153,7 +229,8 @@ When you ask something complex, Yollayah might say: "Hold up - let me check with
 │  ├── ux/          Terminal output, TUI launcher                 │
 │  └── yollayah/    Personality, setup, modelfile generation      │
 ├─────────────────────────────────────────────────────────────────┤
-│  tui/             Rust TUI with animated axolotl avatar         │
+│  conductor/       Async orchestration engine (Rust)             │
+│  tui/             Terminal UI with animated axolotl (Rust)      │
 │  agents/          Conductor + specialist profiles (synced)      │
 │  .logs/           Ephemeral logs (deleted on shutdown)          │
 │  .integrity/      Checksum manifest for verification            │
