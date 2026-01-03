@@ -1,0 +1,346 @@
+================================================================================
+YOLLAYAH LOADING SCREEN - ASCII MOCKUPS
+================================================================================
+
+All three design options shown with terminal examples
+
+================================================================================
+OPTION A: SIMPLE TEXT SPINNER (Minimal)
+================================================================================
+
+Visual on 80x24 terminal:
+
+┌──────────────────────────────────────────────────────────────────────────────┐
+│                                                                              │
+│                                                                              │
+│                                                                              │
+│                          Connecting to Yollayah...                          │
+│                                                                              │
+│                                 ⠙ Loading                                   │
+│                                                                              │
+│                                                                              │
+│                          Press Ctrl+C to cancel                             │
+│                                                                              │
+│                                                                              │
+└──────────────────────────────────────────────────────────────────────────────┘
+
+Animation Sequence (10fps - 100ms per frame):
+
+Frame 1:  ⠙ Loading
+Frame 2:  ⠹ Loading
+Frame 3:  ⠸ Loading
+Frame 4:  ⠼ Loading
+Frame 5:  ⠴ Loading
+Frame 6:  ⠦ Loading
+Frame 7:  ⠧ Loading
+Frame 8:  ⠇ Loading
+(repeats 0-1)
+
+Status Messages (2 second rotation):
+
+0-2s:   "Connecting to Yollayah..."
+2-4s:   "Warming up..."
+4-6s:   "Almost ready!"
+6-8s:   (repeats if still loading)
+
+Text Color (1000ms breathing cycle):
+  At t=0ms:    DIM_GRAY (#646464)
+  At t=250ms:  (interpolating)
+  At t=500ms:  YOLLAYAH_MAGENTA (#FF8CFF) - BRIGHTEST
+  At t=750ms:  (interpolating)
+  At t=1000ms: DIM_GRAY (repeats)
+
+Implementation: 40 lines of Rust
+Complexity: 1.5 hours
+Delight Factor: 6/10
+
+================================================================================
+OPTION B: PULSING AXOLOTL HEAD (RECOMMENDED)
+================================================================================
+
+Visual on 80x24 terminal:
+
+┌──────────────────────────────────────────────────────────────────────────────┐
+│                                                                              │
+│                                                                              │
+│                                                                              │
+│                                                                              │
+│                                   Just starting...                          │
+│                                                                              │
+│                                     TLLT                                    │
+│                                     BooBL  ← axolotl sprite (6x2)           │
+│                                                                              │
+│                                                                              │
+│                             Press Ctrl+C to cancel                          │
+│                                                                              │
+│                                                                              │
+└──────────────────────────────────────────────────────────────────────────────┘
+
+
+Sprite Details (6x2 character grid):
+
+Row 1: "TLLT"
+       T = top half block (▀) in AXOLOTL_BODY color
+       L = lower half block (▄) in AXOLOTL_BODY color
+       (represents axolotl head/body)
+
+Row 2: "BooBL"
+       B = full block (█) in AXOLOTL_BODY color
+       o = letter 'o' in AXOLOTL_EYES color (open eye)
+       o = letter 'o' in AXOLOTL_EYES color (open eye)
+       B = full block (█) in AXOLOTL_BODY color
+       L = lower half block (▄) in AXOLOTL_BODY color
+
+Animation Sequence (1 second cycle, 100ms per frame):
+
+FRAME 1 (0-333ms): AWAKE STATE
+  Row 1: TLLT
+  Row 2: BooBL
+  Eyes:   oo (open)
+  Gills:  AXOLOTL_GILLS (#FF7F7F) - DIM PINK
+  Text Color: DIM_GRAY (#646464)
+  Message: "Just starting..."
+
+FRAME 2 (333-666ms): ALERT/HAPPY STATE
+  Row 1: TLLT
+  Row 2: B^^BL
+  Eyes:   ^^ (happy/alert)
+  Gills:  AXOLOTL_GILLS_HIGHLIGHT (#FFA0A0) - BRIGHT CORAL
+  Text Color: YOLLAYAH_MAGENTA (#FF8CFF)
+  Message: "Just starting..." (held)
+
+FRAME 3 (666-1000ms): BACK TO FRAME 1
+  (continuous loop)
+
+
+Status Message Rotation (every 2 seconds):
+
+0-2s:   "Just starting..."
+2-4s:   "Warming up..."
+4-6s:   "Almost there..."
+6-8s:   (repeats if still loading)
+
+
+Color Breathing Detail:
+
+Gills oscillate using breathing_color(base, bright, cycle_ms, elapsed):
+
+At t=0ms:    AXOLOTL_GILLS = RGB(255, 127, 127) - dim coral
+At t=250ms:  interpolating...
+At t=500ms:  AXOLOTL_GILLS_HIGHLIGHT = RGB(255, 160, 160) - bright coral
+At t=750ms:  interpolating...
+At t=1000ms: back to dim coral (repeats)
+
+Text color follows the same rhythm:
+
+At t=0ms:    DIM_GRAY = RGB(100, 100, 100)
+At t=500ms:  YOLLAYAH_MAGENTA = RGB(255, 140, 255)
+At t=1000ms: back to dim gray
+
+
+Full Animation Timeline (3 seconds):
+
+t=0s:    Frame 1 starts, eyes: oo, gills: dim, text: dim
+t=250ms: Color breathing midpoint, eyes still oo
+t=333ms: Frame 2 begins, eyes: ^^, gills: bright, text: bright
+t=500ms: Frame 2 peak brightness
+t=666ms: Frame 3 begins, eyes: .., gills: back to dim
+t=1000ms: Frame 1 again (cycle repeats)
+t=2000ms: Status message changes to "Warming up..."
+t=4000ms: Status message changes to "Almost there!"
+
+
+Variant: Different Eye Expressions Per Frame
+
+Frame 1: oo (regular open eyes)
+Frame 2: ^^ (happy/alert eyes)
+Frame 3: .. (curious/squinting eyes)
+
+This adds life and personality without changing sprite complexity.
+
+
+Implementation Notes:
+
+Sprite Construction:
+  palette = vec![
+    ('T', '▀', AXOLOTL_BODY),
+    ('L', '▄', AXOLOTL_BODY),
+    ('B', '█', AXOLOTL_BODY),
+    ('o', 'o', AXOLOTL_EYES),
+    ('^', '^', AXOLOTL_EYES),
+    ('.', '.', AXOLOTL_EYES),
+  ];
+
+Frame Building:
+  frame1 = build_frame(&[" TLLT ", " BooBL"], palette, 333);
+  frame2 = build_frame(&[" TLLT ", " B^^BL"], palette, 333);
+  frame3 = build_frame(&[" TLLT ", " Bo.BL"], palette, 333);
+
+Rendering:
+  1. Calculate gills color: breathing_color(GILLS, GILLS_HIGHLIGHT, 1000, elapsed)
+  2. Calculate text color: breathing_color(DIM_GRAY, MAGENTA, 1000, elapsed)
+  3. Apply colors to sprite cells
+  4. Center sprite on screen
+  5. Draw status message below
+  6. Draw "Press Ctrl+C" footer
+
+
+Implementation: 150-200 lines of Rust
+Complexity: 2 hours
+Delight Factor: 8/10
+
+Key Advantages:
+  - Reuses existing sprite infrastructure
+  - Breathing metaphor (gills = AI waking)
+  - Character personality visible immediately
+  - Works on all terminal sizes
+  - Can be upgraded to Option C later
+
+================================================================================
+OPTION C: SWIMMING PROGRESS BAR (Fancy)
+================================================================================
+
+Visual on 80x24 terminal:
+
+┌──────────────────────────────────────────────────────────────────────────────┐
+│                                                                              │
+│                       Warming up your AI friend...                          │
+│                                                                              │
+│                                                                              │
+│                    [░░░░░ ⚬ ░░░░░░░]  25%                                   │
+│                         (axolotl swimming position)                         │
+│                                                                              │
+│                                                                              │
+│              ✓ Connecting to Conductor...                                   │
+│              ⟳ Initializing model...                                        │
+│              ⏳ Press Ctrl+C to cancel                                       │
+│                                                                              │
+│                                                                              │
+└──────────────────────────────────────────────────────────────────────────────┘
+
+
+Full Progress Bar Example (at 65%):
+
+┌─────────────────────────────────────────────────┐
+│  Warming up your AI friend...                   │
+│                                                 │
+│  [████████████ ⚬ ░░░░░░░░]  65%                │
+│     (axolotl positioned at 65%)                 │
+│                                                 │
+│  ✓ Connecting to Conductor...    (complete)    │
+│  ⟳ Initializing model...         (active)      │
+│  ⏳ Finalizing startup...         (pending)     │
+│                                                 │
+│  Press Ctrl+C to cancel                        │
+└─────────────────────────────────────────────────┘
+
+
+Three Loading Phases:
+
+Phase 1: 0-30% - "Connecting to Conductor..."
+  Status: ⟳ (spinning icon - indicates active work)
+  Bar: [░░░░░░░░░░░░░░░░░░░░ ⚬ ]
+  Character: ⚬ (axolotl) at left side
+  Gills: fluttering (animation)
+
+Phase 2: 30-70% - "Initializing model..."
+  Status: ⟳ (spinning icon)
+  Bar: [████████░░░░░ ⚬ ░░░░░░░░]
+  Character: ⚬ (axolotl) moving right
+  Gills: still fluttering
+  Eyes: might change expressions (more animation)
+
+Phase 3: 70-100% - "Finalizing startup..."
+  Status: ✓ or ⏳
+  Bar: [████████████████░░░░░░░░░░░ ⚬ ]
+  Character: ⚬ (axolotl) near right edge
+  Gills: faster fluttering (excitement)
+  Eyes: happy expressions
+
+
+Sub-frame Animations (Within Each Phase):
+
+While in Phase 2 at 50%, axolotl gills flutter every 200ms:
+  t=0ms:   Frame A - gills at normal position
+  t=200ms: Frame B - gills retracted slightly
+  t=400ms: Frame A - gills back out
+  t=600ms: Frame B - gills retracted
+  (repeats while at this progress level)
+
+
+Character Positioning:
+
+Progress %  Character X Position
+0%          20% across bar  (left)
+50%         50% across bar  (middle)
+100%        80% across bar  (right, ready to finish)
+
+X = bar_start + (progress * bar_width * 0.6)
+
+
+Bar Appearance:
+
+Empty: ░░░░░░░░░░░░░░░░░░░ (light block)
+Filled: ████████████████░░░░ (dark block)
+Character: ⚬ (circle) or stylized axolotl
+
+Example at 40% progress:
+[████████░░░░░░░░░░░░░░░░░]
+              ⚬ (at 40% position)
+
+
+Implementation: 250 lines of Rust
+Complexity: 3-4 hours
+Delight Factor: 9/10
+
+Advantages:
+  - Shows actual progress percentage
+  - Most engaging for slow loads
+  - Keeps user watching
+  - Highly brandable
+  - Fun metaphor (swimming to goal)
+
+Disadvantages:
+  - Most complex code
+  - Over-engineered for typical <3s loads
+  - Harder to test
+  - Phase calculation adds complexity
+  - Might feel condescending if load is fast
+
+
+When to Use:
+  - Only if typical load time > 3 seconds
+  - As future upgrade after Option B works
+  - Progressive enhancement strategy
+
+================================================================================
+SUMMARY: OPTION COMPARISON
+================================================================================
+
+Feature               Option A    Option B        Option C
+─────────────────────────────────────────────────────────────
+Visual Style          Spinner     Axolotl        Progress Bar
+Code Size             40 lines    150-200 lines  250+ lines
+Implementation Time   1.5 hours   2 hours        3-4 hours
+Delight Factor        6/10        8/10           9/10
+Code Reuse            Minimal     Excellent      Medium
+Terminal Compat       All         80x24+         80x24+
+CPU Usage             Low         Low            Medium
+Personality           None        High           High
+Progress Indication   Status text Status text    % + phases
+Future Upgradeable    No          Yes (→C)       N/A
+
+RECOMMENDATION:       ✗           ✓ SELECT       ✗
+
+
+Reasoning for Option B:
+
+  1. Right balance (not too minimal, not over-engineered)
+  2. Reuses existing sprite infrastructure
+  3. Shows Yollayah personality immediately
+  4. 2-hour implementation (reasonable scope)
+  5. Can upgrade to Option C later without waste
+  6. Perfect metaphor (breathing = waking up)
+  7. First user impression: "This is fun and friendly"
+
+================================================================================

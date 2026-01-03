@@ -376,7 +376,7 @@ impl DisplayTask {
 }
 
 /// Display task status
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub enum DisplayTaskStatus {
     /// Task created but not started
     Pending,

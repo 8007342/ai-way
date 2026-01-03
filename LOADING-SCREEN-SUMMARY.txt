@@ -1,0 +1,245 @@
+================================================================================
+YOLLAYAH TUI LOADING SCREEN DESIGN - EXECUTIVE SUMMARY
+================================================================================
+
+TASK: STORY 3 - Design Yollayah-Themed Loading UI (TODO-tui-initialization.md)
+CREATED: 2026-01-03
+STATUS: Complete - Ready for Implementation
+
+================================================================================
+THE PROBLEM
+================================================================================
+
+User Report: "The TUI always launches blank for a moment, only then I can see
+Yollayah dancing and the You:_ prompt."
+
+Issue: Blank screen appears unprofessional, looks broken/frozen during startup
+
+Goal: Replace blank screen with delightful, Yollayah-themed loading animation
+
+================================================================================
+THREE DESIGN OPTIONS
+================================================================================
+
+OPTION A: Simple Text Spinner (MINIMAL)
+├─ Visual: Plain "Loading..." with spinning indicator
+├─ Code: ~40 lines
+├─ Time: 1.5 hours
+├─ Delight: 6/10 (functional but bland)
+├─ Pros: Minimal code, works everywhere
+└─ Cons: Generic, no brand personality
+
+OPTION B: Pulsing Axolotl Head (RECOMMENDED) ✓
+├─ Visual: Tiny axolotl sprite (6x2) with breathing gills
+├─ Code: ~150-200 lines
+├─ Time: 2 hours
+├─ Delight: 8/10 (cute, branded, personality)
+├─ Pros:
+│  ├─ Reuses existing sprite infrastructure (no new assets)
+│  ├─ Yollayah character immediately visible
+│  ├─ Breathing gills metaphor: "AI waking up"
+│  ├─ Color palette instantly recognizable
+│  ├─ Works on all terminal sizes
+│  └─ Can upgrade to Option C later without waste
+└─ Cons:
+   ├─ Slightly more code than Option A
+   └─ Requires sprite system understanding
+
+OPTION C: Swimming Progress Bar (FANCY)
+├─ Visual: Axolotl swims left→right through progress bar
+├─ Code: ~250 lines
+├─ Time: 3-4 hours
+├─ Delight: 9/10 (most engaging)
+├─ Pros: Shows actual progress, highly engaging
+└─ Cons: Over-engineered for typical <3 second loads
+
+================================================================================
+RECOMMENDATION: OPTION B (Pulsing Axolotl Head)
+================================================================================
+
+WHY OPTION B WINS:
+
+1. Perfect Balance
+   ✓ Delightful without over-engineering
+   ✓ Between minimal (A) and complex (C)
+   ✓ 2 hours vs 4 hours vs 1.5 hours
+
+2. Reuses Existing Code
+   ✓ Sprite system already built (sprites.rs)
+   ✓ Breathing color function exists (theme::breathing_color())
+   ✓ No new widget types needed
+   ✓ Lower implementation risk
+
+3. Immediate Brand Recognition
+   ✓ It's Yollayah! (the actual character)
+   ✓ First interaction with the axolotl
+   ✓ Sets tone: "fun, friendly AI"
+   ✓ Not generic like other apps
+
+4. Perfect Metaphor
+   ✓ Breathing gills = AI waking up
+   ✓ Eyes open → happy = coming to life
+   ✓ Makes sense to users intuitively
+
+5. Future-Proof
+   ✓ If loading slow later, upgrade to Option C
+   ✓ Option B becomes the swimming character in C
+   ✓ Zero wasted effort
+
+================================================================================
+TECHNICAL DETAILS (Option B)
+================================================================================
+
+Animation Loop (1 second cycle):
+  0-333ms:  Dim gills (AXOLOTL_GILLS) + open eyes (oo)
+  333-666ms: Bright gills (AXOLOTL_GILLS_HIGHLIGHT) + happy eyes (^^)
+  666-1000ms: Back to dim (continuous loop)
+
+Status Messages (rotate every 2 seconds):
+  "Just starting..."
+  "Warming up..."
+  "Almost there..."
+
+Color Implementation:
+  Uses breathing_color() with 1000ms cycle
+  Gills oscillate between dim pink and bright coral
+  Text oscillates between dim gray and bright magenta
+
+Sprite:
+  Uses existing "Tiny" avatar size (6x2 cells)
+  Built with build_frame() helper from sprites.rs
+  Three frames with different eye expressions
+
+Performance:
+  Frame rate: 10fps (100ms per render)
+  Time to render: <50ms
+  CPU: Minimal (just color interpolation)
+  Memory: <500KB
+  Works on 80x24+ terminals
+
+================================================================================
+IMPLEMENTATION CHECKLIST
+================================================================================
+
+File: tui/src/loading.rs (new file, ~200 lines)
+
+✓ Create LoadingScreen struct with state tracking
+✓ Define LoadingPhase enum (Connecting/WarmingUp/Ready)
+✓ Build 3 animation frames using build_frame()
+✓ Implement tick() for animation updates
+✓ Implement render() for drawing sprite + text
+✓ Center sprite on screen
+✓ Add status message below sprite
+✓ Add "Press Ctrl+C to cancel" footer
+✓ Test on 80x24 and 120x40 terminals
+✓ Verify color breathing smooth (no flicker)
+✓ Verify frame rate stable at 10fps
+
+Estimated Implementation Time: 2 hours
+Testing Time: 1 hour
+Integration Time (STORY 4): 2 hours
+
+================================================================================
+COLOR PALETTE (from theme.rs)
+================================================================================
+
+Base Colors:
+  AXOLOTL_BODY (#FFB6C1)              - Soft pink
+  AXOLOTL_GILLS (#FF7F7F)             - Coral (dim state)
+  AXOLOTL_GILLS_HIGHLIGHT (#FFA0A0)   - Coral (bright state)
+  AXOLOTL_EYES (#282828)              - Dark (for eye character)
+  AXOLOTL_EYE_SHINE (#FFFFFF)         - White (shine accent)
+  AXOLOTL_MOUTH (#B46478)             - Mauve
+
+UI Colors:
+  YOLLAYAH_MAGENTA                    - Bright magenta accent
+  DIM_GRAY (#646464)                  - Dim text baseline
+  STATUS_THINKING_COLOR (#FFDF80)     - Warm yellow
+  MOOD_HAPPY (#FFDF80)                - Warm yellow
+
+Animation:
+  breathing_color(base, bright, cycle_ms, elapsed)
+  - Sine-wave oscillation between base and bright
+  - Smooth, non-jarring color transitions
+
+================================================================================
+NEXT STEPS
+================================================================================
+
+IMMEDIATE:
+  1. Review this design with team
+  2. Approve Option B choice
+  3. Begin implementation in tui/src/loading.rs
+
+SHORT TERM (STORY 4):
+  4. Wire LoadingScreen into app startup
+  5. Show before Conductor connection
+  6. Update phase as connection progresses
+  7. Transition to main UI when ready
+
+FUTURE (IF NEEDED):
+  8. If loading consistently slow, implement Option C
+  9. Embed Option B sprite in Option C progress bar
+  10. Reuse all Option B code
+
+================================================================================
+FILES & RESOURCES
+================================================================================
+
+Design Document:
+  /var/home/machiyotl/src/ai-way/DESIGN-loading-screen.md
+  (Detailed design with ASCII mockups, code examples, full analysis)
+
+Referenced Source Code:
+  /var/home/machiyotl/src/ai-way/tui/src/avatar/sprites.rs
+    - Frame, Animation, SpriteSheet types
+    - build_frame(), build_animation() helpers
+    - ColoredCell with blend modes
+
+  /var/home/machiyotl/src/ai-way/tui/src/theme/mod.rs
+    - Color palette definitions
+    - breathing_color() function
+    - Color interpolation helpers
+
+  /var/home/machiyotl/src/ai-way/tui/src/avatar/sizes.rs
+    - Avatar animation examples
+    - Tiny (6x2), Small, Medium, Large sizes
+    - Idle, thinking, happy animations
+
+Project Context:
+  /var/home/machiyotl/src/ai-way/TODO-tui-initialization.md
+    - Full project plan
+    - STORY 3 = This design task
+    - STORY 4 = Implementation integration
+
+================================================================================
+SUCCESS CRITERIA
+================================================================================
+
+After implementation:
+  ✓ Loading screen appears within 100ms (no blank screen)
+  ✓ Yollayah avatar visible (6x2 sprite)
+  ✓ Gills breathe with color (dim ↔ bright)
+  ✓ Status messages rotate (just starting → warming up → almost there)
+  ✓ Works on 80x24+ terminals
+  ✓ Minimal CPU/memory usage
+  ✓ Code is clean and maintainable
+  ✓ Can be extended to Option C later
+
+================================================================================
+CONCLUSION
+================================================================================
+
+RECOMMENDATION: Implement Option B (Pulsing Axolotl Head)
+
+This option:
+  • Shows personality immediately (no blank screen)
+  • Reuses existing sprite infrastructure (fast implementation)
+  • Delightful without over-engineering (Goldilocks)
+  • Perfect metaphor (breathing = waking up)
+  • Future-proof (upgradable to Option C)
+  • 2-hour implementation with high impact
+
+Next action: Seek team approval, then implement tui/src/loading.rs
+
+================================================================================

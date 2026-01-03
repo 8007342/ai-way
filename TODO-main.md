@@ -9,6 +9,12 @@ Master index for all TODO tracking documents. Check here first to find pending w
 | [TODO-epic-2026Q1-avatar-animation.md](TODO-epic-2026Q1-avatar-animation.md) | **EXECUTION** | Avatar evolution, sprite generation, TUI animation loop |
 | [TODO-epic-2026Q1-multi-surface.md](TODO-epic-2026Q1-multi-surface.md) | **EXECUTION** | Daemon architecture, multi-connection support, transport security |
 
+## Completed Epics (2026-Q1)
+
+| Epic | Completed | Description |
+|------|-----------|-------------|
+| [TODO-epic-2026Q1-toolbox.md](TODO-epic-2026Q1-toolbox.md) | **2026-01-03** | ✅ Toolbox container integration for Silverblue - PRODUCTION READY |
+
 ## Active Refactors
 
 | Document | Status | Description |
@@ -19,6 +25,12 @@ Master index for all TODO tracking documents. Check here first to find pending w
 | [TODO-implementation-plan.md](TODO-implementation-plan.md) | **ACTIVE** | Detailed implementation plan with dependencies |
 | [TODO-qa-testing.md](TODO-qa-testing.md) | **PENDING** | Unit tests, integration tests, pre-commit hooks |
 | [TODO-integration-testing.md](TODO-integration-testing.md) | **ACTIVE** | Integration test suite documentation |
+
+## Performance & Infrastructure
+
+| Document | Status | Description |
+|----------|--------|-------------|
+| [TODO-ollama-keep-alive.md](TODO-ollama-keep-alive.md) | **COMPLETE** | Fix OLLAMA_KEEP_ALIVE configuration - prevents model unloading |
 
 ## Enhancement Tracking
 

@@ -381,6 +381,13 @@ ux_ollama_pull() {
     local model="$1"
     local skip_intro="${2:-false}"
 
+    # In test verbose mode, show raw ollama output
+    if [[ -n "${YOLLAYAH_TEST_VERBOSE:-}" ]]; then
+        echo ">>> Pulling model: $model"
+        ollama pull "$model"
+        return $?
+    fi
+
     # Cute intro message (skipped if caller already announced)
     if [[ "$skip_intro" != "true" ]]; then
         ux_yollayah "$(yollayah_thinking) Downloading my brain... this might take a minute!"

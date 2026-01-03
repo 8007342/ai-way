@@ -100,6 +100,12 @@ pub struct App {
     /// Previous input state for dirty tracking
     prev_input_buffer: String,
     prev_cursor_pos: usize,
+    /// Previous status bar state for dirty tracking
+    prev_conductor_state: ConductorState,
+    prev_task_count: usize,
+    prev_scroll_offset: usize,
+    /// Previous tasks state for dirty tracking (simple hash)
+    prev_tasks_hash: u64,
 
     // === Avatar Rendering State ===
     /// Avatar position (x, y)
@@ -220,6 +226,10 @@ impl App {
             total_lines: 0,
             prev_input_buffer: String::new(),
             prev_cursor_pos: 0,
+            prev_conductor_state: ConductorState::Initializing,
+            prev_task_count: 0,
+            prev_scroll_offset: 0,
+            prev_tasks_hash: 0,
             avatar_pos: (avatar_x, avatar_y),
             avatar_target: (avatar_x, avatar_y),
             wander_timer: Duration::from_secs(5),
@@ -1090,19 +1100,26 @@ impl App {
 
     /// Render status bar with activity indicators
     fn render_status(&mut self) {
-        if let Some(buf) = self.compositor.layer_buffer_mut(self.layers.status) {
-            buf.reset();
-            let area = buf.area;
+        // Count active sub-agent tasks
+        let active_task_count = self
+            .display
+            .tasks
+            .iter()
+            .filter(|t| t.status.is_active())
+            .count();
 
-            let state_str = self.display.conductor_state.description();
+        // Check if status changed
+        let status_changed = self.display.conductor_state != self.prev_conductor_state
+            || active_task_count != self.prev_task_count
+            || self.scroll_offset != self.prev_scroll_offset;
 
-            // Count active sub-agent tasks
-            let active_task_count = self
-                .display
-                .tasks
-                .iter()
-                .filter(|t| t.status.is_active())
-                .count();
+        // Only render if status changed
+        if status_changed {
+            if let Some(buf) = self.compositor.layer_buffer_mut(self.layers.status) {
+                buf.reset();
+                let area = buf.area;
+
+                let state_str = self.display.conductor_state.description();
 
             // Determine if we're doing complex work (thinking/responding)
             let is_processing = matches!(
@@ -1196,16 +1213,35 @@ impl App {
                 if self.dev_mode { " [DEV]" } else { "" }
             );
 
-            buf.set_string(x_pos, area.y, &suffix, Style::default().fg(Color::DarkGray));
-        }
+                buf.set_string(x_pos, area.y, &suffix, Style::default().fg(Color::DarkGray));
+            }
 
-        // Mark layer as needing re-composite
-        self.compositor.mark_layer_dirty(self.layers.status);
+            // Mark layer as needing re-composite
+            self.compositor.mark_layer_dirty(self.layers.status);
+
+            // Update previous state
+            self.prev_conductor_state = self.display.conductor_state;
+            self.prev_task_count = active_task_count;
+            self.prev_scroll_offset = self.scroll_offset;
+        }
+    }
+
+    /// Compute a simple hash of active tasks for dirty tracking
+    fn compute_tasks_hash(tasks: &[crate::display::DisplayTask]) -> u64 {
+        use std::collections::hash_map::DefaultHasher;
+        use std::hash::{Hash, Hasher};
+
+        let mut hasher = DefaultHasher::new();
+        for task in tasks {
+            task.id.0.hash(&mut hasher);
+            task.progress.hash(&mut hasher);
+            task.status.hash(&mut hasher);
+        }
+        hasher.finish()
     }
 
     /// Render task panel layer
     fn render_tasks(&mut self) {
-        let has_tasks = self.display.has_active_tasks();
         let tasks: Vec<_> = self
             .display
             .tasks
@@ -1214,16 +1250,28 @@ impl App {
             .cloned()
             .collect();
 
-        if let Some(buf) = self.compositor.layer_buffer_mut(self.layers.tasks) {
-            buf.reset();
-            if has_tasks {
-                // Render tasks from display state
-                Self::render_display_tasks_to_buffer(buf, &tasks);
-            }
-        }
+        // Compute hash of current tasks
+        let tasks_hash = Self::compute_tasks_hash(&tasks);
 
-        // Mark layer as needing re-composite
-        self.compositor.mark_layer_dirty(self.layers.tasks);
+        // Check if tasks changed
+        let tasks_changed = tasks_hash != self.prev_tasks_hash;
+
+        // Only render if tasks changed
+        if tasks_changed {
+            if let Some(buf) = self.compositor.layer_buffer_mut(self.layers.tasks) {
+                buf.reset();
+                if !tasks.is_empty() {
+                    // Render tasks from display state
+                    Self::render_display_tasks_to_buffer(buf, &tasks);
+                }
+            }
+
+            // Mark layer as needing re-composite
+            self.compositor.mark_layer_dirty(self.layers.tasks);
+
+            // Update previous hash
+            self.prev_tasks_hash = tasks_hash;
+        }
     }
 
     /// Render tasks from display state to a buffer

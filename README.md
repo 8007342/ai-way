@@ -4,7 +4,9 @@
 
 Privacy-first local AI runtime. Your AI, your data, your rules.
 
-## Quick Start
+## Recommended Setup (Fedora Silverblue)
+
+If you're on Fedora Silverblue, ai-way automatically uses toolbox containers for clean dependency isolation. This is the recommended setup:
 
 ```bash
 git clone https://github.com/8007342/ai-way.git
@@ -12,7 +14,29 @@ cd ai-way
 ./yollayah.sh
 ```
 
-That's it. Yollayah will:
+First run takes ~2-3 minutes:
+1. Creates an isolated toolbox container (30 seconds)
+2. Installs Ollama inside the container (1-2 minutes)
+3. Downloads and loads an optimized model for your GPU
+4. Launches the TUI with Yollayah
+
+Subsequent runs take ~5 seconds. Everything is automatic - no manual setup required.
+
+**Benefits**: Complete isolation, clean uninstall (`toolbox rm ai-way`), GPU passthrough works automatically.
+
+See [TOOLBOX.md](TOOLBOX.md) for details and troubleshooting.
+
+## Quick Start (Other Systems)
+
+On non-Silverblue systems (Ubuntu, Fedora Workstation, etc.):
+
+```bash
+git clone https://github.com/8007342/ai-way.git
+cd ai-way
+./yollayah.sh
+```
+
+Yollayah will:
 1. Check and install missing dependencies (Ollama, Rust)
 2. Pull a model optimized for your hardware (~2-8GB depending on GPU)
 3. Create their personality from the conductor profile

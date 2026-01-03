@@ -46,6 +46,104 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 export SCRIPT_DIR
 
 # ============================================================================
+# Toolbox Integration (Fedora Silverblue)
+# ============================================================================
+
+# Detect if running inside toolbox container
+# The /run/.toolboxenv file is created by toolbox when entering a container
+if [[ -f /run/.toolboxenv ]]; then
+    INSIDE_TOOLBOX=true
+    # Extract container name from containerenv file (standard toolbox metadata)
+    # Format: name="container-name"
+    if [[ -f /run/.containerenv ]]; then
+        TOOLBOX_NAME=$(grep -oP 'name="\K[^"]+' /run/.containerenv 2>/dev/null || echo "unknown")
+    else
+        TOOLBOX_NAME="unknown"
+    fi
+else
+    INSIDE_TOOLBOX=false
+    TOOLBOX_NAME=""
+fi
+
+# Check if toolbox command is available on system
+# Toolbox is pre-installed on Fedora Silverblue but may not exist on other distros
+if command -v toolbox &> /dev/null; then
+    TOOLBOX_AVAILABLE=true
+else
+    TOOLBOX_AVAILABLE=false
+fi
+
+# Check if ai-way toolbox container exists
+# Only check if toolbox command is available to avoid errors on other distros
+# Use awk to check column 2 (container name) to avoid false positives
+if [[ "$TOOLBOX_AVAILABLE" == "true" ]] && toolbox list 2>/dev/null | awk 'NR>1 && $2=="ai-way"' | grep -q .; then
+    TOOLBOX_EXISTS=true
+else
+    TOOLBOX_EXISTS=false
+fi
+
+# Export variables for child processes (daemon, TUI)
+export INSIDE_TOOLBOX TOOLBOX_NAME TOOLBOX_AVAILABLE TOOLBOX_EXISTS
+
+# ============================================================================
+# Toolbox Auto-Enter & Creation (Phase 1.2 & 1.3)
+# ============================================================================
+
+# Auto-enter ai-way toolbox if available (Silverblue)
+_toolbox_auto_enter() {
+    # Skip if already inside toolbox
+    [[ "$INSIDE_TOOLBOX" == "true" ]] && return 0
+
+    # Skip if toolbox not available (other distros)
+    [[ "$TOOLBOX_AVAILABLE" != "true" ]] && return 0
+
+    # If ai-way toolbox exists, enter it
+    if [[ "$TOOLBOX_EXISTS" == "true" ]]; then
+        echo "🔧 Entering ai-way toolbox container..."
+        exec toolbox run -c ai-way "$SCRIPT_DIR/yollayah.sh" "$@"
+    fi
+
+    # Toolbox doesn't exist, return to trigger creation
+    return 1
+}
+
+# Create ai-way toolbox if needed
+_toolbox_create_and_enter() {
+    # Skip if already in toolbox or toolbox not available
+    [[ "$INSIDE_TOOLBOX" == "true" ]] && return 0
+    [[ "$TOOLBOX_AVAILABLE" != "true" ]] && return 0
+
+    # Check if already exists (shouldn't happen, but be safe)
+    if [[ "$TOOLBOX_EXISTS" == "true" ]]; then
+        return 0
+    fi
+
+    # Create ai-way toolbox
+    echo ""
+    echo "🚀 First-time setup: Creating ai-way toolbox container..."
+    echo "   This provides clean dependency isolation on Silverblue."
+    echo "   (One-time setup, takes ~30 seconds)"
+    echo ""
+
+    if toolbox create ai-way; then
+        echo ""
+        echo "✅ Toolbox created successfully!"
+        echo "   Entering container..."
+        echo ""
+        exec toolbox run -c ai-way "$SCRIPT_DIR/yollayah.sh" "$@"
+    else
+        echo ""
+        echo "❌ Failed to create toolbox container."
+        echo "   Try manually: toolbox create ai-way"
+        echo ""
+        exit 1
+    fi
+}
+
+# Try to auto-enter toolbox (exits via exec if successful)
+_toolbox_auto_enter "$@" || _toolbox_create_and_enter "$@"
+
+# ============================================================================
 # Bootstrap: Load Modules
 # ============================================================================
 
@@ -298,6 +396,7 @@ Usage: yollayah.sh [COMMAND]
 
 Commands:
   start     Start daemon and TUI (default if no command given)
+  test      Test mode: fast startup with tiny model (for development)
   daemon    Start daemon only (runs in background)
   connect   Connect TUI to existing daemon
   stop      Stop daemon gracefully
@@ -309,16 +408,34 @@ Options:
   --version     Show version
 
 Environment Variables:
-  CONDUCTOR_SOCKET  Unix socket path for daemon communication
-  CONDUCTOR_PID     PID file path for daemon process
-  AI_WAY_LOG        Log level (trace, debug, info, warn, error)
+  CONDUCTOR_SOCKET            Unix socket path for daemon communication
+  CONDUCTOR_PID               PID file path for daemon process
+  AI_WAY_LOG                  Log level (trace, debug, info, warn, error)
+  YOLLAYAH_TEST_MODEL         Override test mode model (default: qwen2:0.5b)
+  YOLLAYAH_OLLAMA_KEEP_ALIVE  Model keep-alive duration (default: 24h, use -1 for forever)
+
+Toolbox Mode (Fedora Silverblue):
+  On Silverblue, ai-way automatically runs inside a toolbox container
+  for better dependency isolation. The ai-way toolbox is created
+  automatically on first run.
+
+  To manually manage the toolbox:
+    toolbox create ai-way    # Create container
+    toolbox enter ai-way     # Enter container
+    toolbox rm ai-way        # Remove container (clean uninstall)
 
 Examples:
-  yollayah.sh                  # Start normally (daemon + TUI)
-  yollayah.sh daemon           # Start daemon only
-  yollayah.sh connect          # Connect to running daemon
-  yollayah.sh status           # Check if daemon is running
-  AI_WAY_LOG=debug yollayah.sh # Start with debug logging
+  yollayah.sh                           # Auto-enters toolbox (Silverblue)
+  yollayah.sh --test                    # Test mode in toolbox
+  toolbox enter ai-way                  # Manually enter toolbox
+  YOLLAYAH_OLLAMA_KEEP_ALIVE=-1 \
+    yollayah.sh                         # Keep models loaded forever
+  yollayah.sh daemon                    # Start daemon only
+  yollayah.sh connect                   # Connect to running daemon
+  yollayah.sh status                    # Check if daemon is running
+  AI_WAY_LOG=debug yollayah.sh          # Start with debug logging
+  YOLLAYAH_TEST_MODEL=tinyllama:1.1b \
+    yollayah.sh --test                  # Test mode with custom model
 EOF
 }
 
@@ -359,14 +476,20 @@ connect_tui() {
 # ============================================================================
 
 main() {
-    clear
-    ux_print_banner
+    # Skip pretty output in test verbose mode
+    if [[ -z "${YOLLAYAH_TEST_VERBOSE:-}" ]]; then
+        clear
+        ux_print_banner
+    fi
 
     # Verify script integrity FIRST (before any other operations)
     # Environment sanitization already ran when integrity module was sourced
     integrity_verify || exit 1
 
-    ux_show_startup_progress
+    # Skip pretty output in test verbose mode
+    if [[ -z "${YOLLAYAH_TEST_VERBOSE:-}" ]]; then
+        ux_show_startup_progress
+    fi
 
     # Run first-time setup if needed (gracious sudo handling)
     setup_run || exit 1
@@ -380,33 +503,61 @@ main() {
     # Register cleanup handler
     ollama_register_cleanup
 
+    # === SYNCHRONOUS BOOTSTRAP ===
+    # Complete ALL setup before launching TUI to avoid terminal corruption
+    # See TODO-architecture-terminal-ownership.md for design rationale
+
     # Ensure Ollama is running
     ollama_ensure_running || exit 1
 
-    # Select and pull best model for hardware
+    # Select best model for hardware (test mode uses tiny model)
     model_select_best
 
-    # Verify GPU usage (warn if GPU detected but Ollama not using it)
-    verify_ollama_gpu_usage || true  # Don't fail, just warn
+    # Test mode: minimal bootstrap, skip non-essential operations
+    if [[ -n "${YOLLAYAH_TEST_MODE:-}" ]]; then
+        if [[ -n "${YOLLAYAH_TEST_VERBOSE:-}" ]]; then
+            echo ">>> Test mode: skipping non-essential operations"
+            echo ">>> Ensuring model ready: $SELECTED_MODEL"
+        else
+            log_info "Test mode: skipping non-essential operations"
+        fi
 
-    model_ensure_ready || exit 1
+        # Pull test model if needed (small download, fast)
+        model_ensure_ready || exit 1
 
-    # Sync agents repository (the breadcrumb to YOU.md)
-    agents_sync
+        # Skip agents_sync, yollayah_create_model, routing_init, user_init
+        if [[ -n "${YOLLAYAH_TEST_VERBOSE:-}" ]]; then
+            echo ">>> Test mode ready! Using $SELECTED_MODEL"
+        else
+            ux_blank
+            ux_success "Test mode ready! Using $SELECTED_MODEL"
+        fi
+    else
+        # Normal mode: full bootstrap
 
-    # Create Yollayah personality model
-    yollayah_create_model || exit 1
+        # Verify GPU usage (warn if GPU detected but Ollama not using it)
+        verify_ollama_gpu_usage || true
 
-    # Initialize routing module (specialist task management)
-    routing_init
+        # Ensure model is ready (may take time on first run)
+        model_ensure_ready || exit 1
 
-    # Initialize user module (no-op if no data)
-    user_init
+        # Sync agents repository (the breadcrumb to YOU.md)
+        agents_sync
 
-    # Ready!
-    ux_show_all_ready
+        # Create Yollayah personality model
+        yollayah_create_model || exit 1
 
-    # Start the interface (TUI if available, else bash prompt)
+        # Initialize routing module (specialist task management)
+        routing_init
+
+        # Initialize user module (no-op if no data)
+        user_init
+
+        # Ready!
+        ux_show_all_ready
+    fi
+
+    # Bootstrap complete - NOW launch TUI (owns terminal exclusively)
     ux_start_interface "$YOLLAYAH_MODEL_NAME"
 }
 
@@ -418,6 +569,16 @@ main() {
 case "${1:-start}" in
     start|"")
         # Default: full startup (daemon + TUI)
+        main "$@"
+        ;;
+    test|--test)
+        # Test mode: minimal bootstrap with tiny model + verbose logging
+        export YOLLAYAH_TEST_MODE=1
+        export YOLLAYAH_TEST_MODEL="${YOLLAYAH_TEST_MODEL:-qwen2:0.5b}"
+        export YOLLAYAH_TEST_VERBOSE=1
+        echo "🧪 TEST MODE - Verbose logging enabled"
+        echo "Model: $YOLLAYAH_TEST_MODEL"
+        echo "----------------------------------------"
         main "$@"
         ;;
     daemon|--daemon)

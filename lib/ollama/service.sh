@@ -75,17 +75,137 @@ EOF
 # Service Control
 # ============================================================================
 
+# Smart filter for ollama serve output (test verbose mode)
+# Extracts only GPU/CUDA diagnostic lines, showing them in clean format
+_ollama_filter_output() {
+    # Read from stdin, filter and colorize key diagnostic lines
+    while IFS= read -r line; do
+        # Extract GPU discovery messages
+        if [[ "$line" =~ "discovering available GPUs" ]]; then
+            echo -e "${UX_CYAN}→ Ollama:${UX_NC} ${UX_DIM}Discovering GPUs...${UX_NC}"
+
+        # Extract GPU compute info (the money shot!)
+        elif [[ "$line" =~ "inference compute" ]]; then
+            # Parse the structured log line for key details
+            local gpu_name=$(echo "$line" | grep -oP 'name=\K[^ ]+')
+            local gpu_desc=$(echo "$line" | grep -oP 'description="\K[^"]+')
+            local gpu_total=$(echo "$line" | grep -oP 'total="\K[^"]+')
+            local gpu_avail=$(echo "$line" | grep -oP 'available="\K[^"]+')
+            local gpu_lib=$(echo "$line" | grep -oP 'library=\K[^ ]+')
+
+            echo -e "${UX_GREEN}✓ Ollama:${UX_NC} GPU detected: ${UX_BOLD}$gpu_desc${UX_NC}"
+            echo -e "${UX_DIM}  └─ Library: $gpu_lib, Total: $gpu_total, Available: $gpu_avail${UX_NC}"
+
+        # Extract CUDA visibility warnings
+        elif [[ "$line" =~ "user overrode visible devices" ]]; then
+            local cuda_devices=$(echo "$line" | grep -oP 'CUDA_VISIBLE_DEVICES=\K[^ ]+')
+            echo -e "${UX_YELLOW}⚠ Ollama:${UX_NC} ${UX_DIM}Using CUDA device: $cuda_devices${UX_NC}"
+
+        # Extract listening message (confirms startup)
+        elif [[ "$line" =~ "Listening on" ]]; then
+            local addr=$(echo "$line" | grep -oP 'Listening on \K[^ ]+')
+            local version=$(echo "$line" | grep -oP 'version \K[^ ]+' | tr -d ')')
+            echo -e "${UX_GREEN}✓ Ollama:${UX_NC} Listening on $addr ${UX_DIM}(v$version)${UX_NC}"
+
+        # Extract Vulkan messages
+        elif [[ "$line" =~ "Vulkan" ]]; then
+            if [[ "$line" =~ "disabled" ]]; then
+                echo -e "${UX_DIM}  └─ Vulkan: disabled (using CUDA)${UX_NC}"
+            fi
+
+        # Extract runner start messages (interesting in test mode)
+        elif [[ "$line" =~ "starting runner" ]]; then
+            local port=$(echo "$line" | grep -oP 'port \K[0-9]+')
+            echo -e "${UX_DIM}→ Ollama:${UX_NC} ${UX_DIM}Starting runner on port $port${UX_NC}"
+        fi
+
+        # All other lines are suppressed (that's the whole point!)
+    done
+}
+
 # Check if Ollama is installed
 ollama_check_installed() {
-    pj_check "ollama binary"
+    # Phase 2.1: Toolbox-aware detection
+    local in_toolbox=false
+    if [[ -f /run/.toolboxenv ]]; then
+        in_toolbox=true
+        pj_check "ollama binary (inside toolbox container)"
+        log_ollama "DEBUG" "Running inside toolbox - checking for container ollama"
+    else
+        pj_check "ollama binary"
+        log_ollama "DEBUG" "Running on host - checking for ollama"
+    fi
+
     pj_cmd "command -v ollama"
     if command_exists ollama; then
         pj_found "ollama at $(command -v ollama)"
+        log_ollama "INFO" "Ollama found at: $(command -v ollama)"
         return 0
     else
         pj_missing "ollama"
+        log_ollama "WARN" "Ollama not found in PATH"
 
-        # Use ux_* for user-facing messages if available
+        # Phase 2.2: Auto-install in toolbox
+        if [[ "$in_toolbox" == "true" ]]; then
+            log_ollama "INFO" "Inside toolbox - attempting auto-install"
+
+            # Use ux_* for user-facing messages
+            if declare -f ux_blank &>/dev/null; then
+                ux_blank
+                ux_info "Installing ollama in toolbox container (one-time setup)..."
+                ux_print "This will take about 1-2 minutes."
+                ux_blank
+            else
+                echo ""
+                echo "Installing ollama in toolbox container (one-time setup)..."
+                echo "This will take about 1-2 minutes."
+                echo ""
+            fi
+
+            pj_step "Installing ollama via official script"
+            pj_cmd "curl -fsSL https://ollama.com/install.sh | sh"
+
+            # No sudo needed in toolbox!
+            if curl -fsSL https://ollama.com/install.sh | sh; then
+                log_ollama "INFO" "Ollama installed successfully in toolbox"
+                pj_result "Installation complete"
+
+                # Verify installation
+                if command_exists ollama; then
+                    if declare -f ux_success &>/dev/null; then
+                        ux_success "Ollama installed successfully in container"
+                        ux_blank
+                    else
+                        echo ""
+                        echo "Ollama installed successfully in container"
+                        echo ""
+                    fi
+                    return 0
+                else
+                    log_ollama "ERROR" "Ollama installed but not found in PATH"
+                    if declare -f ux_error &>/dev/null; then
+                        ux_error "Installation completed but ollama not found in PATH"
+                    fi
+                    return 1
+                fi
+            else
+                log_ollama "ERROR" "Failed to install ollama in toolbox"
+                if declare -f ux_error &>/dev/null; then
+                    ux_blank
+                    ux_error "Failed to install ollama in toolbox"
+                    ux_error "Try manually: curl -fsSL https://ollama.com/install.sh | sh"
+                    ux_blank
+                else
+                    echo ""
+                    echo "Failed to install ollama in toolbox"
+                    echo "Try manually: curl -fsSL https://ollama.com/install.sh | sh"
+                    echo ""
+                fi
+                return 1
+            fi
+        fi
+
+        # Not in toolbox - show install instructions and prompt
         if declare -f ux_blank &>/dev/null; then
             ux_blank
             ux_warn "Ollama is required to run Yollayah locally."
@@ -139,11 +259,81 @@ ollama_ensure_running() {
     log_ollama "WARN" "Ollama not running, starting..."
     pj_result "Ollama not responding, will start it"
 
+    # Phase 2.3: GPU device detection in toolbox
+    if [[ -f /run/.toolboxenv ]]; then
+        pj_step "GPU detection (inside toolbox container)"
+        log_ollama "DEBUG" "Checking for GPU devices in toolbox"
+
+        local gpu_found=false
+        local gpu_devices=""
+
+        # Check for NVIDIA GPUs
+        if ls /dev/nvidia* &> /dev/null; then
+            gpu_devices=$(ls /dev/nvidia* 2>/dev/null | tr '\n' ' ')
+            pj_found "NVIDIA GPU devices: $gpu_devices"
+            log_ollama "INFO" "NVIDIA GPU devices found: $gpu_devices"
+            gpu_found=true
+        fi
+
+        # Check for AMD GPUs
+        if ls /dev/dri/renderD* &> /dev/null; then
+            local amd_devices=$(ls /dev/dri/renderD* 2>/dev/null | tr '\n' ' ')
+            pj_found "AMD GPU devices: $amd_devices"
+            log_ollama "INFO" "AMD GPU devices found: $amd_devices"
+            gpu_found=true
+        fi
+
+        if [[ "$gpu_found" == "false" ]]; then
+            pj_missing "No GPU devices found in container"
+            log_ollama "WARN" "No GPU devices detected - will use CPU inference (slow)"
+            if declare -f ux_warn &>/dev/null; then
+                ux_warn "GPU not detected - will use CPU inference (slow)"
+            fi
+        fi
+
+        # In verbose mode, show additional GPU info
+        if [[ -n "${YOLLAYAH_DEBUG:-}" ]]; then
+            pj_check "GPU driver information"
+            if command_exists nvidia-smi; then
+                pj_cmd "nvidia-smi --query-gpu=name,driver_version --format=csv,noheader"
+                local gpu_info=$(nvidia-smi --query-gpu=name,driver_version --format=csv,noheader 2>/dev/null || echo "N/A")
+                pj_found "$gpu_info"
+                log_ollama "DEBUG" "GPU info: $gpu_info"
+            else
+                pj_missing "nvidia-smi not available"
+            fi
+        fi
+    fi
+
     # Start Ollama serve in background
     # Set LD_LIBRARY_PATH to help Ollama find CUDA libraries on Fedora/Silverblue
+    # NOTE: In toolbox, this may not be needed but kept for compatibility
     # See TODO-ollama-gpu.md for details
     pj_cmd "ollama serve (background)"
-    LD_LIBRARY_PATH="/usr/lib:/usr/lib64:${LD_LIBRARY_PATH:-}" ollama serve > /dev/null 2>&1 &
+
+    # Set OLLAMA_KEEP_ALIVE to prevent model unloading (CRITICAL for performance!)
+    # Default: keep models loaded for 24 hours - prevents slow model reloading
+    # Override with: YOLLAYAH_OLLAMA_KEEP_ALIVE=<duration>
+    # See: TODO-ollama-keep-alive.md for rationale
+    : "${YOLLAYAH_OLLAMA_KEEP_ALIVE:=24h}"
+    export OLLAMA_KEEP_ALIVE="$YOLLAYAH_OLLAMA_KEEP_ALIVE"
+    pj_result "OLLAMA_KEEP_ALIVE=${OLLAMA_KEEP_ALIVE} (models stay in memory)"
+    log_ollama "INFO" "OLLAMA_KEEP_ALIVE set to: $OLLAMA_KEEP_ALIVE"
+
+    # In test verbose mode, show filtered Ollama output (GPU/CUDA diagnostics only)
+    if [[ -n "${YOLLAYAH_TEST_VERBOSE:-}" ]]; then
+        echo -e "${UX_CYAN}→${UX_NC} Starting ollama serve with smart diagnostic filtering..."
+        echo -e "${UX_DIM}  (showing GPU/CUDA messages only)${UX_NC}"
+        echo -e "${UX_DIM}  OLLAMA_KEEP_ALIVE=${OLLAMA_KEEP_ALIVE}${UX_NC}"
+        ux_blank
+
+        # Start ollama serve with filtered output
+        # stderr goes to our filter, process runs in background
+        LD_LIBRARY_PATH="/usr/lib:/usr/lib64:${LD_LIBRARY_PATH:-}" ollama serve 2>&1 | _ollama_filter_output &
+    else
+        LD_LIBRARY_PATH="/usr/lib:/usr/lib64:${LD_LIBRARY_PATH:-}" ollama serve > /dev/null 2>&1 &
+    fi
+
     local pid=$!
     WE_STARTED_OLLAMA=true
     log_ollama "INFO" "Started ollama serve (PID: $pid) with CUDA library path"

@@ -64,8 +64,8 @@ _agents_clone() {
     fi
     pj_found "git at $(command -v git)"
 
-    pj_cmd "git clone $AGENTS_REPO $AGENTS_DIR"
-    if git clone --quiet "$AGENTS_REPO" "$AGENTS_DIR"; then
+    pj_cmd "git clone $AGENTS_REPO $AGENTS_DIR (30s timeout)"
+    if timeout 30 git clone --quiet "$AGENTS_REPO" "$AGENTS_DIR"; then
         AGENTS_CHANGED=true
         log_agents "INFO" "Agents repo cloned successfully"
         pj_result "Clone successful"
@@ -101,9 +101,9 @@ _agents_update() {
     before_hash=$(get_git_hash "$AGENTS_DIR")
     pj_result "Current: ${before_hash:0:7}"
 
-    # Pull quietly, don't fail if offline
-    pj_cmd "git pull (in $AGENTS_DIR)"
-    if (cd "$AGENTS_DIR" && git pull --quiet 2>/dev/null); then
+    # Pull quietly with timeout, don't fail if offline
+    pj_cmd "git pull (in $AGENTS_DIR, 15s timeout)"
+    if (cd "$AGENTS_DIR" && timeout 15 git pull --quiet 2>/dev/null); then
         after_hash=$(get_git_hash "$AGENTS_DIR")
 
         if [[ "$before_hash" != "$after_hash" ]]; then
