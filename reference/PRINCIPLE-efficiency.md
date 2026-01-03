@@ -16,7 +16,13 @@ All I/O operations MUST be non-blocking. Resources MUST be lazy-initialized and 
 
 ## The Three Laws of Async Efficiency
 
-### Law 1: No Sleep, Only Wait on I/O
+### Law 1: No Sleep, Only Wait on Async I/O
+
+**All I/O operations MUST return Futures, not block threads.**
+
+The framework (tokio runtime) handles async wiring, thread management, and task scheduling. Your code operates on the **reified object** when the Future resolves (using `.await`).
+
+#### Part A: No Sleep (Polling is Forbidden)
 
 **FORBIDDEN**:
 ```rust
@@ -50,6 +56,67 @@ tokio::select! {
     msg = rx.recv() => { ... }
 }
 ```
+
+#### Part B: No Blocking I/O (All I/O Must Be Async)
+
+**I/O functions MUST return `Future<Output = Result<T>>`, not block the thread.**
+
+**FORBIDDEN - Blocking I/O**:
+```rust
+// ❌ TERRIBLE - Blocks thread waiting for file system
+use std::fs;
+let contents = fs::read_to_string("file.txt")?; // Blocks!
+
+// ❌ TERRIBLE - Blocks thread waiting for network
+use std::net::TcpStream;
+let stream = TcpStream::connect("127.0.0.1:8080")?; // Blocks!
+
+// ❌ TERRIBLE - Blocking read trait
+use std::io::Read;
+let mut file = std::fs::File::open("data.bin")?; // Blocks!
+file.read_to_end(&mut buffer)?; // Blocks!
+
+// ❌ TERRIBLE - Synchronous HTTP client (blocks thread pool)
+let response = reqwest::blocking::get("https://api.example.com")?; // Blocks!
+```
+
+**REQUIRED - Async I/O**:
+```rust
+// ✅ GOOD - Async file I/O (returns Future, runtime manages it)
+use tokio::fs;
+let contents = fs::read_to_string("file.txt").await?; // Non-blocking!
+
+// ✅ GOOD - Async network I/O
+use tokio::net::TcpStream;
+let stream = TcpStream::connect("127.0.0.1:8080").await?; // Non-blocking!
+
+// ✅ GOOD - Async read trait
+use tokio::io::AsyncReadExt;
+let mut file = tokio::fs::File::open("data.bin").await?; // Non-blocking!
+file.read_to_end(&mut buffer).await?; // Non-blocking!
+
+// ✅ GOOD - Async HTTP client
+let response = reqwest::get("https://api.example.com").await?; // Non-blocking!
+```
+
+**Why This Matters**:
+- **Blocking I/O wastes threads**: If you have 8 threads in tokio runtime and all block on I/O, no other tasks can run
+- **Async I/O is efficient**: Thread can handle 1000s of concurrent I/O operations using event loop (epoll/kqueue)
+- **Runtime does the wiring**: You write simple `.await` code, tokio handles thread parking, waking, scheduling
+
+**Common Blocking → Async Replacements**:
+
+| Blocking (❌ FORBIDDEN) | Async (✅ REQUIRED) |
+|-------------------------|---------------------|
+| `std::fs::read()` | `tokio::fs::read().await` |
+| `std::fs::write()` | `tokio::fs::write().await` |
+| `std::fs::File::open()` | `tokio::fs::File::open().await` |
+| `std::net::TcpStream::connect()` | `tokio::net::TcpStream::connect().await` |
+| `std::net::TcpListener::accept()` | `tokio::net::TcpListener::accept().await` |
+| `std::io::Read` trait | `tokio::io::AsyncRead` trait |
+| `std::io::Write` trait | `tokio::io::AsyncWrite` trait |
+| `reqwest::blocking::get()` | `reqwest::get().await` |
+| `std::process::Command::output()` | `tokio::process::Command::output().await` |
 
 **Exception - Frame Rate Limiting (TUI ONLY)**:
 ```rust
@@ -444,10 +511,13 @@ fn render_conversation(&mut self) {
 | Principle | Rule | Violation Severity |
 |-----------|------|-------------------|
 | No Sleep | Only wait on I/O, never `sleep()` | CRITICAL |
+| No Blocking I/O | Use `tokio::fs`, `tokio::net`, not `std::fs`, `std::net` | CRITICAL |
+| Futures Only | I/O functions return `Future<Output = T>`, not `T` | CRITICAL |
 | Lazy Init | Load on-demand, cache aggressively | HIGH |
 | Thin Clients | Surfaces are display-only | CRITICAL |
 | Dirty Tracking | Only render changed regions | MEDIUM |
-| Async I/O | All I/O is non-blocking | CRITICAL |
 | Event-Driven | React, don't poll | CRITICAL |
 
-**Remember**: If you're using `sleep()`, you're probably doing it wrong.
+**Remember**:
+- If you're using `sleep()`, you're probably doing it wrong.
+- If you're using `std::fs` or `std::net`, use `tokio::fs` or `tokio::net` instead.

@@ -480,6 +480,77 @@ let (tx, rx) = mpsc::channel(50);  // Avatar updates - low frequency
 
 ---
 
+## Category 6: Blocking I/O Anti-Patterns
+
+**Principle Violated**: PRINCIPLE-efficiency.md Law 1 Part B (All I/O Must Be Async)
+
+**Rule**: All I/O operations MUST return `Future<Output = Result<T>>` and be `.await`ed. Never use blocking I/O from `std::fs`, `std::net`, or `std::io::Read/Write` traits.
+
+---
+
+### ❌ TERRIBLE: Blocking File System I/O
+
+**Example**:
+```rust
+// ❌ TERRIBLE PRACTICE - Blocks tokio worker thread!
+async fn load_config() -> Result<Config> {
+    let contents = std::fs::read_to_string("config.toml")?; // Blocks!
+    toml::from_str(&contents)
+}
+```
+
+**Why This Is Terrible**:
+- **Blocks tokio worker thread**: Thread can't handle other tasks while waiting for disk
+- **Kills concurrency**: 8 threads all blocking = entire runtime stalls
+- **Wastes resources**: Thread doing nothing while kernel reads disk
+
+**Fix**:
+```rust
+// ✅ GOOD - Async file I/O
+async fn load_config() -> Result<Config> {
+    let contents = tokio::fs::read_to_string("config.toml").await?;
+    toml::from_str(&contents)
+}
+```
+
+---
+
+### ❌ TERRIBLE: Blocking Network I/O
+
+**Example**:
+```rust
+// ❌ TERRIBLE PRACTICE - Blocks thread waiting for network!
+async fn fetch_data() -> Result<String> {
+    let stream = std::net::TcpStream::connect("api.example.com:443")?; // Blocks 10-200ms!
+    // ... read from stream ...
+}
+```
+
+**Fix**:
+```rust
+// ✅ GOOD - Async network I/O
+async fn fetch_data() -> Result<String> {
+    let response = reqwest::get("https://api.example.com/data").await?;
+    response.text().await
+}
+```
+
+---
+
+### Quick Reference: Blocking → Async Replacements
+
+| Operation | ❌ Blocking (FORBIDDEN) | ✅ Async (REQUIRED) |
+|-----------|------------------------|---------------------|
+| **File Read** | `std::fs::read_to_string()` | `tokio::fs::read_to_string().await` |
+| **File Write** | `std::fs::write()` | `tokio::fs::write().await` |
+| **TCP Connect** | `std::net::TcpStream::connect()` | `tokio::net::TcpStream::connect().await` |
+| **HTTP Request** | `reqwest::blocking::get()` | `reqwest::get().await` |
+| **Process Spawn** | `std::process::Command::output()` | `tokio::process::Command::output().await` |
+
+**Exception**: Sync I/O is acceptable in non-async functions, tests, and CLI parsing before runtime starts.
+
+---
+
 ## Summary of Violations
 
 | Category | Violation | Severity | Status |
@@ -503,7 +574,9 @@ let (tx, rx) = mpsc::channel(50);  // Avatar updates - low frequency
 **How to prevent recurrence:**
 
 1. **Code Review Checklist**:
-   - [ ] No `sleep()` calls in production code (except frame limiting)
+   - [ ] No `sleep()` calls in production code (except frame limiting, backoff)
+   - [ ] No blocking I/O: Use `tokio::fs`, `tokio::net`, not `std::fs`, `std::net`
+   - [ ] All I/O returns `Future`, not direct result
    - [ ] No calculations in loops without caching
    - [ ] No allocations in hot paths (> 100 calls/sec)
    - [ ] Dirty tracking for all rendering paths
@@ -511,6 +584,8 @@ let (tx, rx) = mpsc::channel(50);  // Avatar updates - low frequency
 
 2. **CI/CD Checks**:
    - Lint rule: Deny `std::thread::sleep`, warn on `tokio::time::sleep`
+   - Static analysis: Detect `std::fs::`, `std::net::`, `std::io::Read/Write` in async code
+   - Integration test: `test_no_blocking_io_in_production()`
    - Performance regression tests: Measure allocations/sec
    - Flamegraph analysis: Identify hotspots
 
