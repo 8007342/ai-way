@@ -39,7 +39,7 @@ _YOLLAYAH_INTEGRITY_CHECKSUMS_LOADED=1
 # ============================================================================
 
 # Where checksums are stored
-readonly INTEGRITY_CHECKSUMS_DIR="${SCRIPT_DIR}/.integrity"
+readonly INTEGRITY_CHECKSUMS_DIR="${SCRIPT_DIR}/workdir/.integrity"
 readonly INTEGRITY_CHECKSUMS_FILE="${INTEGRITY_CHECKSUMS_DIR}/checksums.sha256"
 
 # Files to verify (glob patterns)

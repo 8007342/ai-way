@@ -43,7 +43,7 @@ _YOLLAYAH_LOGGING_BUS_LOADED=1
 # ============================================================================
 
 # Log directory (in script dir, not /home)
-readonly LOG_DIR="${SCRIPT_DIR}/.logs"
+readonly LOG_DIR="${SCRIPT_DIR}/workdir/logs"
 
 # Session identifier (launch timestamp for persistence)
 readonly LOG_LAUNCH_TIME="$(date +%Y%m%d%H%M)"

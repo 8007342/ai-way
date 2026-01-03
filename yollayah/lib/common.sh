@@ -51,11 +51,11 @@ readonly AGENTS_DIR="${SCRIPT_DIR}/agents"
 readonly AGENTS_REPO="https://github.com/8007342/agents.git"
 
 # Runtime state (gitignored, ephemeral)
-readonly STATE_DIR="${SCRIPT_DIR}/.state"
+readonly STATE_DIR="${SCRIPT_DIR}/workdir/state"
 readonly STATE_FILE="${STATE_DIR}/ollama.state"
 
 # Logs (gitignored, for PJ debugging)
-readonly LOGS_DIR="${SCRIPT_DIR}/.logs"
+readonly LOGS_DIR="${SCRIPT_DIR}/workdir/logs"
 
 # User customizations (gitignored, persistent but local-only)
 # See lib/user/README.md for privacy policy

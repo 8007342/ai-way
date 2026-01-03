@@ -54,7 +54,9 @@ source "${SCRIPT_DIR}/lib/ollama/lifecycle.sh"
 # ============================================================================
 
 TIMESTAMP=$(date +%Y%m%d_%H%M%S)
-LOG_FILE="$SCRIPT_DIR/build-log-$TIMESTAMP.txt"
+# Output logs to workdir/logs/ to avoid polluting root
+mkdir -p "$SCRIPT_DIR/../workdir/logs"
+LOG_FILE="$SCRIPT_DIR/../workdir/logs/build-log-$TIMESTAMP.txt"
 
 # Colors for output
 RED='\033[0;31m'

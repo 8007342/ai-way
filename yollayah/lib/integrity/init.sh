@@ -87,7 +87,7 @@ integrity_verify() {
         ux_info "Generating integrity manifest..."
         integrity_generate_manifest
         ux_info "Manifest generated. Exiting."
-        ux_info "Commit .integrity/ to version control."
+        ux_info "Commit workdir/.integrity/ to version control."
         exit 0
     fi
 

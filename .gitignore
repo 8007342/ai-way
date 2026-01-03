@@ -1,26 +1,28 @@
 # Generated files
 modelfiles/
-logs/
 
-# Yollayah runtime state (stored in script dir, not /home)
-# See lib/user/README.md for privacy policy
+# Build logs (local development)
+build-log-*.txt
+
+# Yollayah runtime state - now in workdir/
+# See workdir/README.md for details
+workdir/
+
+# Legacy state files (pre-modular) - clean up if found
 .state/
 .user/
 .logs/
-
-# Legacy state files (pre-modular)
 .yollayah-state
 .yollayah-settings
 
 # Cloned agents repo (the breadcrumb to YOU.md)
-# Note: lib/agents/ is tracked - only the root agents/ is ignored
+# Note: yollayah/lib/agents/ is tracked - only the root agents/ is ignored
 agents/
-!lib/agents/
+!yollayah/lib/agents/
 
-# Rust build artifacts
+# Rust build artifacts (all workspace targets)
 target/
-tui/target/
-conductor/core/target/
+**/target/
 
 # Docker volumes (persistent data)
 models/
