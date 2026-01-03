@@ -32,7 +32,7 @@ readonly DEFAULT_MODEL="llama3.2:3b"
 # Model tiers based on VRAM
 # Format: "min_vram_gb:model_name"
 readonly MODEL_TIERS=(
-    "16:llama3.1:70b"     # 16GB+ VRAM: Full power
+    "16:llama3.1:8b"      # 16GB+ VRAM: Great quality (70b too large even for 16GB)
     "12:llama3.1:8b"      # 12GB+ VRAM: Great quality
     "8:llama3.2:3b"       # 8GB+ VRAM: Good balance
     "6:llama3.2:3b"       # 6GB+ VRAM: Default
@@ -348,6 +348,16 @@ detect_ram_gb() {
 model_select_best() {
     pj_step "Selecting best model for your hardware"
 
+    # Test mode: use tiny model, skip hardware detection
+    if [[ -n "${YOLLAYAH_TEST_MODE:-}" ]]; then
+        SELECTED_MODEL="${YOLLAYAH_TEST_MODEL:-qwen2:0.5b}"
+        HARDWARE_TIER="test"
+        log_ollama "INFO" "Test mode: using tiny model $SELECTED_MODEL"
+        pj_result "🧪 Test mode: $SELECTED_MODEL (352MB, fast inference)"
+        ux_info "Using tiny model for fast testing: $SELECTED_MODEL"
+        return 0
+    fi
+
     # Allow override via environment variable
     if [[ -n "${YOLLAYAH_MODEL:-}" ]]; then
         SELECTED_MODEL="$YOLLAYAH_MODEL"
@@ -438,23 +448,29 @@ model_pull() {
 
     if model_is_available "$model"; then
         pj_result "Model $model already available"
-        ux_yollayah "$(yollayah_celebration) Brain's already here!"
+        if [[ -z "${YOLLAYAH_TEST_VERBOSE:-}" ]]; then
+            ux_yollayah "$(yollayah_celebration) Brain's already here!"
+        else
+            echo ">>> Model $model already available"
+        fi
         return 0
     fi
     pj_result "Model $model not found, will download"
 
-    # Show hardware-aware message before pulling
-    case "${HARDWARE_TIER:-modest}" in
-        powerful)
-            ux_yollayah "$(yollayah_powerful_hardware "$model")"
-            ;;
-        decent)
-            ux_yollayah "$(yollayah_thinking) Getting the brain ready: $model"
-            ;;
-        modest)
-            ux_yollayah "$(yollayah_modest_hardware "$model")"
-            ;;
-    esac
+    # Show hardware-aware message before pulling (skip in test verbose mode)
+    if [[ -z "${YOLLAYAH_TEST_VERBOSE:-}" ]]; then
+        case "${HARDWARE_TIER:-modest}" in
+            powerful)
+                ux_yollayah "$(yollayah_powerful_hardware "$model")"
+                ;;
+            decent)
+                ux_yollayah "$(yollayah_thinking) Getting the brain ready: $model"
+                ;;
+            modest)
+                ux_yollayah "$(yollayah_modest_hardware "$model")"
+                ;;
+        esac
+    fi
 
     # Use the friendly wrapper that hides scary hashes (skip intro, we already announced)
     ux_ollama_pull "$model" true

@@ -368,7 +368,7 @@ general = "llama3.1:8b"
 code = "deepseek-coder:6.7b"
 math = "qwen2-math:7b"
 quick = "phi3:mini"
-deep = "llama3.1:70b"
+deep = "llama3.1:8b"  # 70b too large for most hardware, 8b is more realistic
 creative = "mistral:7b"
 
 [routing]

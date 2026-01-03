@@ -114,7 +114,7 @@ From yollayah.sh startup:
 - [ ] **G1.4**: Check Ollama version and build info
   ```bash
   ollama --version
-  ollama show llama3.1:70b --modelfile 2>&1 | head -20
+  ollama show llama3.1:8b --modelfile 2>&1 | head -20
   ```
 
 - [ ] **G1.5**: Test manual GPU specification
