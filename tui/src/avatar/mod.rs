@@ -143,9 +143,11 @@ impl Avatar {
                     continue;
                 }
 
-                // Set the cell with its specific color
-                let style = Style::default().fg(cell.fg);
-                buf.set_string(x, y, cell.ch.to_string(), style);
+                // Set the cell with its specific color (no allocation)
+                if let Some(target_cell) = buf.cell_mut((x, y)) {
+                    target_cell.set_char(cell.ch);
+                    target_cell.set_fg(cell.fg);
+                }
             }
         }
 
@@ -190,9 +192,11 @@ impl Avatar {
                     continue;
                 }
 
-                // Set the cell with its specific color
-                let style = Style::default().fg(cell.fg);
-                buf.set_string(x, y, cell.ch.to_string(), style);
+                // Set the cell with its specific color (no allocation)
+                if let Some(target_cell) = buf.cell_mut((x, y)) {
+                    target_cell.set_char(cell.ch);
+                    target_cell.set_fg(cell.fg);
+                }
             }
         }
     }

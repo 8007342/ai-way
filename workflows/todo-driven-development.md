@@ -623,6 +623,93 @@ _Items discovered during development that should NOT block this work:_
 
 ---
 
+## Design Principles and Reference Documents
+
+All development in ai-way MUST adhere to documented design principles and architectural requirements. These are living documents that capture lessons learned, best practices, and hard requirements.
+
+### Core Principles
+
+Located in `reference/PRINCIPLE-*.md`:
+
+1. **PRINCIPLE-efficiency.md** - Async efficiency, zero sleep, aggressive caching
+   - Law 1: No Sleep, Only Wait on I/O
+   - Law 2: Lazy Initialization, Aggressive Caching
+   - Law 3: Surfaces Are Thin Clients
+   - **Violation Severity**: CRITICAL
+
+2. **PRINCIPLE-separation.md** (planned) - TUI/Conductor architecture patterns
+   - Message-based communication
+   - Surface-agnostic core
+   - State ownership rules
+
+3. **PRINCIPLE-ux.md** (planned) - UX consistency, minimalism, theming
+   - Axolotl blocky aesthetic
+   - Color palette standards
+   - Animation principles
+
+### Hard Requirements
+
+Located in `reference/REQUIRED-*.md`:
+
+1. **REQUIRED-separation.md** - TUI/Conductor must be fully separated
+   - Conductor MUST compile without TUI dependency
+   - TUI MUST be swappable (embedded, daemon, web, CLI, headless)
+   - All communication via message protocol
+   - **Violation Severity**: CRITICAL (blocks production)
+
+### Forbidden Practices
+
+Located in `reference/FORBIDDEN-*.md`:
+
+1. **FORBIDDEN-inefficient-calculations.md** - Anti-patterns found in codebase
+   - Sleep in polling loops
+   - Recalculating throwaway data
+   - Allocating in hot paths
+   - Rendering unchanged regions
+   - **Purpose**: Prevent recurrence of known bad practices
+
+### Integration with TODO-Driven Development
+
+**When creating TODO files**:
+1. Reference relevant `PRINCIPLE-*.md` if work requires architectural decisions
+2. Link to `REQUIRED-*.md` for compliance-critical work
+3. Cite `FORBIDDEN-*.md` when fixing anti-patterns
+
+**When filing bugs**:
+1. Create `BUG-XXX-*.md` for principle violations
+2. Link to violated principle document
+3. Create corresponding `TODO-XXX-*.md` for remediation
+
+**Example**:
+```markdown
+# TODO-015-eliminate-polling-sleeps.md
+
+**Principle**: reference/PRINCIPLE-efficiency.md (Law 1: No Sleep)
+**Bug**: BUG-015-sleep-in-polling-loops.md
+**Priority**: P0 - CRITICAL
+
+## Tasks
+- [ ] Replace daemon polling loop with event-driven (conductor-daemon.rs:231)
+- [ ] Fix Unix socket server polling (unix_socket/server.rs:419)
+- [ ] Add regression test for idle CPU usage
+```
+
+### Enforcement
+
+**Code Review Checklist**:
+- [ ] No `std::thread::sleep()` in async code
+- [ ] No `tokio::time::sleep()` in loops (except frame limiting/backoff)
+- [ ] TUI doesn't import Conductor internals
+- [ ] All I/O is async and non-blocking
+- [ ] Caching implemented for repeated calculations
+
+**CI/CD Checks**:
+- Lint rules enforce principle adherence
+- Performance regression tests
+- Compilation test (Conductor without TUI)
+
+---
+
 ## Version History
 
 | Version | Date | Changes |

@@ -68,8 +68,8 @@ impl InProcessTransport {
         mpsc::Receiver<SurfaceEvent>,
         mpsc::Sender<ConductorMessage>,
     ) {
-        let (event_tx, event_rx) = mpsc::channel(100);
-        let (msg_tx, msg_rx) = mpsc::channel(100);
+        let (event_tx, event_rx) = mpsc::channel(256); // Increased for burst tolerance
+        let (msg_tx, msg_rx) = mpsc::channel(256); // Increased for fast streaming
 
         let transport = Self {
             event_tx,

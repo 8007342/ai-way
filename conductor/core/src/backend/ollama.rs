@@ -129,7 +129,7 @@ impl LlmBackend for OllamaBackend {
         &self,
         request: &LlmRequest,
     ) -> anyhow::Result<mpsc::Receiver<StreamingToken>> {
-        let (tx, rx) = mpsc::channel(100);
+        let (tx, rx) = mpsc::channel(256); // Increased for fast streaming (200+ tok/sec)
 
         let url = self.generate_url();
         let prompt = self.build_prompt(request);
