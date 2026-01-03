@@ -123,7 +123,7 @@ fn base_palette() -> Vec<(char, char, ratatui::style::Color)> {
 // TINY (6x2) - Just a peeking head
 // ============================================================================
 
-fn load_tiny() -> SpriteSheet {
+pub fn load_tiny() -> SpriteSheet {
     let mut animations = HashMap::new();
     let p = base_palette();
 
@@ -176,7 +176,7 @@ fn load_tiny() -> SpriteSheet {
 // SMALL (10x3) - Head with gills
 // ============================================================================
 
-fn load_small() -> SpriteSheet {
+pub fn load_small() -> SpriteSheet {
     let mut animations = HashMap::new();
     let p = base_palette();
 
@@ -267,7 +267,7 @@ fn load_small() -> SpriteSheet {
 // MEDIUM (16x5) - Full body, main interaction size
 // ============================================================================
 
-fn load_medium() -> SpriteSheet {
+pub fn load_medium() -> SpriteSheet {
     let mut animations = HashMap::new();
     let p = base_palette();
 
@@ -525,7 +525,7 @@ fn load_medium() -> SpriteSheet {
 // LARGE (24x8) - Big moments, celebrations
 // ============================================================================
 
-fn load_large() -> SpriteSheet {
+pub fn load_large() -> SpriteSheet {
     let mut animations = HashMap::new();
     let p = base_palette();
 

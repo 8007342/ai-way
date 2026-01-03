@@ -67,10 +67,21 @@ impl Avatar {
         }
     }
 
-    /// Update animation (call every frame)
-    pub fn update(&mut self, delta: Duration) {
+    /// Update animation (call every frame) - returns true if avatar changed
+    pub fn update(&mut self, delta: Duration) -> bool {
+        // Track previous state
+        let prev_frame = self.engine.current_frame_index();
+        let prev_animation = self.engine.current_animation().to_string();
+
+        // Update animation
         self.engine.update(delta, self.size);
         self.activity.update(delta);
+
+        // Check if anything changed
+        let frame_changed = self.engine.current_frame_index() != prev_frame;
+        let animation_changed = self.engine.current_animation() != prev_animation;
+
+        frame_changed || animation_changed
     }
 
     /// Play a named animation

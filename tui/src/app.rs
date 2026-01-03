@@ -97,6 +97,9 @@ pub struct App {
     scroll_offset: usize,
     /// Total rendered lines (for scroll bounds)
     total_lines: usize,
+    /// Previous input state for dirty tracking
+    prev_input_buffer: String,
+    prev_cursor_pos: usize,
 
     // === Avatar Rendering State ===
     /// Avatar position (x, y)
@@ -105,6 +108,8 @@ pub struct App {
     avatar_target: (u16, u16),
     /// Time until next wander
     wander_timer: Duration,
+    /// Whether avatar animation changed this frame (for dirty tracking)
+    avatar_changed: bool,
 
     // === Misc State ===
     /// Last frame time (for animations)
@@ -213,9 +218,12 @@ impl App {
             history_draft: String::new(),
             scroll_offset: 0,
             total_lines: 0,
+            prev_input_buffer: String::new(),
+            prev_cursor_pos: 0,
             avatar_pos: (avatar_x, avatar_y),
             avatar_target: (avatar_x, avatar_y),
             wander_timer: Duration::from_secs(5),
+            avatar_changed: true, // Start dirty to render on first frame
             last_frame: now,
             dev_mode: false,
             size: (size.0, size.1),
@@ -669,8 +677,8 @@ impl App {
         // Update display state timers
         self.display.update(delta);
 
-        // Update avatar animation
-        self.avatar.update(delta);
+        // Update avatar animation (track if it changed)
+        self.avatar_changed = self.avatar.update(delta);
 
         // Sync avatar state from display state
         self.sync_avatar_from_display();
@@ -993,73 +1001,90 @@ impl App {
                 }
             }
         }
+
+        // Mark layer as needing re-composite
+        self.compositor.mark_layer_dirty(self.layers.conversation);
     }
 
     /// Render input layer
     fn render_input(&mut self) {
-        if let Some(buf) = self.compositor.layer_buffer_mut(self.layers.input) {
-            buf.reset();
-            let area = buf.area;
+        // Check if input changed
+        let input_changed = self.input_buffer != self.prev_input_buffer
+            || self.cursor_pos != self.prev_cursor_pos;
 
-            let separator = "-".repeat(area.width as usize);
-            buf.set_string(
-                area.x,
-                area.y,
-                &separator,
-                Style::default().fg(Color::DarkGray),
-            );
+        // Only render if input changed
+        if input_changed {
+            if let Some(buf) = self.compositor.layer_buffer_mut(self.layers.input) {
+                buf.reset();
+                let area = buf.area;
 
-            let text_height = area.height.saturating_sub(1) as usize;
-            let text_width = area.width.saturating_sub(1) as usize;
+                let separator = "-".repeat(area.width as usize);
+                buf.set_string(
+                    area.x,
+                    area.y,
+                    &separator,
+                    Style::default().fg(Color::DarkGray),
+                );
 
-            if text_width < 5 || text_height < 1 {
-                return;
-            }
+                let text_height = area.height.saturating_sub(1) as usize;
+                let text_width = area.width.saturating_sub(1) as usize;
 
-            // Build input string with cursor at correct position
-            let prefix = "You: ";
-            let chars: Vec<char> = self.input_buffer.chars().collect();
-            let cursor_pos = self.cursor_pos.min(chars.len());
+                if text_width < 5 || text_height < 1 {
+                    return;
+                }
 
-            // Insert cursor indicator at position
-            let (before, after) = chars.split_at(cursor_pos);
-            let before_str: String = before.iter().collect();
-            let after_str: String = after.iter().collect();
+                // Build input string with cursor at correct position
+                let prefix = "You: ";
+                let chars: Vec<char> = self.input_buffer.chars().collect();
+                let cursor_pos = self.cursor_pos.min(chars.len());
 
-            // Use block cursor (▏) for insert mode feel
-            let full_input = format!("{}{}▏{}", prefix, before_str, after_str);
-            let wrapped_lines: Vec<String> = textwrap::wrap(&full_input, text_width)
-                .iter()
-                .map(|s| s.to_string())
-                .collect();
+                // Insert cursor indicator at position
+                let (before, after) = chars.split_at(cursor_pos);
+                let before_str: String = before.iter().collect();
+                let after_str: String = after.iter().collect();
 
-            let visible_lines: Vec<&String> = if wrapped_lines.len() > text_height {
-                wrapped_lines
+                // Use block cursor (▏) for insert mode feel
+                let full_input = format!("{}{}▏{}", prefix, before_str, after_str);
+                let wrapped_lines: Vec<String> = textwrap::wrap(&full_input, text_width)
                     .iter()
-                    .skip(wrapped_lines.len() - text_height)
-                    .collect()
-            } else {
-                wrapped_lines.iter().collect()
-            };
+                    .map(|s| s.to_string())
+                    .collect();
 
-            // Static color for input text (breathing removed for performance)
-            let input_style = Style::default().fg(INPUT_TEXT_COLOR);
+                let visible_lines: Vec<&String> = if wrapped_lines.len() > text_height {
+                    wrapped_lines
+                        .iter()
+                        .skip(wrapped_lines.len() - text_height)
+                        .collect()
+                } else {
+                    wrapped_lines.iter().collect()
+                };
 
-            for (i, line) in visible_lines.iter().enumerate() {
-                let y = area.y + 1 + i as u16;
-                if y < area.y + area.height {
-                    buf.set_string(area.x, y, line, input_style);
+                // Static color for input text (breathing removed for performance)
+                let input_style = Style::default().fg(INPUT_TEXT_COLOR);
+
+                for (i, line) in visible_lines.iter().enumerate() {
+                    let y = area.y + 1 + i as u16;
+                    if y < area.y + area.height {
+                        buf.set_string(area.x, y, line, input_style);
+                    }
+                }
+
+                if wrapped_lines.len() > text_height {
+                    buf.set_string(
+                        area.x + area.width.saturating_sub(3),
+                        area.y,
+                        "^",
+                        Style::default().fg(Color::Yellow),
+                    );
                 }
             }
 
-            if wrapped_lines.len() > text_height {
-                buf.set_string(
-                    area.x + area.width.saturating_sub(3),
-                    area.y,
-                    "^",
-                    Style::default().fg(Color::Yellow),
-                );
-            }
+            // Mark layer as needing re-composite
+            self.compositor.mark_layer_dirty(self.layers.input);
+
+            // Update previous state
+            self.prev_input_buffer = self.input_buffer.clone();
+            self.prev_cursor_pos = self.cursor_pos;
         }
     }
 
@@ -1173,6 +1198,9 @@ impl App {
 
             buf.set_string(x_pos, area.y, &suffix, Style::default().fg(Color::DarkGray));
         }
+
+        // Mark layer as needing re-composite
+        self.compositor.mark_layer_dirty(self.layers.status);
     }
 
     /// Render task panel layer
@@ -1193,6 +1221,9 @@ impl App {
                 Self::render_display_tasks_to_buffer(buf, &tasks);
             }
         }
+
+        // Mark layer as needing re-composite
+        self.compositor.mark_layer_dirty(self.layers.tasks);
     }
 
     /// Render tasks from display state to a buffer
@@ -1244,9 +1275,15 @@ impl App {
 
     /// Render avatar layer
     fn render_avatar(&mut self) {
-        if let Some(buf) = self.compositor.layer_buffer_mut(self.layers.avatar) {
-            buf.reset();
-            self.avatar.render(buf);
+        // Only render and mark dirty if avatar actually changed
+        if self.avatar_changed {
+            if let Some(buf) = self.compositor.layer_buffer_mut(self.layers.avatar) {
+                buf.reset();
+                self.avatar.render(buf);
+            }
+
+            // Mark layer as needing re-composite
+            self.compositor.mark_layer_dirty(self.layers.avatar);
         }
     }
 

@@ -5,12 +5,12 @@
 use std::collections::HashMap;
 use std::time::Duration;
 
-use super::sizes::{load_all_sprites, AvatarSize};
+use super::sizes::AvatarSize;
 use super::sprites::{Frame, SpriteSheet};
 
-/// Engine that manages animation playback
+/// Engine that manages animation playback with lazy sprite loading
 pub struct AnimationEngine {
-    /// Sprite sheets for each size
+    /// Sprite sheets for each size (loaded on demand)
     sheets: HashMap<AvatarSize, SpriteSheet>,
     /// Current animation name
     current_animation: String,
@@ -23,10 +23,15 @@ pub struct AnimationEngine {
 }
 
 impl AnimationEngine {
-    /// Create a new animation engine with all sprites loaded
+    /// Create a new animation engine with lazy loading (loads only Medium initially)
     pub fn new() -> Self {
+        let mut sheets = HashMap::new();
+        // Only load Medium size (the default) to minimize startup time
+        // Other sizes will be loaded on-demand when first requested
+        sheets.insert(AvatarSize::Medium, super::sizes::load_medium());
+
         Self {
-            sheets: load_all_sprites(),
+            sheets,
             current_animation: "idle".to_string(),
             current_frame: 0,
             frame_time: Duration::ZERO,
@@ -34,8 +39,24 @@ impl AnimationEngine {
         }
     }
 
+    /// Ensure a sprite sheet is loaded for the given size
+    fn ensure_loaded(&mut self, size: AvatarSize) {
+        if !self.sheets.contains_key(&size) {
+            let sheet = match size {
+                AvatarSize::Tiny => super::sizes::load_tiny(),
+                AvatarSize::Small => super::sizes::load_small(),
+                AvatarSize::Medium => super::sizes::load_medium(),
+                AvatarSize::Large => super::sizes::load_large(),
+            };
+            self.sheets.insert(size, sheet);
+        }
+    }
+
     /// Update animation state
     pub fn update(&mut self, delta: Duration, size: AvatarSize) {
+        // Ensure the sprite sheet for this size is loaded
+        self.ensure_loaded(size);
+
         let sheet = match self.sheets.get(&size) {
             Some(s) => s,
             None => return,
@@ -94,6 +115,11 @@ impl AnimationEngine {
     /// Get current animation name
     pub fn current_animation(&self) -> &str {
         &self.current_animation
+    }
+
+    /// Get current frame index (for dirty tracking)
+    pub fn current_frame_index(&self) -> usize {
+        self.current_frame
     }
 }
 
