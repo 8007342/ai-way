@@ -869,7 +869,7 @@ impl App {
         // Line metadata for rendering
         #[derive(Clone)]
         struct LineMeta {
-            text: String,
+            text: String, // Keep as String for now (textwrap returns owned Cow anyway)
             base_style: Style,
             prefix_len: usize,         // Length of role prefix
             role: Option<DisplayRole>, // Role for prefix coloring

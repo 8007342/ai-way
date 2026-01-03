@@ -34,7 +34,6 @@ mod states;
 use std::time::Duration;
 
 use ratatui::buffer::Buffer;
-use ratatui::style::Style;
 
 pub use accessibility::{
     detect_motion_preference, parse_motion_preference, AccessibleAnimator, MotionPreference,

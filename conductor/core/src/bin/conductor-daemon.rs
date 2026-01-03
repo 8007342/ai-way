@@ -225,10 +225,12 @@ async fn main() -> anyhow::Result<()> {
         loop {
             {
                 let mut conductor = conductor_for_streaming.lock().await;
+                // ✅ GOOD: poll_streaming() now waits asynchronously on channel recv()
+                // No sleep needed - it blocks efficiently until tokens arrive
                 conductor.poll_streaming().await;
             }
-            // Small delay to avoid busy-looping
-            tokio::time::sleep(tokio::time::Duration::from_millis(10)).await;
+            // ✅ GOOD: Yield to other tasks between poll batches (no sleep!)
+            tokio::task::yield_now().await;
         }
     });
 

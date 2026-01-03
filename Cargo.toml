@@ -4,6 +4,7 @@ members = [
     "conductor/core",
     "conductor/daemon",
     "tui",
+    "tests/architectural-enforcement",
 ]
 
 [workspace.package]
@@ -11,3 +12,7 @@ version = "0.1.0"
 edition = "2021"
 authors = ["ai-way contributors"]
 license = "AGPL-3.0"
+
+[workspace.dependencies]
+# Integration test dependencies
+walkdir = "2.5"

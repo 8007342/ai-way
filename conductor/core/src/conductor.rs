@@ -1028,16 +1028,39 @@ impl<B: LlmBackend + 'static> Conductor<B> {
             };
 
             let mut collected = Vec::new();
-            while let Ok(token) = rx.try_recv() {
-                let is_terminal = matches!(
-                    token,
-                    StreamingToken::Complete { .. } | StreamingToken::Error(_)
-                );
-                collected.push(token);
-                if is_terminal {
-                    break;
+
+            // ✅ GOOD: Wait asynchronously for first token (no polling, no sleep!)
+            // This blocks until a token arrives, then drains any additional buffered tokens
+            match rx.recv().await {
+                Some(token) => {
+                    let is_terminal = matches!(
+                        token,
+                        StreamingToken::Complete { ..} | StreamingToken::Error(_)
+                    );
+                    collected.push(token);
+
+                    // Don't drain more if this was terminal
+                    if !is_terminal {
+                        // Drain any additional tokens that arrived while we were processing
+                        // (non-blocking, just clears the buffer)
+                        while let Ok(token) = rx.try_recv() {
+                            let is_terminal = matches!(
+                                token,
+                                StreamingToken::Complete { .. } | StreamingToken::Error(_)
+                            );
+                            collected.push(token);
+                            if is_terminal {
+                                break;
+                            }
+                        }
+                    }
+                }
+                None => {
+                    // Channel closed, no streaming active
+                    return false;
                 }
             }
+
             collected
         };
 

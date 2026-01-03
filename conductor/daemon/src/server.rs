@@ -209,19 +209,24 @@ impl DaemonServer {
             loop {
                 {
                     let mut c = conductor_for_streaming.lock().await;
+                    // ✅ GOOD: poll_streaming() now waits asynchronously on channel recv()
+                    // No sleep needed - eliminates 0-1ms latency and idle CPU waste
                     c.poll_streaming().await;
                 }
-                // Reduced from 10ms to 1ms for faster streaming responsiveness
-                // This reduces token batching latency from 10ms to 1ms
-                tokio::time::sleep(tokio::time::Duration::from_millis(1)).await;
+                // ✅ GOOD: Yield to other tasks between poll batches (no sleep!)
+                tokio::task::yield_now().await;
             }
         });
 
         // Spawn task to periodically cleanup disconnected surfaces
         let registry_for_cleanup = registry.clone();
         tokio::spawn(async move {
+            // ✅ GOOD: Use interval for periodic tasks (not sleep in loop)
+            let mut interval = tokio::time::interval(tokio::time::Duration::from_secs(30));
+            interval.tick().await; // First tick completes immediately
+
             loop {
-                tokio::time::sleep(tokio::time::Duration::from_secs(30)).await;
+                interval.tick().await; // Wait for next 30s interval
                 registry_for_cleanup.cleanup_disconnected();
             }
         });
