@@ -176,26 +176,42 @@ fn check_file(path: &Path, violations: &mut Vec<String>, _policy: &BlockingIoPol
 
 /// Check if line is inside a test function
 fn is_in_test_function(lines: &[&str], current_idx: usize) -> bool {
-    // Scan backwards for #[test] or #[tokio::test]
+    // Scan backwards to find the enclosing function
+    let mut found_fn_idx = None;
     for i in (0..current_idx).rev() {
         let line = lines[i].trim();
 
-        if line.starts_with("fn ") {
-            return false; // Found a function without test marker
-        }
-
-        if line.starts_with("#[test]")
-            || line.starts_with("#[tokio::test")
-            || line.starts_with("#[cfg(test)]")
-        {
-            return true;
+        if line.starts_with("fn ") || line.contains(" fn ") {
+            found_fn_idx = Some(i);
+            break;
         }
 
         // Stop at module boundaries
-        if line.starts_with("mod ") || line.starts_with("impl ") {
+        if line.starts_with("mod ") || (line.starts_with("impl ") && line.contains('{')) {
             return false;
         }
     }
+
+    // If we found a function, check if it has a test marker
+    if let Some(fn_idx) = found_fn_idx {
+        // Scan backwards from the function to find test markers
+        for i in (0..fn_idx).rev() {
+            let line = lines[i].trim();
+
+            if line.starts_with("#[test]")
+                || line.starts_with("#[tokio::test")
+                || line.starts_with("#[cfg(test)]")
+            {
+                return true;
+            }
+
+            // Stop if we hit another function or boundary
+            if line.starts_with("fn ") || line.starts_with("mod ") || line.starts_with("impl ") {
+                break;
+            }
+        }
+    }
+
     false
 }
 

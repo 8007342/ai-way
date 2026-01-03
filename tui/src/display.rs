@@ -12,12 +12,27 @@
 //! - DisplayAvatarState: Current avatar state for rendering
 //! - DisplayTask: Task info for the task panel
 
+use std::cell::RefCell;
+use std::collections::hash_map::DefaultHasher;
+use std::hash::{Hash, Hasher};
 use std::time::{Duration, Instant};
 
 use conductor_core::{
     AvatarGesture, AvatarMood, AvatarPosition, AvatarReaction, AvatarSize, ConductorMessage,
     ConductorState, MessageId, MessageRole, ResponseMetadata, TaskId, TaskStatus,
 };
+
+/// Text wrapping cache for a message
+/// Stores wrapped lines by width and content hash
+#[derive(Clone, Debug)]
+struct WrappedCache {
+    /// Terminal width used for wrapping
+    width: usize,
+    /// Hash of message content (for invalidation)
+    content_hash: u64,
+    /// Wrapped lines
+    lines: Vec<String>,
+}
 
 /// A rendered conversation message
 #[derive(Clone, Debug)]
@@ -32,6 +47,9 @@ pub struct DisplayMessage {
     pub streaming: bool,
     /// Response metadata (for assistant messages)
     pub metadata: Option<ResponseMetadata>,
+    /// Cached wrapped lines (invalidated on content/width change)
+    #[allow(clippy::type_complexity)]
+    wrapped_cache: RefCell<Option<WrappedCache>>,
 }
 
 impl DisplayMessage {
@@ -43,6 +61,7 @@ impl DisplayMessage {
             content,
             streaming: false,
             metadata: None,
+            wrapped_cache: RefCell::new(None),
         }
     }
 
@@ -54,12 +73,61 @@ impl DisplayMessage {
             content: String::new(),
             streaming: true,
             metadata: None,
+            wrapped_cache: RefCell::new(None),
         }
+    }
+
+    /// Get wrapped lines for formatted message content, using cache when possible
+    ///
+    /// Takes the fully formatted content (with prefix, streaming indicator, etc.)
+    /// and returns wrapped lines. Cache is keyed by formatted content hash and width.
+    ///
+    /// **Performance**: Saves 1200+ textwrap::wrap() calls/sec at 10 FPS with 20 messages.
+    /// Streaming messages won't benefit from cache (content changes every frame),
+    /// but non-streaming messages (most of conversation) will hit cache on every frame.
+    pub fn get_wrapped(&self, formatted_content: &str, width: usize) -> Vec<String> {
+        let mut cache = self.wrapped_cache.borrow_mut();
+
+        // Calculate content hash for cache validation
+        let content_hash = {
+            let mut hasher = DefaultHasher::new();
+            formatted_content.hash(&mut hasher);
+            hasher.finish()
+        };
+
+        // Check if cache is valid
+        if let Some(cached) = cache.as_ref() {
+            if cached.width == width && cached.content_hash == content_hash {
+                // ✅ Cache hit! Return cached lines without wrapping
+                return cached.lines.clone();
+            }
+        }
+
+        // ❌ Cache miss - re-wrap and store
+        let wrapped: Vec<String> = textwrap::wrap(formatted_content, width)
+            .iter()
+            .map(|s| s.to_string())
+            .collect();
+
+        *cache = Some(WrappedCache {
+            width,
+            content_hash,
+            lines: wrapped.clone(),
+        });
+
+        wrapped
+    }
+
+    /// Invalidate the wrapping cache (called when content changes)
+    pub fn invalidate_wrap_cache(&self) {
+        *self.wrapped_cache.borrow_mut() = None;
     }
 
     /// Append token to streaming message
     pub fn append(&mut self, text: &str) {
         self.content.push_str(text);
+        // Invalidate cache since content changed
+        self.invalidate_wrap_cache();
     }
 
     /// Mark stream as complete with metadata
@@ -67,6 +135,8 @@ impl DisplayMessage {
         self.content = final_content;
         self.streaming = false;
         self.metadata = Some(metadata);
+        // Invalidate cache since content changed
+        self.invalidate_wrap_cache();
     }
 
     /// Format metadata as Yollayah-style commentary

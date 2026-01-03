@@ -1,8 +1,9 @@
 # TODO-017: Framebuffer Optimization Sprints
 
 **Created**: 2026-01-03
+**Updated**: 2026-01-03
 **Priority**: P1 - High Impact Performance Work
-**Status**: 🟡 PLANNED - Ready for Implementation
+**Status**: 🟢 IN PROGRESS - Sprints 1 & 2 Complete
 **Related**: PERFORMANCE-AUDIT-FRAMEBUFFER.md
 
 ---
@@ -16,11 +17,12 @@ Optimize TUI rendering pipeline to reduce CPU overhead by 40-60%. Based on compr
 
 ---
 
-## Sprint 1: Text Wrapping Cache
+## Sprint 1: Text Wrapping Cache ✅ COMPLETED
 
 **Impact**: Saves 1200+ `textwrap::wrap()` calls per second
 **Effort**: Medium (2-4 hours)
 **Files**: `tui/src/display.rs`, `tui/src/app.rs`
+**Status**: ✅ Implemented 2026-01-03
 
 ### Problem
 
@@ -139,11 +141,12 @@ fn test_wrapping_cache() {
 
 ---
 
-## Sprint 2: Conversation Dirty Tracking
+## Sprint 2: Conversation Dirty Tracking ✅ COMPLETED
 
 **Impact**: 90% fewer re-renders when conversation unchanged
 **Effort**: Small (1-2 hours)
 **Files**: `tui/src/app.rs`
+**Status**: ✅ Implemented 2026-01-03
 
 ### Problem
 

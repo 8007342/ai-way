@@ -106,6 +106,10 @@ pub struct App {
     prev_scroll_offset: usize,
     /// Previous tasks state for dirty tracking (simple hash)
     prev_tasks_hash: u64,
+    /// Conversation dirty tracking (Sprint 2 optimization)
+    conversation_dirty: bool,
+    last_render_width: usize,
+    cached_conversation_lines: Vec<LineMeta>,
 
     // === Avatar Rendering State ===
     /// Avatar position (x, y)
@@ -133,6 +137,16 @@ struct AppLayers {
     input: LayerId,
     status: LayerId,
     avatar: LayerId,
+}
+
+/// Line metadata for conversation rendering
+#[derive(Clone)]
+struct LineMeta {
+    text: String, // Keep as String for now (textwrap returns owned Cow anyway)
+    base_style: Style,
+    prefix_len: usize,         // Length of role prefix
+    role: Option<DisplayRole>, // Role for prefix coloring
+    is_streaming: bool,        // Streaming message indicator
 }
 
 impl App {
@@ -230,6 +244,9 @@ impl App {
             prev_task_count: 0,
             prev_scroll_offset: 0,
             prev_tasks_hash: 0,
+            conversation_dirty: true, // Start dirty to render on first frame
+            last_render_width: 0,
+            cached_conversation_lines: Vec::new(),
             avatar_pos: (avatar_x, avatar_y),
             avatar_target: (avatar_x, avatar_y),
             wander_timer: Duration::from_secs(5),
@@ -359,6 +376,7 @@ impl App {
 
     /// Process all pending messages from the Conductor
     fn process_conductor_messages(&mut self) {
+        let mut any_messages = false;
         for msg in self.conductor.recv_all() {
             // Check for quit message before applying
             if let ConductorMessage::Quit { message } = &msg {
@@ -367,6 +385,13 @@ impl App {
 
             // Apply message to display state
             self.display.apply_message(msg);
+            any_messages = true;
+        }
+
+        // ✅ OPTIMIZATION (Sprint 2): Mark conversation dirty if any messages received
+        // This includes new messages, tokens, stream end, etc.
+        if any_messages {
+            self.conversation_dirty = true;
         }
     }
 
@@ -866,17 +891,16 @@ impl App {
             return;
         }
 
-        // Line metadata for rendering
-        #[derive(Clone)]
-        struct LineMeta {
-            text: String, // Keep as String for now (textwrap returns owned Cow anyway)
-            base_style: Style,
-            prefix_len: usize,         // Length of role prefix
-            role: Option<DisplayRole>, // Role for prefix coloring
-            is_streaming: bool,        // Streaming message indicator
+        // ✅ OPTIMIZATION (Sprint 2): Check if we can use cached lines
+        // Only rebuild if conversation changed or width changed (terminal resize)
+        let width_changed = self.last_render_width != width;
+        if !self.conversation_dirty && !width_changed {
+            // ✅ Cache hit! Use cached lines, skip expensive rebuild
+            self.render_cached_conversation_lines(height);
+            return;
         }
 
-        // Build wrapped lines from display messages
+        // ❌ Cache miss - rebuild lines from messages
         let mut all_lines: Vec<LineMeta> = Vec::new();
 
         for msg in &self.display.messages {
@@ -893,7 +917,8 @@ impl App {
                 format!("{}{}", prefix, msg.content)
             };
 
-            let wrapped = textwrap::wrap(&content, width);
+            // ✅ Use cached wrapping - saves 1200+ textwrap::wrap() calls/sec
+            let wrapped = msg.get_wrapped(&content, width);
             for (line_idx, line) in wrapped.iter().enumerate() {
                 all_lines.push(LineMeta {
                     text: line.to_string(),
@@ -928,7 +953,18 @@ impl App {
             });
         }
 
-        self.total_lines = all_lines.len();
+        // ✅ OPTIMIZATION (Sprint 2): Cache the built lines for next frame
+        self.cached_conversation_lines = all_lines;
+        self.last_render_width = width;
+        self.conversation_dirty = false;
+
+        // Use cached lines for rendering
+        self.render_cached_conversation_lines(height);
+    }
+
+    /// Render conversation using cached lines (Sprint 2 optimization)
+    fn render_cached_conversation_lines(&mut self, height: usize) {
+        self.total_lines = self.cached_conversation_lines.len();
 
         // Clamp scroll offset
         let max_scroll = self.total_lines.saturating_sub(height);
@@ -947,7 +983,12 @@ impl App {
             buf.reset();
             let area = buf.area;
 
-            let visible_lines: Vec<_> = all_lines.iter().skip(visible_start).take(height).collect();
+            let visible_lines: Vec<_> = self
+                .cached_conversation_lines
+                .iter()
+                .skip(visible_start)
+                .take(height)
+                .collect();
 
             // Number of lines to fade at edges for scroll indication
             const FADE_LINES: usize = 3;
