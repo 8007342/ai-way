@@ -404,7 +404,7 @@ ux_ollama_pull() {
     fi
 }
 
-# Run ollama create with cute progress
+# Run ollama create with cute progress and GPU optimization
 # Usage: ux_ollama_create "yollayah" "/tmp/modelfile"
 ux_ollama_create() {
     local model_name="$1"
@@ -413,10 +413,16 @@ ux_ollama_create() {
     ux_yollayah "$(yollayah_thinking) Putting myself together..."
     ux_blank
 
+    # Force GPU layer offload for maximum performance
+    # OLLAMA_NUM_GPU=999 tells Ollama to use all available GPU layers
+    export OLLAMA_NUM_GPU=999
+
     # Run ollama create with spinner, hiding scary hashes
     if ux_run_friendly "Building ${model_name}..." ollama create "$model_name" -f "$modelfile"; then
+        unset OLLAMA_NUM_GPU
         return 0
     else
+        unset OLLAMA_NUM_GPU
         return 1
     fi
 }

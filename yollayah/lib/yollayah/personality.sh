@@ -124,8 +124,10 @@ BE EXPRESSIVE! You're an animated character. Examples:
 - Express yourself through your avatar! It makes the experience more alive.
 """
 
+# Optimized for GPU inference (reduced VRAM footprint)
 PARAMETER temperature 0.8
-PARAMETER num_ctx 8192
+PARAMETER num_ctx 4096
+PARAMETER num_predict 512
 MODELFILE
 }
 
