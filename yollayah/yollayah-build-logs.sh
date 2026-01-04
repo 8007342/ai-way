@@ -39,6 +39,9 @@ export SCRIPT_DIR
 # Core utilities
 source "${SCRIPT_DIR}/yollayah/lib/common.sh"
 
+# Robot flag system (must be early for --robot parsing)
+source "${SCRIPT_DIR}/yollayah/lib/common/robot.sh"
+
 # Logging infrastructure
 source "${SCRIPT_DIR}/yollayah/lib/logging/init.sh"
 
@@ -48,6 +51,7 @@ source "${SCRIPT_DIR}/yollayah/lib/ux/output.sh"
 # Ollama management
 source "${SCRIPT_DIR}/yollayah/lib/ollama/service.sh"
 source "${SCRIPT_DIR}/yollayah/lib/ollama/lifecycle.sh"
+source "${SCRIPT_DIR}/yollayah/lib/ollama/model.sh"
 
 # ============================================================================
 # Configuration
@@ -220,6 +224,77 @@ build_conductor() {
     fi
 }
 
+build_yollayah_model() {
+    local verbose="$1"
+    log_section "Building Yollayah Model"
+
+    # Check if Ollama is running
+    if ! pgrep -x "ollama" > /dev/null; then
+        log_warn "Ollama not running, attempting to start..."
+        if ! ollama serve > /dev/null 2>&1 &; then
+            log_error "Failed to start Ollama"
+            return 1
+        fi
+        sleep 2
+    fi
+
+    log "Creating yollayah model from llama3.2:3b..."
+
+    if [[ "$verbose" == "true" ]]; then
+        # Verbose mode: use robot flags for detailed output
+        if ROBOT_MODEL_LEVEL=debug model_create_yollayah "llama3.2:3b" "force" 2>&1 | tee -a "$LOG_FILE"; then
+            log_success "Yollayah model created successfully"
+            return 0
+        else
+            log_error "Yollayah model creation failed"
+            return 1
+        fi
+    else
+        # Non-verbose: capture output to log only
+        if ROBOT_MODEL_LEVEL=info model_create_yollayah "llama3.2:3b" "force" >> "$LOG_FILE" 2>&1; then
+            log_success "Yollayah model created successfully"
+            return 0
+        else
+            log_error "Yollayah model creation failed"
+            return 1
+        fi
+    fi
+}
+
+test_yollayah_gpu() {
+    log_section "Testing Yollayah GPU Usage"
+
+    # Check if nvidia-smi available
+    if ! command -v nvidia-smi &> /dev/null; then
+        log_warn "nvidia-smi not available, cannot test GPU"
+        return 2
+    fi
+
+    # Check if yollayah model exists
+    if ! model_exists "yollayah"; then
+        log_warn "Yollayah model not found, skipping GPU test"
+        log "Run: $0 --model to create the model first"
+        return 2
+    fi
+
+    log "Running GPU verification test..."
+
+    # Use robot flags for detailed GPU output
+    if ROBOT_MODEL_LEVEL=info ROBOT_GPU_LEVEL=debug model_test_yollayah_gpu 2>&1 | tee -a "$LOG_FILE"; then
+        log_success "GPU usage confirmed for yollayah model"
+        return 0
+    else
+        local exit_code=$?
+        if [[ $exit_code -eq 1 ]]; then
+            log_error "CPU fallback detected (yollayah not using GPU)"
+            log_warn "This is the bug we're investigating in EPIC-001"
+        elif [[ $exit_code -eq 2 ]]; then
+            log_warn "Cannot verify GPU usage"
+        fi
+        return $exit_code
+    fi
+}
+
 test_ollama_install() {
     local verbose="$1"
     log_section "Testing Ollama Installation"
@@ -349,7 +424,7 @@ analyze_log() {
 
 show_usage() {
     cat << EOF
-Usage: $0 [MODE]
+Usage: $0 [--robot=module=level:...] [MODE]
 
 Modes:
   (no args)              Build entire workspace (non-verbose)
@@ -363,15 +438,47 @@ Modes:
   --conductor-verbose    Build Conductor only (verbose)
   --install-ollama       Test Ollama installation (non-verbose)
   --install-ollama-verbose  Test Ollama installation (verbose)
+  --model                Build yollayah model (non-verbose)
+  --model-verbose        Build yollayah model (verbose)
+  --test-model-gpu       Test yollayah GPU usage
+  --robot-test           Show robot configuration and exit
+
+Robot Flags (module-level verbosity control):
+  --robot=module=level:module=level:...
+
+  Modules:
+    model    - Model creation and management
+    gpu      - GPU verification and diagnostics
+    build    - Build process output
+    test     - Test execution
+    ollama   - Ollama backend operations
+    all      - Global override (sets all modules)
+
+  Levels:
+    off      - No output
+    error    - Errors only
+    warn     - Warnings + errors
+    info     - Info + above (default)
+    debug    - Debug + above
+    trace    - Everything (most verbose)
+    full     - Alias for trace
 
 Examples:
-  $0                     # Build everything (non-verbose)
-  $0 --tui-verbose       # Build TUI with verbose output
-  $0 --install-ollama    # Test Ollama installation
+  $0                                    # Build everything (non-verbose)
+  $0 --tui-verbose                      # Build TUI with verbose output
+  $0 --install-ollama                   # Test Ollama installation
+  $0 --model                            # Build yollayah model
+  $0 --model-verbose                    # Build yollayah model (verbose)
+  $0 --test-model-gpu                   # Test GPU usage
+  $0 --robot=model=debug --model        # Build model with debug output
+  $0 --robot=model=trace:gpu=debug --test-model-gpu  # Test GPU with verbose logging
+  $0 --robot-test                       # Show robot flag configuration
 
 Output:
   - Real-time output to stdout
   - Full log saved to build-log-TIMESTAMP.txt
+
+See: knowledge/methodology/common/bash/ROBOT-FLAGS.md for details
 EOF
 }
 
@@ -380,14 +487,27 @@ EOF
 # ============================================================================
 
 main() {
+    # Parse robot flags first
+    robot_parse_flags "$@"
+
     local mode="${1:---all}"
     local verbose="false"
     local build_failed=0
+
+    # Strip robot flag from args if present
+    if [[ "$mode" == --robot=* ]]; then
+        shift
+        mode="${1:---all}"
+    fi
 
     # Parse mode and verbose flag
     case "$mode" in
         --help|-h)
             show_usage
+            exit 0
+            ;;
+        --robot-test)
+            robot_show_config
             exit 0
             ;;
         --all|"")
@@ -397,6 +517,18 @@ main() {
         --all-verbose)
             mode="all"
             verbose="true"
+            ;;
+        --model)
+            mode="model"
+            verbose="false"
+            ;;
+        --model-verbose)
+            mode="model"
+            verbose="true"
+            ;;
+        --test-model-gpu)
+            mode="test-gpu"
+            verbose="false"
             ;;
         --surfaces)
             mode="surfaces"
@@ -474,15 +606,23 @@ main() {
             log "Mode: Ollama installation test (verbose: $verbose)"
             test_ollama_install "$verbose" || build_failed=1
             ;;
+        model)
+            log "Mode: Build yollayah model (verbose: $verbose)"
+            build_yollayah_model "$verbose" || build_failed=1
+            ;;
+        test-gpu)
+            log "Mode: Test yollayah GPU usage"
+            test_yollayah_gpu || build_failed=1
+            ;;
     esac
 
     # Run smoke tests only for build modes
-    if [[ "$mode" != "ollama" ]] && [[ $build_failed -eq 0 ]]; then
+    if [[ "$mode" != "ollama" ]] && [[ "$mode" != "model" ]] && [[ "$mode" != "test-gpu" ]] && [[ $build_failed -eq 0 ]]; then
         run_smoke_tests
     fi
 
     # Analyze log only for build modes
-    if [[ "$mode" != "ollama" ]]; then
+    if [[ "$mode" != "ollama" ]] && [[ "$mode" != "model" ]] && [[ "$mode" != "test-gpu" ]]; then
         analyze_log
     fi
 
