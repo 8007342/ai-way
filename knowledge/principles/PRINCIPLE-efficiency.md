@@ -309,6 +309,174 @@ loop {
 
 ---
 
+## CRITICAL ANTI-PATTERN: Blocking Await in Event Loops
+
+**STATUS**: 🔴 STRICTLY FORBIDDEN - This is a BUG
+
+**This anti-pattern causes the TUI to freeze and defeats the purpose of async architecture.**
+
+### The Problem
+
+**NEVER use blocking await operations (like `recv().await`) in polling functions called from event loops.**
+
+Event loops MUST remain responsive at all times. Using blocking `.await` in a function that's called repeatedly from the event loop will cause the entire UI to freeze.
+
+### ❌ FORBIDDEN: Blocking Await in Polling Functions
+
+```rust
+// ❌ CRITICAL BUG - This WILL freeze the UI
+pub async fn poll_streaming(&mut self) -> bool {
+    let rx = self.streaming_rx.as_mut()?;
+
+    // BLOCKS until token arrives (can be 2-5 seconds during GPU loading!)
+    match rx.recv().await {  // ← FREEZES EVENT LOOP
+        Some(token) => {
+            process(token);
+            true
+        }
+        None => false,
+    }
+}
+
+// Called from event loop (BAD!)
+while self.running {
+    tokio::select! {
+        event = event_stream.next() => { ... }
+        _ = tick.tick() => { ... }
+    }
+
+    // ❌ This can block for SECONDS!
+    self.conductor.poll_streaming().await;  // ← UI FROZEN HERE
+
+    // These never run while blocked above
+    self.update();
+    self.render(terminal)?;
+}
+```
+
+**Why This Is Catastrophic**:
+1. Event loop calls `poll_streaming()` every frame (10 FPS = every 100ms)
+2. `rx.recv().await` blocks until a token arrives
+3. GPU loads model for 2-5 seconds before first token
+4. Event loop is FROZEN - no rendering, no updates, appears hung
+5. First token arrives - all buffered tokens (up to 256) drain at once
+6. CPU spikes from batch processing instead of gradual streaming
+7. User sees: freeze → sudden text dump (broken streaming)
+
+### ✅ REQUIRED: Non-Blocking Operations in Polling Functions
+
+**Use `try_recv()` for polling functions:**
+
+```rust
+// ✅ GOOD - Returns immediately if no tokens available
+pub fn poll_streaming(&mut self) -> bool {  // Not even async!
+    let rx = match self.streaming_rx.as_mut() {
+        Some(rx) => rx,
+        None => return false,
+    };
+
+    let mut collected = Vec::new();
+
+    // Non-blocking check - returns immediately
+    match rx.try_recv() {  // ← NEVER BLOCKS
+        Ok(token) => {
+            collected.push(token);
+
+            // Drain any additional buffered tokens
+            while let Ok(token) = rx.try_recv() {
+                collected.push(token);
+            }
+
+            process_tokens(collected);
+            true
+        }
+        Err(TryRecvError::Empty) => {
+            // No tokens yet - keep UI responsive
+            false
+        }
+        Err(TryRecvError::Disconnected) => {
+            // Stream ended
+            false
+        }
+    }
+}
+
+// Called from event loop (GOOD!)
+while self.running {
+    tokio::select! {
+        event = event_stream.next() => { ... }
+        _ = tick.tick() => { ... }
+    }
+
+    // ✅ Returns immediately if no tokens
+    self.conductor.poll_streaming();  // No .await needed!
+
+    // Always reached - UI stays responsive
+    self.update();
+    self.render(terminal)?;
+}
+```
+
+### ✅ ALTERNATIVE: Move Blocking Await Into tokio::select!
+
+**If you need blocking await, use `tokio::select!` to multiplex it with other events:**
+
+```rust
+// ✅ GOOD - Blocking await in select!, not in polling function
+while self.running {
+    tokio::select! {
+        // Terminal events
+        Some(event) = event_stream.next() => {
+            self.handle_event(event);
+        }
+
+        // Streaming tokens (blocking await is OK here!)
+        Some(token) = self.conductor.recv_token() => {
+            self.process_token(token);
+        }
+
+        // Frame tick
+        _ = tick.tick() => {
+            self.update();
+            self.render(terminal)?;
+        }
+    }
+}
+```
+
+**Why This Works**:
+- `tokio::select!` multiplexes multiple async operations
+- While waiting for token, can still handle terminal events and render frames
+- Event loop never blocks on single operation
+- True concurrent event handling
+
+### Rule Summary
+
+**WHEN TO USE EACH PATTERN**:
+
+| Pattern | Use Case | Event Loop Impact |
+|---------|----------|-------------------|
+| `rx.recv().await` in `tokio::select!` | ✅ Event sources in main loop | Non-blocking (multiplexed) |
+| `rx.try_recv()` in polling function | ✅ Called from event loop | Non-blocking (returns immediately) |
+| `rx.recv().await` in polling function | ❌ **FORBIDDEN** | Blocking (freezes UI) |
+| `rx.recv().await` in spawned task | ✅ Background processing | Non-blocking (separate task) |
+
+### Detection and Prevention
+
+**During code review, immediately reject any code that**:
+1. Has `async fn poll_*` or `async fn check_*` functions
+2. Contains `.recv().await` (or any blocking await) in a function called repeatedly from event loop
+3. Calls `.await` inside a loop without `tokio::select!`
+
+**Required fixes**:
+- Change to `try_recv()` for polling
+- Move blocking await into `tokio::select!`
+- Spawn dedicated task for blocking operations
+
+**Related Bugs**: `TODO-BUG-001-tui-waits-for-full-stream.md`
+
+---
+
 ## Buffer and Channel Sizing
 
 **Channels MUST be sized appropriately for message frequency.**
