@@ -535,8 +535,6 @@ impl ResponseMetadata {
 pub enum ConductorState {
     /// Starting up, not ready
     Initializing,
-    /// Warming up the model
-    WarmingUp,
     /// Ready for input
     Ready,
     /// Processing a query
@@ -557,7 +555,6 @@ impl ConductorState {
     pub fn description(&self) -> &'static str {
         match self {
             Self::Initializing => "Starting up...",
-            Self::WarmingUp => "Loading model...",
             Self::Ready => "Ready",
             Self::Thinking => "Thinking...",
             Self::Responding => "Responding...",

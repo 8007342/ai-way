@@ -45,10 +45,9 @@ use crate::tasks::{TaskId, TaskManager};
 pub struct ConductorConfig {
     /// Default model to use
     pub model: String,
-    /// Whether to warm up the model on startup
+    /// Whether to warm up the model on startup (DEPRECATED - always false, Ollama keep_alive handles this)
     pub warmup_on_start: bool,
     /// Whether to send a dynamic greeting when a surface connects
-    /// This also serves as a warmup for the LLM
     pub greet_on_connect: bool,
     /// Maximum messages to keep in context
     pub max_context_messages: usize,
@@ -68,7 +67,7 @@ impl Default for ConductorConfig {
     fn default() -> Self {
         Self {
             model: "yollayah".to_string(),
-            warmup_on_start: true,
+            warmup_on_start: false, // DEPRECATED - Ollama keep_alive handles model loading
             greet_on_connect: true,
             max_context_messages: 10,
             system_prompt: None,
@@ -147,8 +146,6 @@ pub struct Conductor<B: LlmBackend> {
     /// Legacy single-surface channel (for backward compatibility)
     /// When using the registry, this can be None
     legacy_tx: Option<mpsc::Sender<ConductorMessage>>,
-    /// Whether warmup is complete
-    warmup_complete: bool,
     /// Current streaming message receiver
     streaming_rx: Option<mpsc::Receiver<StreamingToken>>,
     /// Current streaming message ID
@@ -232,7 +229,6 @@ impl<B: LlmBackend + 'static> Conductor<B> {
             state: ConductorState::Initializing,
             registry,
             legacy_tx,
-            warmup_complete: false,
             streaming_rx: None,
             streaming_message_id: None,
             streaming_start: None,
@@ -305,7 +301,7 @@ impl<B: LlmBackend + 'static> Conductor<B> {
 
     /// Check if warmup is complete
     pub fn is_ready(&self) -> bool {
-        self.warmup_complete
+        true
     }
 
     /// Create a state snapshot for late-joining surfaces
@@ -342,7 +338,7 @@ impl<B: LlmBackend + 'static> Conductor<B> {
         let session_info = SessionSnapshot::new(
             self.session.id.clone(),
             self.config.model.clone(),
-            self.warmup_complete,
+            true,
             self.state,
             self.session.metadata.created_at,
             self.session.metadata.message_count,
@@ -378,57 +374,21 @@ impl<B: LlmBackend + 'static> Conductor<B> {
             .await;
         }
 
-        // Warm up if configured
-        if self.config.warmup_on_start {
-            self.warmup().await?;
-        } else {
-            self.warmup_complete = true;
-            self.set_state(ConductorState::Ready).await;
-        }
+        // Skip warmup - Ollama keep_alive keeps models loaded
+        // Ready immediately for user interaction
+        self.set_state(ConductorState::Ready).await;
 
         // Send session info
         self.send(ConductorMessage::SessionInfo {
             session_id: self.session.id.clone(),
             model: self.config.model.clone(),
-            ready: self.warmup_complete,
+            ready: true, // Always ready (no warmup needed)
         })
         .await;
 
         Ok(())
     }
 
-    /// Warm up the model
-    async fn warmup(&mut self) -> anyhow::Result<()> {
-        self.set_state(ConductorState::WarmingUp).await;
-
-        let request =
-            LlmRequest::new("Say hi in 5 words or less.", &self.config.model).with_stream(true);
-
-        match self.backend.send_streaming(&request).await {
-            Ok(mut rx) => {
-                // Drain the warmup response
-                while let Some(token) = rx.recv().await {
-                    match token {
-                        StreamingToken::Complete { .. } => break,
-                        StreamingToken::Error(e) => {
-                            tracing::warn!("Warmup error: {}", e);
-                            break;
-                        }
-                        _ => {}
-                    }
-                }
-                self.warmup_complete = true;
-                self.set_state(ConductorState::Ready).await;
-            }
-            Err(e) => {
-                tracing::warn!("Warmup failed: {}", e);
-                self.warmup_complete = true; // Allow proceeding anyway
-                self.set_state(ConductorState::Ready).await;
-            }
-        }
-
-        Ok(())
-    }
 
     /// Generate a dynamic greeting
     ///
@@ -504,15 +464,15 @@ impl<B: LlmBackend + 'static> Conductor<B> {
                 self.send(ConductorMessage::SessionInfo {
                     session_id: self.session.id.clone(),
                     model: self.config.model.clone(),
-                    ready: self.warmup_complete,
+                    ready: true,
                 })
                 .await;
 
                 // Generate dynamic greeting if configured and ready
                 // This also warms up the LLM while making Yollayah feel alive
-                if self.config.greet_on_connect && self.warmup_complete {
+                if self.config.greet_on_connect && true {
                     self.generate_greeting().await;
-                } else if self.warmup_complete {
+                } else if true {
                     // Fall back to static welcome if greeting disabled
                     self.send(ConductorMessage::Message {
                         id: MessageId::new(),
@@ -677,7 +637,7 @@ impl<B: LlmBackend + 'static> Conductor<B> {
                     self.send(ConductorMessage::SessionInfo {
                         session_id: self.session.id.clone(),
                         model: self.config.model.clone(),
-                        ready: self.warmup_complete,
+                        ready: true,
                     })
                     .await;
 
@@ -769,7 +729,7 @@ impl<B: LlmBackend + 'static> Conductor<B> {
                     ConductorMessage::SessionInfo {
                         session_id: self.session.id.clone(),
                         model: self.config.model.clone(),
-                        ready: self.warmup_complete,
+                        ready: true,
                     },
                 )
                 .await;
@@ -781,10 +741,10 @@ impl<B: LlmBackend + 'static> Conductor<B> {
                 );
 
                 // Generate dynamic greeting if configured and ready
-                if self.config.greet_on_connect && self.warmup_complete {
+                if self.config.greet_on_connect && true {
                     // For multi-surface, generate greeting for all (broadcast)
                     self.generate_greeting().await;
-                } else if self.warmup_complete {
+                } else if true {
                     self.send_to(
                         &conn_id,
                         ConductorMessage::Message {
@@ -858,7 +818,7 @@ impl<B: LlmBackend + 'static> Conductor<B> {
                         ConductorMessage::SessionInfo {
                             session_id: self.session.id.clone(),
                             model: self.config.model.clone(),
-                            ready: self.warmup_complete,
+                            ready: true,
                         },
                     )
                     .await;

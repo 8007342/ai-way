@@ -356,7 +356,6 @@ impl ConductorState {
     pub fn accessibility_description(&self) -> &'static str {
         match self {
             ConductorState::Initializing => "Yollayah is starting up",
-            ConductorState::WarmingUp => "Yollayah is loading",
             ConductorState::Ready => "Yollayah is ready to help",
             ConductorState::Thinking => "Yollayah is thinking about your question",
             ConductorState::Responding => "Yollayah is responding",
