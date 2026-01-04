@@ -180,7 +180,12 @@ ux_conversation_loop() {
         echo -ne "${UX_MAGENTA}Yollayah:${UX_NC} "
 
         # Stream the response
-        ollama run "$model_name" "$user_input" 2>/dev/null
+        if ! ollama run "$model_name" "$user_input"; then
+            echo ""
+            ux_error "Failed to get response from model: $model_name"
+            ux_info "Check if Ollama is running: ollama list"
+            ux_info "Try: ollama run $model_name"
+        fi
 
         ux_blank
         ux_blank
