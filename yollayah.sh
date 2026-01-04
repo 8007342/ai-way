@@ -396,7 +396,7 @@ Usage: yollayah.sh [COMMAND]
 
 Commands:
   start     Start daemon and TUI (default if no command given)
-  test      Test mode: fast startup with tiny model (for development)
+  test      Test mode: builds yollayah from qwen2:0.5b (~352MB, fast inference)
   daemon    Start daemon only (runs in background)
   connect   Connect TUI to existing daemon
   stop      Stop daemon gracefully

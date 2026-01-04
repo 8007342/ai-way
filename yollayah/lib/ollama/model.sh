@@ -190,6 +190,20 @@ model_create_from_file() {
 # Yollayah-Specific Operations
 # ============================================================================
 
+# Get the base model that yollayah was built from
+# Args: $1 - model name (default: "yollayah")
+# Returns: 0 and prints base model, 1 if cannot determine
+model_get_base() {
+    local model_name="${1:-yollayah}"
+
+    if ! model_exists "$model_name"; then
+        return 1
+    fi
+
+    # Extract the FROM line from the modelfile
+    ollama show "$model_name" --modelfile 2>/dev/null | grep "^FROM" | awk '{print $2}'
+}
+
 # Create the yollayah model
 # Args: $1 - base model name (default: "llama3.2:3b")
 #       $2 - force rebuild (optional, "force" to rebuild)
@@ -204,11 +218,18 @@ model_create_yollayah() {
 
     # Check if model exists
     if model_exists "$model_name"; then
-        if [[ "$force_rebuild" == "force" ]]; then
+        # Check if base model changed
+        local current_base
+        current_base=$(model_get_base "$model_name")
+        if [[ -n "$current_base" ]] && [[ "$current_base" != "$base_model" ]]; then
+            robot_info "$MODEL_MODULE" "Base model changed: $current_base → $base_model"
+            robot_info "$MODEL_MODULE" "Rebuilding yollayah with new base"
+            model_delete "$model_name" || return 1
+        elif [[ "$force_rebuild" == "force" ]]; then
             robot_info "$MODEL_MODULE" "Force rebuild requested, deleting existing model"
             model_delete "$model_name" || return 1
         else
-            robot_info "$MODEL_MODULE" "Model already exists, skipping creation (use 'force' to rebuild)"
+            robot_info "$MODEL_MODULE" "Model already exists (base: $current_base), skipping creation (use 'force' to rebuild)"
             return 0
         fi
     fi

@@ -140,10 +140,21 @@ yollayah_model_exists() {
     ollama list 2>/dev/null | grep -q "^${YOLLAYAH_MODEL_NAME}"
 }
 
+# Get the base model that yollayah was built from
+yollayah_get_base_model() {
+    if ! yollayah_model_exists; then
+        return 1
+    fi
+
+    # Extract the FROM line from the modelfile
+    ollama show "$YOLLAYAH_MODEL_NAME" --modelfile 2>/dev/null | grep "^FROM" | awk '{print $2}'
+}
+
 # Create or update the Yollayah model
 yollayah_create_model() {
     local base_model="${SELECTED_MODEL:-$DEFAULT_MODEL}"
     local modelfile_path="/tmp/yollayah.modelfile"
+    local rebuild_reason=""
 
     pj_step "Creating Yollayah personality model"
     pj_result "Base model: $base_model"
@@ -152,14 +163,29 @@ yollayah_create_model() {
     pj_cmd "ollama list | grep $YOLLAYAH_MODEL_NAME"
     if yollayah_model_exists; then
         pj_found "Existing yollayah model"
+
+        # Check if base model changed
+        local current_base
+        current_base=$(yollayah_get_base_model)
+        if [[ -n "$current_base" ]] && [[ "$current_base" != "$base_model" ]]; then
+            rebuild_reason="Base model changed: $current_base → $base_model"
+            pj_result "$rebuild_reason"
+            if [[ -n "${YOLLAYAH_TEST_MODE:-}" ]]; then
+                ux_info "Test mode: Rebuilding yollayah with tiny model ($base_model)"
+            else
+                ux_yollayah "$(yollayah_interjection) My base changed! Rebuilding from $base_model..."
+            fi
+            pj_cmd "ollama rm $YOLLAYAH_MODEL_NAME"
+            ollama rm "$YOLLAYAH_MODEL_NAME" 2>/dev/null || true
         # Rebuild if agents changed
-        if [[ "$AGENTS_CHANGED" == "true" ]]; then
-            pj_result "Agents updated, rebuilding model"
+        elif [[ "$AGENTS_CHANGED" == "true" ]]; then
+            rebuild_reason="Agents updated"
+            pj_result "$rebuild_reason"
             ux_yollayah "$(yollayah_interjection) Agents got updated! Rebuilding myself real quick..."
             pj_cmd "ollama rm $YOLLAYAH_MODEL_NAME"
             ollama rm "$YOLLAYAH_MODEL_NAME" 2>/dev/null || true
         else
-            pj_result "Model up to date, skipping rebuild"
+            pj_result "Model up to date (base: $current_base), skipping rebuild"
             ux_yollayah "$(yollayah_celebration) Already good to go."
             return 0
         fi
@@ -181,10 +207,21 @@ yollayah_create_model() {
 
     # Create the model using friendly wrapper (hides scary hashes!)
     pj_cmd "ollama create $YOLLAYAH_MODEL_NAME -f $modelfile_path"
+
+    # Show test mode specific message
+    if [[ -n "${YOLLAYAH_TEST_MODE:-}" ]]; then
+        ux_info "Creating yollayah model from tiny base: $base_model (fast!)"
+        pj_result "Test mode: Building from $base_model (~352MB)"
+    fi
+
     if ux_ollama_create "$YOLLAYAH_MODEL_NAME" "$modelfile_path"; then
         rm -f "$modelfile_path"
         pj_result "Model created successfully"
-        ux_yollayah "$(yollayah_celebration) Ready to roll, amigo!"
+        if [[ -n "${YOLLAYAH_TEST_MODE:-}" ]]; then
+            ux_success "Yollayah test model ready! (Built from $base_model)"
+        else
+            ux_yollayah "$(yollayah_celebration) Ready to roll, amigo!"
+        fi
         return 0
     else
         rm -f "$modelfile_path"
