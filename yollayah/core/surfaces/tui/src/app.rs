@@ -302,6 +302,20 @@ impl App {
                     }
                 }
 
+                // REACTIVE STREAMING: Process tokens as they arrive
+                // This replaces the polling anti-pattern (poll_streaming())
+                _ = self.conductor.process_streaming_token() => {
+                    // Token was processed by conductor, which sent messages to UI
+                    // Process those messages immediately
+                    self.process_conductor_messages();
+
+                    // Render immediately to display new token
+                    // No need to wait for next frame tick
+                    if let Err(e) = self.render(terminal) {
+                        tracing::error!("Render error during streaming: {}", e);
+                    }
+                }
+
                 // Frame tick - do work and render (10 FPS = 100ms)
                 _ = tokio::time::sleep(Duration::from_millis(100)) => {
                     // Handle startup phases incrementally
@@ -342,21 +356,14 @@ impl App {
                 }
             }
 
-            // IMPORTANT: Process messages FIRST to drain the channel
-            // This prevents poll_streaming from blocking if channel is full
-            self.process_conductor_messages();
-
-            // Poll conductor for streaming tokens
-            // This may send new tokens to the channel we just drained
-            self.conductor.poll_streaming().await;
-
-            // Process any newly arrived messages from streaming
+            // Process conductor messages (non-streaming control messages)
+            // Streaming tokens are now handled reactively in tokio::select! above
             self.process_conductor_messages();
 
             // Update animations and display state
             self.update();
 
-            // Render
+            // Render frame (streaming renders happen immediately in select!)
             self.render(terminal)?;
 
             // Check for quit message
@@ -1228,7 +1235,7 @@ impl App {
 
             // State description with static colors (breathing removed for performance)
             let status_style = match self.display.conductor_state {
-                ConductorState::WarmingUp | ConductorState::Initializing => {
+                ConductorState::Initializing => {
                     Style::default().fg(YOLLAYAH_MAGENTA)
                 }
                 ConductorState::Ready => Style::default().fg(STATUS_READY_COLOR),

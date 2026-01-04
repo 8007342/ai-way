@@ -1309,6 +1309,148 @@ impl<B: LlmBackend + 'static> Conductor<B> {
         }
     }
 
+    /// Process next streaming token reactively (non-polling)
+    ///
+    /// This method awaits the next token arrival and processes it,
+    /// sending appropriate messages to the UI. Use in tokio::select!
+    /// for true reactive streaming.
+    ///
+    /// Returns:
+    /// - `true` if a token was processed
+    /// - `false` if there's no active stream
+    ///
+    /// # Example
+    /// ```rust,no_run
+    /// tokio::select! {
+    ///     _ = conductor.process_streaming_token() => {
+    ///         // Token was processed and messages sent to UI
+    ///         // Call process_conductor_messages() to handle them
+    ///     }
+    ///     event = event_stream.next() => {
+    ///         // Handle other events
+    ///     }
+    /// }
+    /// ```
+    pub async fn process_streaming_token(&mut self) -> bool {
+        // Get mutable reference to streaming_rx
+        let rx = match self.streaming_rx.as_mut() {
+            Some(rx) => rx,
+            None => return false,  // No active stream
+        };
+
+        // REACTIVE: await next token (blocks until one arrives)
+        let token = match rx.recv().await {
+            Some(token) => token,
+            None => {
+                // Channel closed
+                self.streaming_rx = None;
+                return false;
+            }
+        };
+
+        // Reset command counter for this token
+        self.command_validator.reset_response_counter();
+
+        // Process the token (same logic as poll_streaming)
+        match token {
+            StreamingToken::Token(text) => {
+                // Count tokens for metrics
+                self.streaming_token_count += 1;
+
+                // Parse for avatar commands
+                let clean_text = self.command_parser.parse(&text);
+
+                // Collect commands to process
+                let mut commands = Vec::new();
+                while let Some(cmd) = self.command_parser.next_command() {
+                    commands.push(cmd);
+                }
+
+                // Process extracted commands WITH VALIDATION
+                for cmd in commands {
+                    // Validate command before execution
+                    match self.command_validator.validate_command(&cmd) {
+                        Ok(()) => {
+                            self.apply_avatar_command(&cmd).await;
+                        }
+                        Err(reason) => {
+                            tracing::warn!(
+                                command = ?cmd,
+                                reason = %reason,
+                                "Rejected LLM command"
+                            );
+                            // Don't execute rejected commands, but continue processing
+                        }
+                    }
+                }
+
+                // Append to session
+                self.session.append_streaming(&clean_text);
+
+                // Send token to UI
+                if let Some(ref msg_id) = self.streaming_message_id {
+                    self.send(ConductorMessage::Token {
+                        message_id: msg_id.clone(),
+                        text: clean_text,
+                    })
+                    .await;
+                }
+            }
+
+            StreamingToken::Complete { message } => {
+                // Complete the session message
+                self.session.complete_streaming();
+
+                // Build response metadata
+                let elapsed_ms = self
+                    .streaming_start
+                    .map_or(0, |s| s.elapsed().as_millis() as u64);
+                let token_count = self.streaming_token_count;
+                let active_tasks = self.tasks.active_count() as u32;
+
+                let mut metadata = ResponseMetadata::with_timing(elapsed_ms, token_count);
+                metadata.agent_tasks_spawned = active_tasks;
+                metadata.model_id = self.streaming_model.take();
+
+                // Reset streaming metrics
+                self.streaming_start = None;
+                self.streaming_token_count = 0;
+
+                // Send completion to UI with metadata
+                if let Some(msg_id) = self.streaming_message_id.take() {
+                    self.send(ConductorMessage::StreamEnd {
+                        message_id: msg_id,
+                        final_content: message,
+                        metadata,
+                    })
+                    .await;
+                }
+
+                self.streaming_rx = None;
+                self.set_state(ConductorState::Ready).await;
+            }
+
+            StreamingToken::Error(error) => {
+                // Cancel the streaming message
+                self.session.cancel_streaming();
+
+                // Send error to UI
+                if let Some(msg_id) = self.streaming_message_id.take() {
+                    self.send(ConductorMessage::StreamError {
+                        message_id: msg_id,
+                        error,
+                    })
+                    .await;
+                }
+
+                self.streaming_rx = None;
+                self.set_state(ConductorState::Ready).await;
+            }
+        }
+
+        true
+    }
+
     /// Shut down the Conductor
     pub async fn shutdown(&mut self) -> anyhow::Result<()> {
         self.set_state(ConductorState::ShuttingDown).await;

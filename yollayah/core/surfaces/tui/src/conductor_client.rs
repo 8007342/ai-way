@@ -388,6 +388,23 @@ impl ConductorClient {
         }
     }
 
+    /// Process next streaming token reactively (non-polling)
+    ///
+    /// For in-process mode, this awaits and processes the next token.
+    /// For remote modes, streaming is handled by the transport layer.
+    ///
+    /// Returns true if a token was processed, false if no active stream.
+    pub async fn process_streaming_token(&mut self) -> bool {
+        match &mut self.mode {
+            ClientMode::InProcess { conductor, .. } => conductor.process_streaming_token().await,
+            ClientMode::UnixSocket { .. } => {
+                // Remote conductor handles streaming internally
+                // Messages arrive via transport
+                false
+            }
+        }
+    }
+
     /// Try to receive a message from the Conductor (non-blocking)
     pub fn try_recv(&mut self) -> Option<ConductorMessage> {
         match &mut self.mode {
