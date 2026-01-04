@@ -29,9 +29,14 @@ _YOLLAYAH_OLLAMA_LIFECYCLE_LOADED=1
 # Default model (conservative, works on most hardware)
 readonly DEFAULT_MODEL="llama3.2:3b"
 
+# Yollayah base model (always use efficient 3b for personality layer)
+# This ensures yollayah model fits in VRAM alongside general inference model
+readonly YOLLAYAH_BASE_MODEL="llama3.2:3b"
+
 # Model tiers based on VRAM
 # Format: "min_vram_gb:model_name"
 readonly MODEL_TIERS=(
+    "20:llama3.1:20b"     # 20GB+ VRAM: High-end GPU (RTX A5000, RTX 4090, etc)
     "16:llama3.1:8b"      # 16GB+ VRAM: Great quality (70b too large even for 16GB)
     "12:llama3.1:8b"      # 12GB+ VRAM: Great quality
     "8:llama3.2:3b"       # 8GB+ VRAM: Good balance
@@ -419,7 +424,8 @@ model_select_best() {
         if [[ $vram_gb -ge $min_vram ]]; then
             SELECTED_MODEL="$model"
             log_ollama "INFO" "Selected $model for ${vram_gb}GB VRAM (tier: $HARDWARE_TIER)"
-            pj_result "Selected: $model (needs ${min_vram}GB+, you have ${vram_gb}GB)"
+            pj_result "General inference: $model (${min_vram}GB+, you have ${vram_gb}GB)"
+            pj_result "Yollayah base: $YOLLAYAH_BASE_MODEL (efficient personality layer)"
             return 0
         fi
     done

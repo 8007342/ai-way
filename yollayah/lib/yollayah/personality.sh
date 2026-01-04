@@ -152,7 +152,14 @@ yollayah_get_base_model() {
 
 # Create or update the Yollayah model
 yollayah_create_model() {
-    local base_model="${SELECTED_MODEL:-$DEFAULT_MODEL}"
+    # Use dedicated base model for yollayah (3b), not general inference model
+    # Test mode uses tiny model, normal mode uses YOLLAYAH_BASE_MODEL
+    local base_model
+    if [[ -n "${YOLLAYAH_TEST_MODE:-}" ]]; then
+        base_model="${YOLLAYAH_TEST_MODEL:-qwen2:0.5b}"
+    else
+        base_model="${YOLLAYAH_BASE_MODEL:-$DEFAULT_MODEL}"
+    fi
     local modelfile_path="/tmp/yollayah.modelfile"
     local rebuild_reason=""
 
