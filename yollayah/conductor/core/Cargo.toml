@@ -22,11 +22,20 @@ websocket = ["tokio-tungstenite"]
 [dependencies]
 # Async runtime
 tokio = { version = "1.41", features = ["full", "rt-multi-thread", "macros", "sync", "net"] }
-tokio-stream = "0.1"
+
+# Reactive streams
+tokio-stream = { version = "0.1", features = ["sync", "time", "net"] }
+futures = { version = "0.3", features = ["async-await"] }
+futures-util = "0.3"
+
+# RxRust (for advanced reactive patterns)
+rxrust = "1.0.0-rc.1"
+
+# Stream utilities
+pin-project-lite = "0.2"
 
 # HTTP client for LLM backends
 reqwest = { version = "0.12", features = ["json", "stream"] }
-futures = "0.3"
 
 # Serialization
 serde = { version = "1.0", features = ["derive"] }
