@@ -518,15 +518,23 @@ ux_tui_build() {
     # Build in release mode for better performance
     pj_cmd "cargo build --release --manifest-path $TUI_DIR/Cargo.toml"
     pj_result "This compiles the Rust TUI (may take 1-2 min first time)"
-    if ux_run_friendly "Building interface..." cargo build --release --manifest-path "$TUI_DIR/Cargo.toml" 2>&1; then
+
+    # Capture output to temp file and check result
+    local build_output
+    build_output=$(mktemp)
+    if cargo build --release --manifest-path "$TUI_DIR/Cargo.toml" > "$build_output" 2>&1; then
         log_ux "INFO" "TUI build successful"
         pj_result "Build successful"
         ux_success "Interface ready!"
+        rm -f "$build_output"
         return 0
     else
-        log_ux "ERROR" "TUI build failed"
-        pj_result "Build failed (check cargo output)"
+        local exit_code=$?
+        log_ux "ERROR" "TUI build failed with exit code: $exit_code"
+        log_ux "ERROR" "Build output: $(tail -20 "$build_output")"
+        pj_result "Build failed with exit $exit_code (check cargo output)"
         ux_warn "Couldn't build the fancy interface, using simple mode"
+        rm -f "$build_output"
         return 1
     fi
 }
