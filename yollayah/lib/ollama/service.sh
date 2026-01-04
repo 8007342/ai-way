@@ -306,9 +306,7 @@ ollama_ensure_running() {
     fi
 
     # Start Ollama serve in background
-    # Set LD_LIBRARY_PATH to help Ollama find CUDA libraries on Fedora/Silverblue
-    # NOTE: In toolbox, this may not be needed but kept for compatibility
-    # See TODO-ollama-gpu.md for details
+    # Let Ollama use its defaults - it knows how to find GPU libraries
     pj_cmd "ollama serve (background)"
 
     # Set OLLAMA_KEEP_ALIVE to prevent model unloading (CRITICAL for performance!)
@@ -322,21 +320,21 @@ ollama_ensure_running() {
 
     # In test verbose mode, show filtered Ollama output (GPU/CUDA diagnostics only)
     if [[ -n "${YOLLAYAH_TEST_VERBOSE:-}" ]]; then
-        echo -e "${UX_CYAN}→${UX_NC} Starting ollama serve with smart diagnostic filtering..."
-        echo -e "${UX_DIM}  (showing GPU/CUDA messages only)${UX_NC}"
+        echo -e "${UX_CYAN}→${UX_NC} Starting ollama serve (verbose mode - showing GPU diagnostics)..."
         echo -e "${UX_DIM}  OLLAMA_KEEP_ALIVE=${OLLAMA_KEEP_ALIVE}${UX_NC}"
         ux_blank
 
-        # Start ollama serve with filtered output
-        # stderr goes to our filter, process runs in background
-        LD_LIBRARY_PATH="/usr/lib:/usr/lib64:${LD_LIBRARY_PATH:-}" ollama serve 2>&1 | _ollama_filter_output &
+        # Start ollama serve with filtered output for diagnostics
+        # Let Ollama use default library paths
+        ollama serve 2>&1 | _ollama_filter_output &
     else
-        LD_LIBRARY_PATH="/usr/lib:/usr/lib64:${LD_LIBRARY_PATH:-}" ollama serve > /dev/null 2>&1 &
+        # Normal mode - run silently with defaults
+        ollama serve > /dev/null 2>&1 &
     fi
 
     local pid=$!
     WE_STARTED_OLLAMA=true
-    log_ollama "INFO" "Started ollama serve (PID: $pid) with CUDA library path"
+    log_ollama "INFO" "Started ollama serve (PID: $pid) using default configuration"
     pj_result "Started ollama serve (PID: $pid)"
 
     # Wait for it to come up
