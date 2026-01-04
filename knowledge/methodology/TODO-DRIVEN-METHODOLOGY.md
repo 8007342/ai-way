@@ -13,16 +13,19 @@
 ## Table of Contents
 
 1. [Core Philosophy](#core-philosophy)
-2. [TODO File Hierarchy](#todo-file-hierarchy)
-3. [File Specifications](#file-specifications)
-4. [Lifecycle Management](#lifecycle-management)
-5. [Agent Update Guidelines](#agent-update-guidelines)
-6. [Security Considerations](#security-considerations)
-7. [Quality Assurance Integration](#quality-assurance-integration)
-8. [Integration with deps.yaml](#integration-with-depsyaml)
-9. [Freshness Tracking](#freshness-tracking)
-10. [Anti-Patterns and Pitfalls](#anti-patterns-and-pitfalls)
-11. [Templates](#templates)
+2. [File Naming Standards](#file-naming-standards)
+3. [TODO File Hierarchy](#todo-file-hierarchy)
+4. [File Navigation](#file-navigation)
+5. [File Specifications](#file-specifications)
+6. [Lifecycle Management](#lifecycle-management)
+7. [QA Verification Workflow](#qa-verification-workflow)
+8. [Agent Update Guidelines](#agent-update-guidelines)
+9. [Security Considerations](#security-considerations)
+10. [Quality Assurance Integration](#quality-assurance-integration)
+11. [Integration with deps.yaml](#integration-with-depsyaml)
+12. [Freshness Tracking](#freshness-tracking)
+13. [Anti-Patterns and Pitfalls](#anti-patterns-and-pitfalls)
+14. [Templates](#templates)
 
 ---
 
@@ -45,6 +48,93 @@ TODO-Driven Development centers on three principles:
 | **TODO files in repo** | Versioned with code, grep-able, offline-first | Manual discipline required |
 
 TODO files live with the code. When you checkout a branch, you get its TODO state. When you review a PR, you see TODO changes. When agents work, they update TODO files directly.
+
+---
+
+## File Naming Standards
+
+### Mandatory Prefixes
+
+**CRITICAL**: All files in `progress/` directory MUST use one of these prefixes:
+
+| Prefix | Meaning | Example |
+|--------|---------|---------|
+| `TODO-` | Active work, pending tasks | `TODO-BUG-001-tui-streaming.md` |
+| `DONE-` | Completed work, archived | `DONE-BUG-001-tui-streaming.md` |
+| `TODO-QA-verify-` | QA verification in progress | `TODO-QA-verify-BUG-001.md` |
+| `DONE-QA-verify-` | QA verification complete | `DONE-QA-verify-BUG-001.md` |
+
+**Rationale**: Prefixes prevent work from being redone due to unclear status. Unprefixed files like `BUG-001.md` or `ANALYSIS-*.md` are ambiguous—are they active or complete?
+
+### Naming Patterns
+
+```
+TODO-[TYPE]-[ID]-[description].md
+DONE-[TYPE]-[ID]-[description].md
+TODO-QA-verify-[TYPE]-[ID].md
+```
+
+**Common Types**:
+- `BUG` - Bug fixes
+- `EPIC` - Multi-sprint initiatives
+- `STORY` - User-facing features
+- `SPRINT` - Sprint planning and tracking
+- `ANALYSIS` - Investigation results
+- `ODYSSEY` - Long-term exploration
+- `PERFORMANCE-AUDIT` - Performance analysis
+- `ADR` - Architecture Decision Record
+
+**Examples**:
+```
+TODO-BUG-001-tui-waits-for-full-stream.md
+DONE-BUG-001-tui-waits-for-full-stream.md
+TODO-QA-verify-BUG-001.md
+TODO-EPIC-001-TUI-reactive-overhaul.md
+TODO-SPRINT-00-foundation.md
+```
+
+### The TODO → DONE Lifecycle
+
+Files transition **in place** through these states:
+
+```
+Creation → Active Work → Complete → QA Verify → Done
+    ↓           ↓            ↓           ↓          ↓
+(unnamed) → TODO-xxxx → TODO-xxxx → TODO-QA-  → DONE-xxxx
+                                     verify-     (+ DONE-QA-)
+```
+
+1. **Creation**: File starts as `TODO-xxxx.md`
+2. **Active Work**: Tasks are completed, checkboxes marked
+3. **Complete**: All tasks done, ready for verification
+4. **QA Verify**: `TODO-QA-verify-xxxx.md` created (see [QA Verification Workflow](#qa-verification-workflow))
+5. **Done**: Both files renamed to `DONE-xxxx.md` and `DONE-QA-verify-xxxx.md`
+
+### Migration of Unprefixed Files
+
+If a file in `progress/` lacks `TODO-` or `DONE-` prefix:
+
+1. **Assess Status**: Does it have pending work?
+   - Yes → Rename to `TODO-xxxx.md`
+   - No → Rename to `DONE-xxxx.md`
+   - Obsolete → Rename to `DONE-xxxx.md` and mark as obsolete in header
+
+2. **Update References**: Update any links in other files
+
+3. **Create QA Task** (if pending): Add `TODO-QA-verify-xxxx.md` if work needs verification
+
+**Example Migration**:
+```bash
+# Unprefixed file with pending work
+git mv progress/BUG-001-tui-streaming.md progress/TODO-BUG-001-tui-streaming.md
+
+# Unprefixed file that's complete
+git mv progress/ANALYSIS-blocking-await.md progress/DONE-ANALYSIS-blocking-await.md
+
+# Obsolete file
+git mv progress/DELIVERABLES.txt progress/DONE-DELIVERABLES.txt
+# (Mark as obsolete in file header)
+```
 
 ---
 
@@ -81,6 +171,87 @@ TODO-*.md                 <- Feature/component specific files
                          v
               [Severity-based items]
 ```
+
+---
+
+## File Navigation
+
+### Parent/Sibling/Children Links
+
+**REQUIRED**: Every TODO file MUST include navigation links at the top for quick traversal of related work.
+
+**Location**: Immediately after the file header (title, status, metadata)
+
+**Format**:
+
+```markdown
+# TODO-EPIC-001-TUI-Reactive-Overhaul
+
+**Status**: 🟢 Active
+**Created**: 2026-01-02
+**Priority**: P0
+
+---
+
+## Navigation
+
+**Parent**: [TODO-main.md](TODO-main.md)
+**Siblings**: [TODO-EPIC-002-ARCHITECTURE-REVIEW.md](TODO-EPIC-002-ARCHITECTURE-REVIEW.md)
+**Children**:
+- [TODO-SPRINT-00-foundation.md](TODO-SPRINT-00-foundation.md)
+- [TODO-101-create-reactive-branch.md](TODO-101-create-reactive-branch.md)
+- [TODO-102-add-reactive-dependencies.md](TODO-102-add-reactive-dependencies.md)
+
+**QA Verification**: [TODO-QA-verify-EPIC-001.md](TODO-QA-verify-EPIC-001.md) _(when complete)_
+
+---
+```
+
+### Navigation Relationship Types
+
+| Relationship | Definition | Example |
+|--------------|------------|---------|
+| **Parent** | File that spawned or owns this work | EPIC → SPRINT has parent EPIC |
+| **Siblings** | Related files at same hierarchy level | Multiple EPICs are siblings under TODO-main |
+| **Children** | Files spawned from this work | EPIC has children SPRINTs, STORYs, BUGs |
+| **QA Verification** | Associated QA verification task | TODO-BUG-001 → TODO-QA-verify-BUG-001 |
+
+### Hierarchy Relationships
+
+```
+TODO-main.md (root index)
+    ├── TODO-EPIC-001.md (parent of sprints)
+    │   ├── TODO-SPRINT-00.md (child of epic, parent of tasks)
+    │   │   ├── TODO-101.md (child of sprint)
+    │   │   └── TODO-102.md (child of sprint)
+    │   └── TODO-SPRINT-01.md (sibling of sprint-00)
+    ├── TODO-EPIC-002.md (sibling of epic-001)
+    └── TODO-BUG-001.md (standalone, parent is TODO-main)
+        └── TODO-QA-verify-BUG-001.md (child of BUG-001)
+```
+
+### Navigation Rules
+
+1. **Root Files** (`TODO-main.md`, `TODO-next.md`): No parent, list all epics as children
+2. **Epic Files**: Parent is `TODO-main.md`, children are sprints/stories
+3. **Sprint Files**: Parent is epic, children are tasks/bugs fixed in sprint
+4. **Task/Bug Files**: Parent is sprint or epic, children are subtasks
+5. **QA Verification Files**: Parent is the file being verified, no children
+
+### Navigation Link Maintenance
+
+**When creating a new file**:
+1. Add navigation section with parent link
+2. Update parent file to add this as a child
+3. List relevant siblings (same parent, related work)
+
+**When completing work**:
+1. Create `TODO-QA-verify-xxxx.md` and link to it
+2. Keep navigation links intact (helps track history)
+
+**When moving to DONE**:
+1. Preserve navigation links (DONE files are documentation)
+2. Remove from parent's children list (or move to "Completed" section)
 
 ---
 
@@ -286,6 +457,161 @@ For security findings:
 **Description**: Hard latency filter rejected all models for short messages.
 **Resolution**: Changed to scoring-only approach.
 ```
+
+---
+
+## QA Verification Workflow
+
+### The QA Gate
+
+When a TODO file's tasks are complete, it enters QA verification **before** moving to DONE status. This ensures:
+1. Work actually meets the stated requirements
+2. Tests exist and pass
+3. Documentation is updated
+4. No regressions introduced
+
+### Creating a QA Verification Task
+
+**Trigger**: All subtasks in `TODO-xxxx.md` are marked complete
+
+**Action**: Create `TODO-QA-verify-xxxx.md` adjacent to the completed file
+
+**Format**:
+
+```markdown
+# TODO-QA-verify-BUG-001
+
+**Parent**: [TODO-BUG-001-tui-waits-for-full-stream.md](TODO-BUG-001-tui-waits-for-full-stream.md)
+**Created**: 2026-01-03
+**QA Team**: QA Engineer, Chaos Monkey Intern, Hacker (supervised by Architect)
+
+---
+
+## Verification Checklist
+
+### Requirements Verification
+- [ ] All tasks in parent TODO file are complete
+- [ ] Stated goal is achieved
+- [ ] No scope creep included
+
+### Testing Verification
+- [ ] Unit tests exist for new code
+- [ ] Integration tests pass
+- [ ] No tests disabled without justification
+- [ ] Manual testing performed (if applicable)
+
+### Quality Verification
+- [ ] Code follows project patterns
+- [ ] No principle violations (PRINCIPLE-*.md)
+- [ ] No security regressions
+- [ ] Documentation updated
+
+### Build Verification
+- [ ] Builds pass (0 errors)
+- [ ] Warnings are justified or fixed
+- [ ] Checksums regenerated (if .sh files changed)
+
+---
+
+## Test Results
+
+[QA team fills in results of testing]
+
+---
+
+## Approval
+
+**QA Engineer**: [ ] Approved
+**Hacker**: [ ] No security issues
+**Architect**: [ ] Approved for DONE status
+
+---
+
+**When all checkboxes are complete**:
+1. Rename `TODO-BUG-001.md` → `DONE-BUG-001.md`
+2. Rename `TODO-QA-verify-BUG-001.md` → `DONE-QA-verify-BUG-001.md`
+```
+
+### QA Team Authority
+
+**CRITICAL**: QA verification files have special authority:
+
+| Team Role | Authority |
+|-----------|-----------|
+| **QA Engineer** | Can mark TODO-QA-verify-xxxx as DONE |
+| **Chaos Monkey Intern** | Stress testing, edge cases |
+| **Hacker** | Security regression review |
+| **Architect** | Final approval for DONE transition |
+
+**Self-Completion Rule**: When all subtasks in `TODO-QA-verify-xxxx.md` are complete and approved:
+1. QA team can rename `TODO-QA-verify-xxxx.md` → `DONE-QA-verify-xxxx.md`
+2. QA team can rename parent `TODO-xxxx.md` → `DONE-xxxx.md`
+3. Update parent file's navigation links
+4. Update siblings to reflect completion
+
+### QA Workflow Diagram
+
+```
+Development Complete
+        ↓
+   TODO-xxxx.md (all tasks done)
+        ↓
+   Create TODO-QA-verify-xxxx.md
+        ↓
+   QA Team Verification
+   ├─ Requirements met?
+   ├─ Tests pass?
+   ├─ Quality checks?
+   └─ Security review?
+        ↓
+   All Approved?
+   ├─ YES → DONE-xxxx.md + DONE-QA-verify-xxxx.md
+   └─ NO → Add fixes to TODO-xxxx.md, restart
+```
+
+### Verification Failure Handling
+
+If QA verification finds issues:
+
+1. **Add subtasks to parent `TODO-xxxx.md`** - Do NOT mark as DONE
+2. **Document failures in QA file** - What didn't work, why
+3. **Re-trigger development** - Fix the issues
+4. **Re-verify** - QA team reviews fixes
+
+**Example**:
+
+```markdown
+# TODO-QA-verify-BUG-001
+
+## Verification Results
+
+### ❌ FAILED - Testing Verification
+- [x] Unit tests exist ✅
+- [ ] Integration tests pass ❌ - TUI still hangs on slow network
+- [ ] Manual testing performed ❌ - Not tested with large responses
+
+## Issues Found
+
+1. **TUI hangs on slow network** - Need network latency simulation test
+2. **Large responses (>10KB) still batch** - Buffer size issue
+
+## Action Required
+
+Added to parent TODO-BUG-001.md:
+- [ ] Add network latency test (slow.localhost:11434)
+- [ ] Fix buffer batching for responses >10KB
+
+**Status**: Returned to development, QA verification pending fixes
+```
+
+### When to Skip QA Verification
+
+QA verification can be skipped for:
+- **Documentation-only changes** (typo fixes, clarifications)
+- **Trivial refactors** (renaming variables, no logic changes)
+- **Methodology updates** (this file!)
+
+**Rule**: If it changes behavior, QA verifies it.
 
 ---
 
@@ -858,6 +1184,7 @@ Just completed investigation of BUG-001 (TUI waits for full stream). Root cause 
 |---------|------|---------|
 | 1.0 | 2026-01-02 | Initial methodology documentation |
 | 1.1 | 2026-01-03 | Added checkpointing system for session resume |
+| 1.2 | 2026-01-03 | Added TODO-/DONE- naming standards, QA verification workflow, Parent/Sibling/Children navigation |
 
 ---
 
