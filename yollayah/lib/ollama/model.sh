@@ -8,8 +8,11 @@
 #   model_create_yollayah "llama3.2:3b"
 
 # Source dependencies
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
-source "${SCRIPT_DIR}/lib/common/robot.sh"
+# Only set SCRIPT_DIR if not already set (for standalone execution)
+if [[ -z "${SCRIPT_DIR:-}" ]]; then
+    SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+fi
+source "${SCRIPT_DIR}/yollayah/lib/common/robot.sh"
 
 # Module name for robot logging
 readonly MODEL_MODULE="model"
