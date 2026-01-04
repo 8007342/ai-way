@@ -36,8 +36,8 @@ readonly YOLLAYAH_BASE_MODEL="llama3.2:3b"
 # Model tiers based on VRAM
 # Format: "min_vram_gb:model_name"
 readonly MODEL_TIERS=(
-    "20:llama3.1:20b"     # 20GB+ VRAM: High-end GPU (RTX A5000, RTX 4090, etc)
-    "16:llama3.1:8b"      # 16GB+ VRAM: Great quality (70b too large even for 16GB)
+    "20:qwen2.5:14b"      # 20GB+ VRAM: High-end GPU (RTX A5000, RTX 4090, etc)
+    "16:llama3.1:8b"      # 16GB+ VRAM: Great quality
     "12:llama3.1:8b"      # 12GB+ VRAM: Great quality
     "8:llama3.2:3b"       # 8GB+ VRAM: Good balance
     "6:llama3.2:3b"       # 6GB+ VRAM: Default
