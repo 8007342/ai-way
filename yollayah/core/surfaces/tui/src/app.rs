@@ -384,7 +384,11 @@ impl App {
     /// Process all pending messages from the Conductor
     fn process_conductor_messages(&mut self) {
         let mut any_messages = false;
+        let mut message_count = 0;
+
         for msg in self.conductor.recv_all() {
+            message_count += 1;
+
             // Check for quit message before applying
             if let ConductorMessage::Quit { message } = &msg {
                 self.goodbye_message = message.clone();
@@ -393,6 +397,17 @@ impl App {
             // Apply message to display state
             self.display.apply_message(msg);
             any_messages = true;
+        }
+
+        // Channel health monitoring: Warn if we're draining too many messages at once
+        // Channel capacity is 512. If we're consistently draining >384 messages (75%),
+        // this indicates the channel is backing up and we may start dropping tokens
+        if message_count > 384 {
+            tracing::warn!(
+                messages_drained = message_count,
+                "Channel health warning: Draining large message batch (>75% of 512 capacity). \
+                 UI may be blocking or rendering too slowly."
+            );
         }
 
         // ✅ OPTIMIZATION (Sprint 2): Mark conversation dirty if any messages received

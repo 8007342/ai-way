@@ -100,7 +100,9 @@ impl ConductorClient {
                 info!("Starting in embedded mode (Conductor in-process)");
 
                 // Create channel for Conductor -> TUI messages
-                let (tx, rx) = mpsc::channel(100);
+                // Increased from 100 → 512 to prevent token dropping at high throughput
+                // (512 provides ~2.5sec buffer @ 200 tok/sec streaming)
+                let (tx, rx) = mpsc::channel(512);
 
                 // Create Ollama backend from environment
                 let backend = OllamaBackend::from_env();

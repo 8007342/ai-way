@@ -21,9 +21,11 @@
 //! - Clean separation of concerns
 
 use std::sync::Arc;
+use std::time::Duration;
 
 use chrono::Timelike;
 use tokio::sync::mpsc;
+use tokio::time::timeout;
 
 use crate::avatar::{AvatarCommand, AvatarState, CommandParser};
 use crate::backend::{LlmBackend, LlmRequest, StreamingToken};
@@ -1512,10 +1514,27 @@ impl<B: LlmBackend + 'static> Conductor<B> {
     /// For backward compatibility, it also sends to the `legacy_tx` if present.
     async fn send(&self, msg: ConductorMessage) {
         // If we have a legacy single-surface channel, use it
-        // Use try_send to avoid blocking if channel is full (prevents streaming stalls)
+        // Use timeout-based send to provide backpressure instead of silently dropping
+        // 100ms timeout prevents deadlock while giving surface time to drain channel
         if let Some(ref tx) = self.legacy_tx {
-            if let Err(e) = tx.try_send(msg.clone()) {
-                tracing::warn!("Failed to send message to legacy surface (channel may be full): {}", e);
+            let send_timeout = Duration::from_millis(100);
+            match timeout(send_timeout, tx.send(msg.clone())).await {
+                Ok(Ok(())) => {
+                    // Message sent successfully
+                }
+                Ok(Err(_)) => {
+                    // Channel closed (surface disconnected)
+                    tracing::warn!("Legacy surface channel closed, message dropped");
+                }
+                Err(_) => {
+                    // Timeout - surface not consuming messages fast enough
+                    tracing::error!(
+                        "Surface not consuming messages (timeout after {}ms), dropping token. \
+                         This indicates the UI is blocking or channel buffer is too small.",
+                        send_timeout.as_millis()
+                    );
+                    // TODO: Add metrics counter for dropped tokens
+                }
             }
         }
 
