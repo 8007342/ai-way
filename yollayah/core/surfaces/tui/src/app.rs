@@ -262,8 +262,9 @@ impl App {
         &mut self,
         terminal: &mut Terminal<CrosstermBackend<io::Stdout>>,
     ) -> anyhow::Result<()> {
-        // Target ~10 FPS for terminal-style animations
-        let frame_duration = Duration::from_millis(100);
+        // Target 20 FPS for snappy terminal feel
+        // This caps render calls to 20/sec even during high-speed streaming (200+ tok/sec)
+        let frame_duration = Duration::from_millis(50);
 
         // Create async event stream for non-blocking terminal events
         let mut event_stream = EventStream::new();
@@ -306,18 +307,16 @@ impl App {
                 // This replaces the polling anti-pattern (poll_streaming())
                 _ = self.conductor.process_streaming_token() => {
                     // Token was processed by conductor, which sent messages to UI
-                    // Process those messages immediately
+                    // Process those messages into display state
                     self.process_conductor_messages();
 
-                    // Render immediately to display new token
-                    // No need to wait for next frame tick
-                    if let Err(e) = self.render(terminal) {
-                        tracing::error!("Render error during streaming: {}", e);
-                    }
+                    // DON'T render here! Let the frame tick handle rendering at 20 FPS.
+                    // This batches all tokens received during the frame interval (50ms)
+                    // into a single render call, reducing overhead from 200+/sec to 20/sec.
                 }
 
-                // Frame tick - do work and render (10 FPS = 100ms)
-                _ = tokio::time::sleep(Duration::from_millis(100)) => {
+                // Frame tick - do work and render (20 FPS = 50ms)
+                _ = tokio::time::sleep(frame_duration) => {
                     // Handle startup phases incrementally
                     match startup_phase {
                         StartupPhase::NeedStart => {
