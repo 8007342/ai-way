@@ -24,6 +24,31 @@ agents/
 target/
 **/target/
 
+# Rust compiled artifacts
+**/*.rlib
+**/*.rmeta
+**/*.d
+**/*.so
+**/*.dylib
+**/*.dll
+**/*.a
+**/*.lib
+
+# Rust incremental compilation
+**/incremental/
+**/.fingerprint/
+**/deps/
+**/build/
+**/examples/*.pdb
+
+# Cargo lock files (libraries don't commit these)
+# NOTE: Binary projects SHOULD commit Cargo.lock
+**/Cargo.lock
+Cargo.lock
+
+# Cargo output
+**/Cargo.toml.orig
+
 # Docker volumes (persistent data)
 models/
 tensors/
