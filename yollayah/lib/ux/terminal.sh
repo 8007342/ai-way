@@ -434,7 +434,7 @@ conductor_stop() {
 # ============================================================================
 
 # Path to the Rust TUI binary
-TUI_DIR="${SCRIPT_DIR}/tui"
+TUI_DIR="${SCRIPT_DIR}/yollayah/core/surfaces/tui"
 TUI_BINARY="${TUI_DIR}/target/release/yollayah-tui"
 TUI_BINARY_DEBUG="${TUI_DIR}/target/debug/yollayah-tui"
 

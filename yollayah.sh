@@ -566,6 +566,13 @@ main() {
         return 0
     fi
 
+    # Debug: Show what mode we're in
+    if [[ -n "${YOLLAYAH_DEBUG:-}" ]]; then
+        echo "DEBUG: About to launch interface"
+        echo "DEBUG: YOLLAYAH_INTERACTIVE=${YOLLAYAH_INTERACTIVE:-not set}"
+        echo "DEBUG: YOLLAYAH_MODEL_NAME=$YOLLAYAH_MODEL_NAME"
+    fi
+
     # Use bash interface if --interactive flag is set, otherwise try TUI
     if [[ "${YOLLAYAH_INTERACTIVE:-}" == "1" ]]; then
         echo "🖥️  Interactive mode: Using simple bash interface"
