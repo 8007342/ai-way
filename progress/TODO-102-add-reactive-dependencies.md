@@ -4,10 +4,11 @@
 **Sprint**: SPRINT-00-foundation.md
 **Story**: STORY-002
 **Owner**: Rust/Async Specialist
-**Status**: 🟡 READY TO START
+**Status**: ✅ COMPLETE
 **Effort**: 2 hours
 **Priority**: P0 - CRITICAL
 **Depends On**: TODO-101 (branch created)
+**Completed**: 2026-01-03
 
 ---
 
@@ -59,12 +60,12 @@ pin-project-lite = "0.2"
 
 ## Tasks
 
-- [ ] Research latest stable versions
-- [ ] Add dependencies to TUI Cargo.toml
-- [ ] Add dependencies to Conductor Cargo.toml
-- [ ] Verify TUI builds with new dependencies
-- [ ] Verify Conductor builds with new dependencies
-- [ ] Create "hello world" reactive example
+- [x] Research latest stable versions
+- [x] Add dependencies to TUI Cargo.toml
+- [x] Add dependencies to Conductor Cargo.toml
+- [x] Verify TUI builds with new dependencies
+- [x] Verify Conductor builds with new dependencies
+- [x] Create "hello world" reactive example (see examples/hello_reactive.rs)
 
 ---
 
@@ -222,12 +223,20 @@ Document in this TODO:
 
 ## Acceptance Criteria
 
-- [ ] Dependencies added to both Cargo.toml files
-- [ ] Both projects build successfully
-- [ ] Hello world example compiles and runs
-- [ ] Example demonstrates reactive pattern correctly
-- [ ] No `.await` in event processing logic
-- [ ] Decision on RxRust vs tokio-stream documented
+- [x] Dependencies added to both Cargo.toml files
+- [x] Both projects build successfully
+- [x] Hello world example compiles and runs
+- [x] Example demonstrates reactive pattern correctly
+- [x] No `.await` in event processing logic
+- [x] Decision on RxRust vs tokio-stream documented (pure tokio-stream chosen)
+
+## Integration Test Requirements (TODO → DONE)
+
+For this TODO to move to DONE status:
+- [x] `cd yollayah/core/surfaces/tui && cargo check` succeeds
+- [x] `cd yollayah/conductor/core && cargo check` succeeds
+- [x] `cargo run --example hello_reactive` runs without errors
+- [x] Example demonstrates proper reactive streaming pattern
 
 ---
 

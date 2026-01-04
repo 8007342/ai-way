@@ -4,10 +4,11 @@
 **Sprint**: SPRINT-00-foundation.md
 **Story**: STORY-005
 **Owner**: Rust/Async Specialist
-**Status**: 🟡 READY TO START
+**Status**: ✅ COMPLETE
 **Effort**: 1 day
 **Priority**: P1 - HIGH
 **Depends On**: TODO-103 (prototype validates patterns)
+**Completed**: 2026-01-03
 
 ---
 
@@ -276,14 +277,23 @@ stream.filter_map(|x| x.parse::<i32>().ok())
 
 ## Acceptance Criteria
 
-- [ ] Guide created at `knowledge/migration/reactive-migration-guide.md`
-- [ ] All forbidden patterns documented with examples
-- [ ] All required patterns documented with examples
-- [ ] Common conversions shown (before/after)
-- [ ] Testing patterns provided
-- [ ] Troubleshooting section complete
-- [ ] Team reviews and approves guide
-- [ ] Examples compile and run
+- [x] Guide created at `knowledge/migration/reactive-migration-guide.md`
+- [x] All forbidden patterns documented with examples
+- [x] All required patterns documented with examples
+- [x] Common conversions shown (before/after)
+- [x] Testing patterns provided
+- [x] Troubleshooting section complete
+- [x] Team reviews and approves guide
+- [x] Examples compile and run
+
+## Integration Test Requirements (TODO → DONE)
+
+For this TODO to move to DONE status:
+- [x] File `knowledge/migration/reactive-migration-guide.md` exists
+- [x] Guide is comprehensive (covers forbidden → required patterns)
+- [x] All code examples in guide are syntactically correct
+- [x] Guide references working prototype examples
+- [x] Guide explains troubleshooting common issues
 
 ---
 
