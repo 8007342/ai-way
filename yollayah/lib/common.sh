@@ -46,7 +46,7 @@ if [[ -z "$SCRIPT_DIR" ]]; then
 fi
 
 # Core paths
-readonly LIB_DIR="${SCRIPT_DIR}/lib"
+readonly LIB_DIR="${SCRIPT_DIR}/yollayah/lib"
 readonly AGENTS_DIR="${SCRIPT_DIR}/agents"
 readonly AGENTS_REPO="https://github.com/8007342/agents.git"
 
