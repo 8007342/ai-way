@@ -155,73 +155,100 @@ ux_handle_command() {
 # ============================================================================
 
 # Main conversation loop
-# Graceful exit handler for conversation loop
-ux_conversation_exit() {
-    # Restore terminal settings
-    stty sane 2>/dev/null || true
-
-    # Show farewell message
-    echo ""  # New line after ^C
-    ux_blank
-    ux_yollayah "¡Hasta luego! Take care of yourself. 💜"
-    ux_blank
-
-    exit 0
-}
-
+# Simplified conversation loop - follows async/streaming principles from Rust
+# - No blocking operations
+# - Minimal function call overhead
+# - Direct streaming from ollama (like async pipe)
+# - Inline all operations for simplicity
 ux_conversation_loop() {
     local model_name="$1"
 
-    # Set up signal handlers for graceful exit
-    trap 'ux_conversation_exit' SIGINT SIGTERM
+    # Graceful exit handler (inline)
+    trap 'stty sane 2>/dev/null; echo -e "\n\n${UX_MAGENTA}¡Hasta luego! Take care of yourself. 💜${UX_NC}\n"; exit 0' SIGINT SIGTERM
 
-    ux_print_ready
-
-    # Show exit hint
-    ux_info "💡 Tip: Press Ctrl+C or Esc to exit, or type /quit"
-    ux_blank
+    # Ready message (inline)
+    echo ""
+    echo -e "${UX_MAGENTA}✨ Yollayah is ready! Type your message or /quit to exit.${UX_NC}"
+    echo ""
 
     while true; do
-        # Prompt
-        ux_prompt "You:"
+        # Prompt (inline, no function call)
+        echo -ne "${UX_GREEN}You:${UX_NC} "
 
-        # Read with support for Esc key detection
-        # -r: raw mode (don't interpret backslashes)
-        # -e: use readline for editing
+        # Read user input
         if ! read -r -e user_input; then
-            # read failed (Ctrl+D or EOF)
-            ux_conversation_exit
+            # EOF (Ctrl+D) - graceful exit
+            stty sane 2>/dev/null
+            echo -e "\n\n${UX_MAGENTA}¡Hasta luego! Take care of yourself. 💜${UX_NC}\n"
+            exit 0
         fi
 
-        # Handle Esc key (ASCII 27 or empty after Esc press)
-        if [[ "$user_input" == $'\x1b' ]] || [[ "$user_input" == $'\e' ]]; then
-            ux_conversation_exit
-        fi
+        # Empty input - skip
+        [[ -z "$user_input" ]] && continue
 
-        # Handle empty input
-        if [[ -z "$user_input" ]]; then
-            continue
-        fi
+        # Handle commands (inline case statement, no function call)
+        case "$user_input" in
+            /quit|/exit|/q)
+                stty sane 2>/dev/null
+                echo ""
+                echo -e "${UX_MAGENTA}¡Hasta luego! Take care of yourself. 💜${UX_NC}"
+                echo ""
+                exit 0
+                ;;
+            /clear|/cls)
+                clear
+                echo ""
+                echo -e "${UX_MAGENTA}✨ Yollayah is ready! Type your message or /quit to exit.${UX_NC}"
+                echo ""
+                continue
+                ;;
+            /help|/h)
+                echo ""
+                echo "Commands: /quit /clear /help /model /mood"
+                echo ""
+                continue
+                ;;
+            /mood)
+                echo ""
+                echo -e "${UX_MAGENTA}I'm feeling good! Ready to help. How about you?${UX_NC}"
+                echo ""
+                continue
+                ;;
+            /model)
+                echo ""
+                echo -e "${UX_DIM}Model:    ${UX_NC}$model_name"
+                echo -e "${UX_DIM}Hardware: ${UX_NC}$(hardware_summary)"
+                echo ""
+                continue
+                ;;
+            /debug)
+                echo ""
+                echo -e "${UX_DIM}Model:     ${UX_NC}$model_name"
+                echo -e "${UX_DIM}Keep Alive:${UX_NC} ${OLLAMA_KEEP_ALIVE:-not set}"
+                [[ -n "${YOLLAYAH_DEBUG:-}" ]] && echo -e "${UX_DIM}Debug:     ${UX_NC}enabled"
+                echo ""
+                continue
+                ;;
+            /*)
+                echo ""
+                echo -e "${UX_YELLOW}Unknown command. Try /help${UX_NC}"
+                echo ""
+                continue
+                ;;
+        esac
 
-        # Handle commands
-        if ux_handle_command "$user_input"; then
-            continue
-        fi
-
-        # Get response from Yollayah
-        ux_blank
+        # Stream response directly from ollama (no buffering, no overhead)
+        echo ""
         echo -ne "${UX_MAGENTA}Yollayah:${UX_NC} "
 
-        # Stream the response
         if ! ollama run "$model_name" "$user_input"; then
             echo ""
-            ux_error "Failed to get response from model: $model_name"
-            ux_info "Check if Ollama is running: ollama list"
-            ux_info "Try: ollama run $model_name"
+            echo -e "${UX_RED}✗ Failed to get response from model: $model_name${UX_NC}"
+            echo -e "${UX_DIM}  Check: ollama list${UX_NC}"
         fi
 
-        ux_blank
-        ux_blank
+        echo ""
+        echo ""
     done
 }
 
