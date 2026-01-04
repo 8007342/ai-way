@@ -1,6 +1,9 @@
 # Generated files
 modelfiles/
 
+# Session checkpoint (ephemeral, not tracked)
+TODO.md
+
 # Build logs (local development)
 build-log-*.txt
 

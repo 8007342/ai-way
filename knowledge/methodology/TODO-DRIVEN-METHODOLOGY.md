@@ -710,11 +710,154 @@ Located in `reference/FORBIDDEN-*.md`:
 
 ---
 
+## Checkpointing: Session Resume System
+
+### The Checkpoint Pattern
+
+When working on complex tasks that may span multiple sessions (e.g., before system reboot, end of day), use **checkpoints** to preserve context and enable seamless resume.
+
+**Checkpoint Location**: Root `TODO.md` file (not in progress/)
+
+### Making a Checkpoint
+
+When the user says **"make a checkpoint"**, create or replace `TODO.md` with:
+
+1. **Current Session Summary** - What you were working on
+2. **Active TODO References** - Links to relevant TODO-*.md, BUG-*.md, EPIC-*.md files
+3. **Key Findings** - Important discoveries or root causes identified
+4. **Next Steps** - Clear continuation points
+5. **Context** - File locations, line numbers, specific variables/functions
+
+**Template**:
+
+```markdown
+# Session Checkpoint
+
+**Created**: YYYY-MM-DD HH:MM
+**Context**: [Brief description of what you were doing]
+
+---
+
+## Current Work
+
+[2-3 sentences describing the immediate task]
+
+## Active TODO Files
+
+- **Primary**: `progress/TODO-XXX.md` - [Brief status]
+- **Related**: `progress/BUG-XXX.md` - [Brief status]
+- **Epic**: `progress/EPIC-XXX.md` - [Current phase]
+
+## Key Findings
+
+[Bulleted list of important discoveries, root causes, or decisions]
+
+## Next Steps
+
+1. [Clear action item with file reference]
+2. [Clear action item with file reference]
+3. [Clear action item with file reference]
+
+## Important Context
+
+**Files Modified**:
+- `path/to/file.rs:line` - [What was changed]
+
+**Commands Run**:
+```bash
+./command --flags
+```
+
+**Critical Values**:
+- Variable X = Y
+- Function Z at line N
+```
+
+### Resuming from Checkpoint
+
+When the user says **"resume from @TODO.md"**:
+
+1. Read `TODO.md` to understand context
+2. Read referenced TODO/BUG/EPIC files for full details
+3. Continue work from Next Steps
+4. Update checkpoint when reaching new milestone
+
+### Checkpoint Lifecycle
+
+- **Created**: At user request ("make a checkpoint")
+- **Updated**: When major findings occur or before long breaks
+- **Deleted**: When session work is fully complete and committed
+- **Not Tracked**: `TODO.md` should be in `.gitignore` (ephemeral)
+
+### Checkpoint vs. TODO Files
+
+| Aspect | TODO.md (Checkpoint) | progress/TODO-*.md |
+|--------|---------------------|-------------------|
+| **Lifespan** | Single session or day | Entire feature/epic |
+| **Scope** | Cross-cutting current work | Specific feature/bug |
+| **Detail** | High (line numbers, variables) | Medium (phases, tasks) |
+| **Tracked** | No (gitignored) | Yes (committed) |
+| **Audience** | AI resuming work | Team + AI |
+
+### Example Checkpoint
+
+```markdown
+# Session Checkpoint
+
+**Created**: 2026-01-03 18:30
+**Context**: Investigating TUI streaming bug root cause
+
+---
+
+## Current Work
+
+Just completed investigation of BUG-001 (TUI waits for full stream). Root cause identified: blocking `rx.recv().await` in event loop causes 2-5 second freeze during model loading. One-line fix ready to implement.
+
+## Active TODO Files
+
+- **Primary**: `progress/TODO-BUG-001-tui-waits-for-full-stream.md` - ✅ Investigation complete, ready for fix
+- **Related**: `progress/EPIC-001-TUI-reactive-overhaul.md` - Sprint 0 merged to main
+- **Context**: `progress/TODO-104-document-migration-patterns.md` - Migration guide complete
+
+## Key Findings
+
+- **Root Cause**: `conductor.rs:1034` uses blocking `rx.recv().await` in polling loop
+- **Impact**: Event loop freezes for 2-5 seconds during GPU model loading
+- **Fix**: Change ONE line from `rx.recv().await` to `rx.try_recv()`
+- **Why It Works**: Non-blocking check allows event loop to continue at 10 FPS
+- **Workaround Available**: `--interactive` flag bypasses TUI, uses bash interface
+
+## Next Steps
+
+1. Implement the one-line fix in `/var/home/machiyotl/src/ai-way/yollayah/conductor/core/src/conductor.rs:1034`
+2. Run build verification: `./yollayah/yollayah-build-logs.sh --all`
+3. Test with: `./yollayah.sh` (TUI should now stream smoothly)
+4. Update TODO-BUG-001 status to FIXED when verified
+
+## Important Context
+
+**Files to Modify**:
+- `yollayah/conductor/core/src/conductor.rs:1034` - Change `rx.recv().await` to `rx.try_recv()`
+
+**Test Commands**:
+```bash
+./yollayah.sh --test-interactive  # Fast integration test
+./yollayah.sh --interactive       # Bash interface (working)
+./yollayah.sh                     # TUI (will test fix)
+```
+
+**Critical Function**: `poll_streaming()` in conductor.rs
+**Error Pattern**: Blocking await in polling loop violates PRINCIPLE-efficiency.md
+```
+
+---
+
 ## Version History
 
 | Version | Date | Changes |
 |---------|------|---------|
 | 1.0 | 2026-01-02 | Initial methodology documentation |
+| 1.1 | 2026-01-03 | Added checkpointing system for session resume |
 
 ---
 
@@ -724,3 +867,4 @@ Located in `reference/FORBIDDEN-*.md`:
 - `TODO-next.md` - Current sprint priorities
 - `TODO-main.md` - General backlog and TODO file index
 - `TODO-security-findings.md` - Security issue tracking
+- `TODO.md` - Current session checkpoint (ephemeral, not tracked)
