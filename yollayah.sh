@@ -557,8 +557,22 @@ main() {
         ux_show_all_ready
     fi
 
-    # Bootstrap complete - NOW launch TUI (owns terminal exclusively)
-    ux_start_interface "$YOLLAYAH_MODEL_NAME"
+    # Bootstrap complete - NOW launch interface
+    # In test+interactive mode, just exit successfully (integration test)
+    if [[ "${YOLLAYAH_TEST_MODE:-}" == "1" && "${YOLLAYAH_INTERACTIVE:-}" == "1" ]]; then
+        echo "✅ Integration test complete: All systems initialized successfully"
+        echo "   Model: $YOLLAYAH_MODEL_NAME"
+        echo "   Ready for interactive sessions"
+        return 0
+    fi
+
+    # Use bash interface if --interactive flag is set, otherwise try TUI
+    if [[ "${YOLLAYAH_INTERACTIVE:-}" == "1" ]]; then
+        echo "🖥️  Interactive mode: Using simple bash interface"
+        ux_conversation_loop "$YOLLAYAH_MODEL_NAME"
+    else
+        ux_start_interface "$YOLLAYAH_MODEL_NAME"
+    fi
 }
 
 # ============================================================================
@@ -577,6 +591,26 @@ case "${1:-start}" in
         export YOLLAYAH_TEST_MODEL="${YOLLAYAH_TEST_MODEL:-qwen2:0.5b}"
         export YOLLAYAH_TEST_VERBOSE=1
         echo "🧪 TEST MODE - Verbose logging enabled"
+        echo "Model: $YOLLAYAH_TEST_MODEL"
+        echo "----------------------------------------"
+        main "$@"
+        ;;
+    interactive|--interactive)
+        # Interactive mode: Use simple bash interface instead of TUI
+        export YOLLAYAH_INTERACTIVE=1
+        echo "🖥️  INTERACTIVE MODE - Using bash interface (no TUI)"
+        echo "Combine with --test for fast integration testing:"
+        echo "  ./yollayah.sh --test --interactive"
+        echo "----------------------------------------"
+        main "$@"
+        ;;
+    test-interactive|--test-interactive)
+        # Combined test+interactive mode: Fast integration test
+        export YOLLAYAH_TEST_MODE=1
+        export YOLLAYAH_INTERACTIVE=1
+        export YOLLAYAH_TEST_MODEL="${YOLLAYAH_TEST_MODEL:-qwen2:0.5b}"
+        echo "🧪 INTEGRATION TEST MODE"
+        echo "Fast startup + initialization check (no UI launched)"
         echo "Model: $YOLLAYAH_TEST_MODEL"
         echo "----------------------------------------"
         main "$@"
