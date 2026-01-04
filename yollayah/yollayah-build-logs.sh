@@ -231,11 +231,14 @@ build_yollayah_model() {
     # Check if Ollama is running
     if ! pgrep -x "ollama" > /dev/null; then
         log_warn "Ollama not running, attempting to start..."
-        if ! ollama serve > /dev/null 2>&1 &; then
+        ollama serve > /dev/null 2>&1 &
+        sleep 2
+
+        # Verify it started
+        if ! pgrep -x "ollama" > /dev/null; then
             log_error "Failed to start Ollama"
             return 1
         fi
-        sleep 2
     fi
 
     log "Creating yollayah model from llama3.2:3b..."
