@@ -30,24 +30,24 @@ set -euo pipefail
 # Bootstrap: Load yollayah.sh library
 # ============================================================================
 
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 export SCRIPT_DIR
 
 # Source yollayah.sh library modules directly
 # Note: We skip toolbox auto-enter and main execution by sourcing modules individually
 
 # Core utilities
-source "${SCRIPT_DIR}/lib/common.sh"
+source "${SCRIPT_DIR}/yollayah/lib/common.sh"
 
 # Logging infrastructure
-source "${SCRIPT_DIR}/lib/logging/init.sh"
+source "${SCRIPT_DIR}/yollayah/lib/logging/init.sh"
 
 # UX output
-source "${SCRIPT_DIR}/lib/ux/output.sh"
+source "${SCRIPT_DIR}/yollayah/lib/ux/output.sh"
 
 # Ollama management
-source "${SCRIPT_DIR}/lib/ollama/service.sh"
-source "${SCRIPT_DIR}/lib/ollama/lifecycle.sh"
+source "${SCRIPT_DIR}/yollayah/lib/ollama/service.sh"
+source "${SCRIPT_DIR}/yollayah/lib/ollama/lifecycle.sh"
 
 # ============================================================================
 # Configuration
@@ -55,8 +55,8 @@ source "${SCRIPT_DIR}/lib/ollama/lifecycle.sh"
 
 TIMESTAMP=$(date +%Y%m%d_%H%M%S)
 # Output logs to workdir/logs/ to avoid polluting root
-mkdir -p "$SCRIPT_DIR/../workdir/logs"
-LOG_FILE="$SCRIPT_DIR/../workdir/logs/build-log-$TIMESTAMP.txt"
+mkdir -p "$SCRIPT_DIR/workdir/logs"
+LOG_FILE="$SCRIPT_DIR/workdir/logs/build-log-$TIMESTAMP.txt"
 
 # Colors for output
 RED='\033[0;31m'
@@ -125,13 +125,8 @@ check_environment() {
         exit 1
     fi
 
-    # Check workspace
-    if [[ -f "$SCRIPT_DIR/Cargo.toml" ]]; then
-        log_success "Workspace manifest found"
-    else
-        log_error "Cargo.toml not found!"
-        exit 1
-    fi
+    # Note: No workspace Cargo.toml at root (by design - hard requirement)
+    # Individual Rust projects are in yollayah/conductor/ and yollayah/core/surfaces/tui/
 
     echo "" | tee -a "$LOG_FILE"
 }
@@ -139,10 +134,14 @@ check_environment() {
 clean_build() {
     log_section "Clean Build Artifacts"
 
-    log "Running cargo clean..."
-    cargo clean 2>&1 | tee -a "$LOG_FILE" || {
-        log_error "cargo clean failed"
-        return 1
+    log "Cleaning TUI build artifacts..."
+    (cd "$SCRIPT_DIR/yollayah/core/surfaces/tui" && cargo clean) 2>&1 | tee -a "$LOG_FILE" || {
+        log_error "TUI cargo clean failed"
+    }
+
+    log "Cleaning Conductor build artifacts..."
+    (cd "$SCRIPT_DIR/yollayah/conductor/daemon" && cargo clean) 2>&1 | tee -a "$LOG_FILE" || {
+        log_error "Conductor cargo clean failed"
     }
 
     log_success "Build artifacts cleaned"
@@ -150,23 +149,25 @@ clean_build() {
 
 build_workspace() {
     local verbose="$1"
-    log_section "Building Entire Workspace"
+    log_section "Building All Rust Projects"
 
-    if [[ "$verbose" == "true" ]]; then
-        log "Running: cargo build --workspace --all-features --verbose"
-        echo "" | tee -a "$LOG_FILE"
-        cargo build --workspace --all-features --verbose 2>&1 | tee -a "$LOG_FILE"
-    else
-        log "Running: cargo build --workspace --all-features"
-        echo "" | tee -a "$LOG_FILE"
-        cargo build --workspace --all-features 2>&1 | tee -a "$LOG_FILE"
-    fi
+    # Note: No workspace Cargo.toml at root (by design)
+    # Build each project individually
+    log "Building conductor and TUI..."
 
-    if [[ ${PIPESTATUS[0]} -eq 0 ]]; then
-        log_success "Workspace build completed"
+    local build_failed=0
+
+    # Build conductor first
+    build_conductor "$verbose" || build_failed=1
+
+    # Build TUI
+    build_tui "$verbose" || build_failed=1
+
+    if [[ $build_failed -eq 0 ]]; then
+        log_success "All builds completed"
         return 0
     else
-        log_error "Workspace build failed"
+        log_error "One or more builds failed"
         return 1
     fi
 }
@@ -176,18 +177,18 @@ build_tui() {
     log_section "Building TUI (yollayah-tui)"
 
     if [[ "$verbose" == "true" ]]; then
-        log "Running: cargo build --package yollayah-tui --release --verbose"
+        log "Running: cd yollayah/core/surfaces/tui && cargo build --release --verbose"
         echo "" | tee -a "$LOG_FILE"
-        cargo build --package yollayah-tui --release --verbose 2>&1 | tee -a "$LOG_FILE"
+        (cd "$SCRIPT_DIR/yollayah/core/surfaces/tui" && cargo build --release --verbose) 2>&1 | tee -a "$LOG_FILE"
     else
-        log "Running: cargo build --package yollayah-tui --release"
+        log "Running: cd yollayah/core/surfaces/tui && cargo build --release"
         echo "" | tee -a "$LOG_FILE"
-        cargo build --package yollayah-tui --release 2>&1 | tee -a "$LOG_FILE"
+        (cd "$SCRIPT_DIR/yollayah/core/surfaces/tui" && cargo build --release) 2>&1 | tee -a "$LOG_FILE"
     fi
 
     if [[ ${PIPESTATUS[0]} -eq 0 ]]; then
         log_success "TUI build completed"
-        check_binary "target/release/yollayah-tui" "TUI"
+        check_binary "yollayah/core/surfaces/tui/target/release/yollayah-tui" "TUI"
         return 0
     else
         log_error "TUI build failed"
@@ -200,18 +201,18 @@ build_conductor() {
     log_section "Building Conductor (conductor-core + conductor-daemon)"
 
     if [[ "$verbose" == "true" ]]; then
-        log "Running: cargo build --package conductor-core --package conductor-daemon --release --verbose"
+        log "Running: cd yollayah/conductor/daemon && cargo build --release --verbose"
         echo "" | tee -a "$LOG_FILE"
-        cargo build --package conductor-core --package conductor-daemon --release --verbose 2>&1 | tee -a "$LOG_FILE"
+        (cd "$SCRIPT_DIR/yollayah/conductor/daemon" && cargo build --release --verbose) 2>&1 | tee -a "$LOG_FILE"
     else
-        log "Running: cargo build --package conductor-core --package conductor-daemon --release"
+        log "Running: cd yollayah/conductor/daemon && cargo build --release"
         echo "" | tee -a "$LOG_FILE"
-        cargo build --package conductor-core --package conductor-daemon --release 2>&1 | tee -a "$LOG_FILE"
+        (cd "$SCRIPT_DIR/yollayah/conductor/daemon" && cargo build --release) 2>&1 | tee -a "$LOG_FILE"
     fi
 
     if [[ ${PIPESTATUS[0]} -eq 0 ]]; then
         log_success "Conductor build completed"
-        check_binary "target/release/conductor-daemon" "Conductor Daemon"
+        check_binary "yollayah/conductor/daemon/target/release/conductor-daemon" "Conductor Daemon"
         return 0
     else
         log_error "Conductor build failed"
@@ -300,9 +301,9 @@ run_smoke_tests() {
     log_section "Smoke Tests"
 
     # Test TUI binary
-    if [[ -x "$SCRIPT_DIR/target/release/yollayah-tui" ]]; then
+    if [[ -x "$SCRIPT_DIR/yollayah/core/surfaces/tui/target/release/yollayah-tui" ]]; then
         log "Testing TUI binary (version check)..."
-        if "$SCRIPT_DIR/target/release/yollayah-tui" --version 2>&1 | tee -a "$LOG_FILE"; then
+        if "$SCRIPT_DIR/yollayah/core/surfaces/tui/target/release/yollayah-tui" --version 2>&1 | tee -a "$LOG_FILE"; then
             log_success "TUI binary responds to --version"
         else
             log_warn "TUI binary does not support --version"
@@ -310,9 +311,9 @@ run_smoke_tests() {
     fi
 
     # Test conductor-daemon binary
-    if [[ -x "$SCRIPT_DIR/target/release/conductor-daemon" ]]; then
+    if [[ -x "$SCRIPT_DIR/yollayah/conductor/daemon/target/release/conductor-daemon" ]]; then
         log "Testing Conductor binary (version check)..."
-        if "$SCRIPT_DIR/target/release/conductor-daemon" --version 2>&1 | tee -a "$LOG_FILE"; then
+        if "$SCRIPT_DIR/yollayah/conductor/daemon/target/release/conductor-daemon" --version 2>&1 | tee -a "$LOG_FILE"; then
             log_success "Conductor binary responds to --version"
         else
             log_warn "Conductor binary does not support --version"
