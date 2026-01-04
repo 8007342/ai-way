@@ -4,6 +4,32 @@ Privacy-first local AI appliance. Your AI, your data, your rules.
 
 ---
 
+# 🚧 DEVELOPMENT BRANCH: Reactive Architecture Overhaul
+
+**Status**: UNDER ACTIVE DEVELOPMENT - DO NOT USE IN PRODUCTION
+
+This branch contains a **complete rewrite** of the TUI and Conductor async architecture.
+
+**What's happening**:
+- Migrating from manual `.await` patterns to reactive streams (tokio-stream/RxRust)
+- Eliminating memory leaks and thread pool conflicts
+- Building correct async architecture from first principles
+
+**Integration tests are DISABLED** on this branch during development.
+
+**Merge criteria**:
+- Zero `.await` violations
+- All unit tests passing
+- Performance targets met
+- Integration tests re-enabled and passing
+- Team code review and sign-off
+
+**Timeline**: 10-14 weeks (see `progress/EPIC-001-TUI-reactive-overhaul.md`)
+
+**DO NOT merge to main until Sprint 6 complete.**
+
+---
+
 ## ⚠️ EXPERIMENTAL SOFTWARE - USE AT YOUR OWN RISK
 
 This is early-stage development software - breaky-breaky stuff!
