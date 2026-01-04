@@ -2,6 +2,11 @@
 # test-model-creation.sh - Integration tests for model creation
 #
 # Tests the model.sh module for yollayah model creation and GPU usage
+#
+# Environment: Host (Category 4: Hybrid Script)
+# - Runs on host for test framework
+# - Calls ollama via toolbox when needed
+# See: facts/tools/TOOLBOX.md
 
 set -euo pipefail
 
@@ -11,6 +16,44 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 # Source dependencies
 source "${SCRIPT_DIR}/lib/common/robot.sh"
 source "${SCRIPT_DIR}/lib/ollama/model.sh"
+
+# ============================================================================
+# Toolbox Adaptation: Hybrid Script
+# ============================================================================
+
+# Detect if we're in toolbox or on host
+is_in_toolbox() {
+    [[ -f /run/.toolboxenv ]]
+}
+
+# Wrapper to call ollama commands (adapts to environment)
+call_ollama() {
+    if is_in_toolbox; then
+        # Already in toolbox, call directly
+        ollama "$@"
+    else
+        # On host, call via toolbox
+        if command -v toolbox &>/dev/null; then
+            toolbox run --directory "$PWD" ollama "$@"
+        else
+            robot_error "$TEST_MODULE" "Toolbox not available, cannot run ollama"
+            return 1
+        fi
+    fi
+}
+
+# Check if ollama is running (adapts to environment)
+check_ollama_running() {
+    if is_in_toolbox; then
+        pgrep -x "ollama" > /dev/null
+    else
+        if command -v toolbox &>/dev/null; then
+            toolbox run pgrep -x "ollama" > /dev/null 2>&1
+        else
+            return 1
+        fi
+    fi
+}
 
 # Test module
 readonly TEST_MODULE="test"
@@ -81,7 +124,7 @@ test_model_exists_check() {
     robot_debug "$TEST_MODULE" "Testing model existence check"
 
     # This test assumes ollama is running
-    if ! pgrep -x "ollama" > /dev/null; then
+    if ! check_ollama_running; then
         robot_warn "$TEST_MODULE" "Ollama not running, skipping test"
         return 0  # Skip, don't fail
     fi
@@ -100,7 +143,7 @@ test_yollayah_creation() {
     robot_debug "$TEST_MODULE" "Testing yollayah model creation"
 
     # This test requires ollama running
-    if ! pgrep -x "ollama" > /dev/null; then
+    if ! check_ollama_running; then
         robot_warn "$TEST_MODULE" "Ollama not running, skipping test"
         return 0  # Skip, don't fail
     fi
@@ -127,7 +170,7 @@ test_gpu_verification() {
     robot_debug "$TEST_MODULE" "Testing GPU verification"
 
     # This test requires ollama running and nvidia-smi
-    if ! pgrep -x "ollama" > /dev/null; then
+    if ! check_ollama_running; then
         robot_warn "$TEST_MODULE" "Ollama not running, skipping test"
         return 0  # Skip, don't fail
     fi

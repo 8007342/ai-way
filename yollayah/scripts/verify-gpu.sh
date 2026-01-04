@@ -7,8 +7,29 @@
 #   0 - GPU usage detected (success)
 #   1 - CPU fallback detected (failure)
 #   2 - Cannot verify (nvidia-smi not available)
+#
+# Environment: Toolbox (Category 2: Toolbox-Only Script)
+# - MUST run in toolbox (needs ollama, nvidia-smi, GPU access)
+# See: facts/tools/TOOLBOX.md
 
 set -euo pipefail
+
+# ============================================================================
+# Toolbox Enforcement: Auto-enter if needed
+# ============================================================================
+
+# This script MUST run in toolbox (needs ollama and nvidia-smi)
+if [[ ! -f /run/.toolboxenv ]] && command -v toolbox &>/dev/null; then
+    echo "Entering toolbox to access ollama and GPU..."
+    exec toolbox run --directory "$PWD" bash "$0" "$@"
+fi
+
+# If we're here and not in toolbox, toolbox command doesn't exist
+if [[ ! -f /run/.toolboxenv ]]; then
+    echo "ERROR: This script requires toolbox (for ollama and GPU access)" >&2
+    echo "Install toolbox or run on a system with ollama installed" >&2
+    exit 2
+fi
 
 # Configuration
 MODEL="${1:-yollayah}"

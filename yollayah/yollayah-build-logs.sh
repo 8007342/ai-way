@@ -27,6 +27,27 @@
 set -euo pipefail
 
 # ============================================================================
+# Toolbox Enforcement: MUST run on host
+# ============================================================================
+
+# This script MUST run on the host, not inside toolbox
+# See: facts/tools/TOOLBOX.md - Category 1: Host-Only Scripts
+if [[ -f /run/.toolboxenv ]]; then
+    echo "ERROR: This script must run on the HOST, not inside toolbox" >&2
+    echo "" >&2
+    echo "Why: Build scripts need consistent paths and host Rust toolchain" >&2
+    echo "" >&2
+    echo "Exit toolbox first:" >&2
+    echo "  exit" >&2
+    echo "" >&2
+    echo "Then run from host:" >&2
+    echo "  ./yollayah/yollayah-build-logs.sh $@" >&2
+    echo "" >&2
+    echo "See: facts/tools/TOOLBOX.md for details" >&2
+    exit 1
+fi
+
+# ============================================================================
 # Bootstrap: Load yollayah.sh library
 # ============================================================================
 
