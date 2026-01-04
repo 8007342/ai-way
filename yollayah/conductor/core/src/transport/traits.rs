@@ -164,7 +164,7 @@ pub trait ConductorTransport: Send + Sync {
     async fn disconnect(&self, conn_id: &ConnectionId) -> Result<(), TransportError>;
 
     /// Get all connected surface IDs
-    fn connections(&self) -> Vec<ConnectionId>;
+    async fn connections(&self) -> Vec<ConnectionId>;
 
     /// Stop accepting new connections and close all existing ones
     async fn shutdown(&mut self) -> Result<(), TransportError>;

@@ -317,25 +317,9 @@ impl ConductorTransport for UnixSocketServer {
         Ok(())
     }
 
-    fn connections(&self) -> Vec<ConnectionId> {
-        // This is a sync method, so we use blocking approach
-        // In practice, this should be called from an async context
-        // Consider making this async in the trait if needed
-        let handle = tokio::runtime::Handle::try_current();
-
-        match handle {
-            Ok(h) => {
-                // We're in a tokio context
-                std::thread::scope(|_| {
-                    h.block_on(async { self.connections.read().await.keys().cloned().collect() })
-                })
-            }
-            Err(_) => {
-                // Not in tokio context, return empty
-                // Caller should use async version
-                Vec::new()
-            }
-        }
+    async fn connections(&self) -> Vec<ConnectionId> {
+        // Properly async - no blocking!
+        self.connections.read().await.keys().cloned().collect()
     }
 
     async fn shutdown(&mut self) -> Result<(), TransportError> {

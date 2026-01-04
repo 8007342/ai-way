@@ -155,15 +155,48 @@ ux_handle_command() {
 # ============================================================================
 
 # Main conversation loop
+# Graceful exit handler for conversation loop
+ux_conversation_exit() {
+    # Restore terminal settings
+    stty sane 2>/dev/null || true
+
+    # Show farewell message
+    echo ""  # New line after ^C
+    ux_blank
+    ux_yollayah "¡Hasta luego! Take care of yourself. 💜"
+    ux_blank
+
+    exit 0
+}
+
 ux_conversation_loop() {
     local model_name="$1"
 
+    # Set up signal handlers for graceful exit
+    trap 'ux_conversation_exit' SIGINT SIGTERM
+
     ux_print_ready
+
+    # Show exit hint
+    ux_info "💡 Tip: Press Ctrl+C or Esc to exit, or type /quit"
+    ux_blank
 
     while true; do
         # Prompt
         ux_prompt "You:"
-        read -r user_input
+
+        # Read with support for Esc key detection
+        # -r: raw mode (don't interpret backslashes)
+        # -e: use readline for editing
+        if ! read -r -e user_input; then
+            # read failed (Ctrl+D or EOF)
+            ux_conversation_exit
+        fi
+
+        # Handle Esc key (ASCII 27 or empty after Esc press)
+        if [[ "$user_input" == $'\x1b' ]] || [[ "$user_input" == $'\e' ]]; then
+            ux_conversation_exit
+        fi
 
         # Handle empty input
         if [[ -z "$user_input" ]]; then
