@@ -309,171 +309,200 @@ loop {
 
 ---
 
-## CRITICAL ANTI-PATTERN: Blocking Await in Event Loops
+## CRITICAL: ALL `.await` CALLS ARE STRICTLY FORBIDDEN
 
-**STATUS**: 🔴 STRICTLY FORBIDDEN - This is a BUG
+**STATUS**: 🔴 STRICTLY FORBIDDEN - Any `.await` anywhere is a BUG
 
-**This anti-pattern causes the TUI to freeze and defeats the purpose of async architecture.**
+**This is a fundamental architectural principle. Do NOT use `.await` ANYWHERE in the Rust codebase.**
 
-### The Problem
+### The Core Problem
 
-**NEVER use blocking await operations (like `recv().await`) in polling functions called from event loops.**
+**The current codebase misuses async/await. It does "unnecessary parallel stuff locally" while simultaneously doing operations that require non-blocking in blocking ways. This is the OPPOSITE of correct async architecture.**
 
-Event loops MUST remain responsive at all times. Using blocking `.await` in a function that's called repeatedly from the event loop will cause the entire UI to freeze.
+### What Is Forbidden
 
-### ❌ FORBIDDEN: Blocking Await in Polling Functions
+**STRICTLY FORBIDDEN - Zero Tolerance**:
+- ✖️ `.await` - ALL forms, ALL locations
+- ✖️ `.wait()` - ALL forms of blocking waits
+- ✖️ `.get()` - Blocking gets on futures/channels
+- ✖️ `.recv().await` - Blocking channel receives
+- ✖️ `.send().await` - Blocking channel sends
+- ✖️ `sleep()` / `thread::sleep()` - ALL forms of sleep
+- ✖️ Manual thread spawning (`thread::spawn`) - Framework handles threading
+- ✖️ Manual thread pools - Framework provides thread pooling
+
+**Root Cause**: These patterns treat async as "threading with extra steps". This causes:
+1. **Memory leaks** - Improper resource cleanup
+2. **Thread pool exhaustion** - Fighting the framework's thread management
+3. **Blocking operations** - Defeating the purpose of async
+4. **CPU/GPU coordination issues** - Manual parallelism conflicts with framework
+
+### ❌ WRONG: Current Async/Await Anti-Pattern
 
 ```rust
-// ❌ CRITICAL BUG - This WILL freeze the UI
+// ❌ WRONG - Uses .await (FORBIDDEN!)
 pub async fn poll_streaming(&mut self) -> bool {
     let rx = self.streaming_rx.as_mut()?;
 
-    // BLOCKS until token arrives (can be 2-5 seconds during GPU loading!)
-    match rx.recv().await {  // ← FREEZES EVENT LOOP
+    // ❌ FORBIDDEN: .await
+    match rx.recv().await {  // ← BLOCKS, CAUSES MEMORY LEAKS
         Some(token) => {
-            process(token);
+            process(token);  // ← Manual processing, not reactive
             true
         }
         None => false,
     }
 }
 
-// Called from event loop (BAD!)
+// ❌ WRONG: Manual event loop with .await
 while self.running {
-    tokio::select! {
-        event = event_stream.next() => { ... }
-        _ = tick.tick() => { ... }
+    tokio::select! {  // ← tokio::select! is manual coordination
+        event = event_stream.next() => { ... }  // ← .await implicit
+        _ = tick.tick() => { ... }  // ← .await implicit
     }
 
-    // ❌ This can block for SECONDS!
-    self.conductor.poll_streaming().await;  // ← UI FROZEN HERE
+    // ❌ FORBIDDEN: .await
+    self.conductor.poll_streaming().await;  // ← Manual await
 
-    // These never run while blocked above
     self.update();
     self.render(terminal)?;
 }
 ```
 
-**Why This Is Catastrophic**:
-1. Event loop calls `poll_streaming()` every frame (10 FPS = every 100ms)
-2. `rx.recv().await` blocks until a token arrives
-3. GPU loads model for 2-5 seconds before first token
-4. Event loop is FROZEN - no rendering, no updates, appears hung
-5. First token arrives - all buffered tokens (up to 256) drain at once
-6. CPU spikes from batch processing instead of gradual streaming
-7. User sees: freeze → sudden text dump (broken streaming)
+**Why This Is Wrong**:
+1. **Manual `.await` = Manual thread management** - Fighting the framework
+2. **Manual event loop** - Framework should handle event coordination
+3. **Blocking operations** - Defeats async architecture
+4. **Memory leaks** - Resources not properly managed by framework
+5. **Thread pool conflicts** - CPU/GPU coordination breaks down
+6. **No backpressure** - Manual polling can't handle flow control
 
-### ✅ REQUIRED: Non-Blocking Operations in Polling Functions
+### ✅ CORRECT: Reactive Streams / Observables Pattern
 
-**Use `try_recv()` for polling functions:**
+**Use reactive streams with framework-managed coordination:**
 
 ```rust
-// ✅ GOOD - Returns immediately if no tokens available
-pub fn poll_streaming(&mut self) -> bool {  // Not even async!
-    let rx = match self.streaming_rx.as_mut() {
-        Some(rx) => rx,
-        None => return false,
-    };
+use tokio_stream::{StreamExt, wrappers::ReceiverStream};
+use futures::stream::{Stream, select_all};
 
-    let mut collected = Vec::new();
+// ✅ CORRECT - Reactive stream composition (NO .await!)
+pub fn create_event_pipeline() -> impl Stream<Item = AppEvent> {
+    // Create streams from various sources
+    let token_stream = ReceiverStream::new(token_rx)
+        .map(AppEvent::Token);
 
-    // Non-blocking check - returns immediately
-    match rx.try_recv() {  // ← NEVER BLOCKS
-        Ok(token) => {
-            collected.push(token);
+    let terminal_stream = TerminalEventStream::new()
+        .map(AppEvent::Terminal);
 
-            // Drain any additional buffered tokens
-            while let Ok(token) = rx.try_recv() {
-                collected.push(token);
-            }
+    let tick_stream = IntervalStream::new(interval(Duration::from_millis(100)))
+        .map(|_| AppEvent::Tick);
 
-            process_tokens(collected);
-            true
-        }
-        Err(TryRecvError::Empty) => {
-            // No tokens yet - keep UI responsive
-            false
-        }
-        Err(TryRecvError::Disconnected) => {
-            // Stream ended
-            false
-        }
-    }
+    // Framework merges streams (NO manual coordination!)
+    select_all(vec![
+        token_stream.boxed(),
+        terminal_stream.boxed(),
+        tick_stream.boxed(),
+    ])
 }
 
-// Called from event loop (GOOD!)
-while self.running {
-    tokio::select! {
-        event = event_stream.next() => { ... }
-        _ = tick.tick() => { ... }
-    }
+// ✅ CORRECT - Reactive event handler (NO .await, NO manual loop!)
+pub fn run_app(mut app: App) {
+    let event_pipeline = create_event_pipeline();
 
-    // ✅ Returns immediately if no tokens
-    self.conductor.poll_streaming();  // No .await needed!
-
-    // Always reached - UI stays responsive
-    self.update();
-    self.render(terminal)?;
+    // Framework handles the event loop!
+    event_pipeline
+        .for_each(|event| {
+            app.handle_event(event);
+            app.update();
+            app.render();
+            // Return ready future (framework manages execution)
+            futures::future::ready(())
+        })
+        .run();  // Framework runs the pipeline
 }
 ```
 
-### ✅ ALTERNATIVE: Move Blocking Await Into tokio::select!
+**Why This Is Correct**:
+1. **No `.await`** - Framework manages all async coordination
+2. **Reactive composition** - Declare WHAT, not HOW
+3. **Automatic backpressure** - Framework handles flow control
+4. **No manual threading** - Framework manages thread pool
+5. **No memory leaks** - Framework manages resource cleanup
+6. **Proper CPU/GPU coordination** - Framework schedules work correctly
 
-**If you need blocking await, use `tokio::select!` to multiplex it with other events:**
+### ✅ ALTERNATIVE: Observable Pattern (RxRust)
+
+**For even more powerful reactive composition:**
 
 ```rust
-// ✅ GOOD - Blocking await in select!, not in polling function
-while self.running {
-    tokio::select! {
-        // Terminal events
-        Some(event) = event_stream.next() => {
-            self.handle_event(event);
-        }
+use rxrust::prelude::*;
 
-        // Streaming tokens (blocking await is OK here!)
-        Some(token) = self.conductor.recv_token() => {
-            self.process_token(token);
-        }
-
-        // Frame tick
-        _ = tick.tick() => {
-            self.update();
-            self.render(terminal)?;
-        }
-    }
+// ✅ CORRECT - Observable composition
+pub fn create_app_observable() -> impl Observable<Item = AppState> {
+    // Combine multiple event sources
+    observable::merge((
+        token_observable().map(Event::Token),
+        terminal_observable().map(Event::Terminal),
+        interval(Duration::from_millis(100), |_| Event::Tick),
+    ))
+    // Transform events into state updates
+    .scan(AppState::default(), |state, event| {
+        state.handle_event(event);
+        Some(state.clone())
+    })
+    // Side effects (rendering) - framework manages when this runs!
+    .tap(|state| {
+        render(state);
+    })
 }
+
+// Framework runs everything
+create_app_observable()
+    .subscribe(|_state| {
+        // State updates automatically trigger renders above
+    });
 ```
 
-**Why This Works**:
-- `tokio::select!` multiplexes multiple async operations
-- While waiting for token, can still handle terminal events and render frames
-- Event loop never blocks on single operation
-- True concurrent event handling
+**Advantages**:
+- **Declarative** - Describe the data flow, not the execution
+- **Composable** - Combine streams with operators
+- **Testable** - Pure transformations, no hidden state
+- **Framework-managed** - All threading/async handled automatically
 
 ### Rule Summary
 
-**WHEN TO USE EACH PATTERN**:
+**STRICTLY FORBIDDEN**:
 
-| Pattern | Use Case | Event Loop Impact |
-|---------|----------|-------------------|
-| `rx.recv().await` in `tokio::select!` | ✅ Event sources in main loop | Non-blocking (multiplexed) |
-| `rx.try_recv()` in polling function | ✅ Called from event loop | Non-blocking (returns immediately) |
-| `rx.recv().await` in polling function | ❌ **FORBIDDEN** | Blocking (freezes UI) |
-| `rx.recv().await` in spawned task | ✅ Background processing | Non-blocking (separate task) |
+| Pattern | Status | Reason |
+|---------|--------|--------|
+| `.await` anywhere | ❌ **FORBIDDEN** | Manual async = thread management bugs |
+| `.wait()` anywhere | ❌ **FORBIDDEN** | Blocking = defeats async |
+| `tokio::select!` | ❌ **FORBIDDEN** | Manual coordination = memory leaks |
+| `tokio::spawn` | ❌ **FORBIDDEN** | Manual threading = framework conflicts |
+| `async fn` with manual loops | ❌ **FORBIDDEN** | Manual loops = no backpressure |
 
-### Detection and Prevention
+**REQUIRED**:
 
-**During code review, immediately reject any code that**:
-1. Has `async fn poll_*` or `async fn check_*` functions
-2. Contains `.recv().await` (or any blocking await) in a function called repeatedly from event loop
-3. Calls `.await` inside a loop without `tokio::select!`
+| Pattern | Status | Reason |
+|---------|--------|--------|
+| Reactive streams (tokio-stream) | ✅ **REQUIRED** | Framework manages everything |
+| Observables (RxRust) | ✅ **PREFERRED** | Most powerful composition |
+| Stream combinators (map, filter, etc) | ✅ **REQUIRED** | Declarative transformations |
+| Framework-managed execution | ✅ **REQUIRED** | Let framework handle async |
 
-**Required fixes**:
-- Change to `try_recv()` for polling
-- Move blocking await into `tokio::select!`
-- Spawn dedicated task for blocking operations
+### Migration Strategy
 
-**Related Bugs**: `TODO-BUG-001-tui-waits-for-full-stream.md`
+**ALL EXISTING CODE WITH `.await` MUST BE REWRITTEN**:
+
+1. **Identify async boundaries** - Where do events come from?
+2. **Convert to streams** - Wrap sources in ReceiverStream, IntervalStream, etc.
+3. **Compose declaratively** - Use map, filter, merge, scan, etc.
+4. **Let framework run** - No manual `.await`, no manual loops
+5. **Test reactive behavior** - Framework handles timing/coordination
+
+**See EPIC-nnn-TUI-overhaul.md** for complete architectural migration plan
+
+**Related Bugs**: `TODO-BUG-001-tui-waits-for-full-stream.md` (temporary fix, needs full rewrite)
 
 ---
 
